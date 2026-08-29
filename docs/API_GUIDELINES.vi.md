@@ -78,3 +78,11 @@ Client giao tiếp với hệ thống sẽ dựa 100% vào mã trạng thái HTT
 - **404 Not Found**: Tài nguyên đang truy vấn không tồn tại trong Database.
 - **409 Conflict**: Xung đột dữ liệu (Ví dụ: Email đã tồn tại, Sân đã có người đặt).
 - **500 Internal Server Error**: Lỗi sập hệ thống không lường trước (Unhandled Exceptions). Lỗi này sẽ được Middleware gom lại và chuyển thành định dạng chuẩn `ProblemDetails` theo RFC 7807 để tránh lộ stacktrace.
+
+---
+
+## 4. Phân Quyền & Bảo Vệ Endpoint (RBAC)
+
+Tất cả các API khi tạo mới **bắt buộc** phải tuân thủ chuẩn phân quyền tập trung bằng phương thức `.RequirePermission(AppPermissions.{Module}.{Action})`.
+
+👉 **Xem chi tiết tài liệu hướng dẫn từng bước:** [Quy Tắc Phân Quyền RBAC khi tạo API](PERMISSION_GUIDELINES.vi.md)
