@@ -3,6 +3,7 @@ using LegendsTeamVN.BadmintonClub.Application.Features.Venues.Create;
 using LegendsTeamVN.BadmintonClub.Application.Features.Venues.Delete;
 using LegendsTeamVN.BadmintonClub.Application.Features.Venues.GetById;
 using LegendsTeamVN.BadmintonClub.Application.Features.Venues.GetList;
+using LegendsTeamVN.BadmintonClub.Application.Features.Venues.GetRecommendations;
 using LegendsTeamVN.BadmintonClub.Application.Features.Venues.Update;
 using LegendsTeamVN.Core.Identity.Authorization;
 using LegendsTeamVN.Core.Presentation.Abstractions;
@@ -27,6 +28,12 @@ public class VenueEndpoint : EndpointGroupBase{
              .WithDescription("Creates a new venue and returns the created ID.")
              .RequirePermission("Venues.Create");
 
+        group.MapGet("recommendations", GetVenueRecommendations)
+             .WithName("GetVenueRecommendations")
+             .WithSummary("Gets venue recommendations")
+             .WithDescription("Retrieves a paged list of recommended venues based on distance, rating, and favourites.")
+             .AllowAnonymous();
+
         group.MapGet("", GetVenues)
              .WithName("GetVenues")
              .WithSummary("Gets all venues with pagination")
@@ -50,6 +57,14 @@ public class VenueEndpoint : EndpointGroupBase{
              .WithSummary("Deletes a venue")
              .WithDescription("Deletes an existing venue by its ID.")
              .RequirePermission("Venues.Delete");
+    }
+
+    private static async Task<IResult> GetVenueRecommendations([AsParameters] GetVenueRecommendationsRequest request, ISender sender)
+    {
+        var result = await sender.Send(new GetVenueRecommendationsQuery(request));
+        return result.Match(
+            onSuccess: responses => Results.Ok(responses)
+        );
     }
 
     private static async Task<IResult> GetVenues([AsParameters] GetVenuesRequest request, ISender sender)
