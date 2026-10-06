@@ -27,8 +27,8 @@ public static class ServiceCollectionExtensions
 
     public static IServiceCollection AddDataSeederBadminton(this IServiceCollection services)
     {
-        services.AddTransient<IDataSeeder, CourtDataSeeder>();
         services.AddTransient<IDataSeeder, VenueDataSeeder>();
+        services.AddTransient<IDataSeeder, CourtDataSeeder>();
         return services;
     }
 }

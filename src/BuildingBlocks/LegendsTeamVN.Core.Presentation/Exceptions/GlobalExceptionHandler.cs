@@ -11,15 +11,21 @@ internal sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> log
     {
         logger.LogError(exception, "Unhandled exception occurred: {Message}", exception.Message);
 
-        var problemDetails = new ProblemDetails
+        var statusCode = exception switch
         {
-            Status = StatusCodes.Status500InternalServerError,
-            Type = "https://tools.ietf.org/html/rfc7231#section-6.6.1",
-            Title = "Server error",
-            Detail = "An unexpected error has occurred."
+            BadHttpRequestException => StatusCodes.Status400BadRequest,
+            _ => StatusCodes.Status500InternalServerError
         };
 
-        httpContext.Response.StatusCode = problemDetails.Status.Value;
+        var problemDetails = new ProblemDetails
+        {
+            Status = statusCode,
+            Type = statusCode == 400 ? "https://tools.ietf.org/html/rfc7231#section-6.5.1" : "https://tools.ietf.org/html/rfc7231#section-6.6.1",
+            Title = statusCode == 400 ? "Bad Request" : "Server error",
+            Detail = exception.Message
+        };
+
+        httpContext.Response.StatusCode = statusCode;
 
         await httpContext.Response.WriteAsJsonAsync(problemDetails, cancellationToken);
 

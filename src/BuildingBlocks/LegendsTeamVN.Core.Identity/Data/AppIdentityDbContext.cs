@@ -7,6 +7,9 @@ namespace LegendsTeamVN.Core.Identity.Data;
 
 public class AppIdentityDbContext : IdentityDbContext<AppUser, AppRole, Guid>
 {
+    public DbSet<AppPermission> Permissions => Set<AppPermission>();
+    public DbSet<AppRolePermission> RolePermissions => Set<AppRolePermission>();
+
     public AppIdentityDbContext(DbContextOptions<AppIdentityDbContext> options) : base(options)
     {
     }

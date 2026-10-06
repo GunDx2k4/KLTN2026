@@ -1,19 +1,17 @@
-using System.Text;
-
 using LegendsTeamVN.Core.Application.Data;
 using LegendsTeamVN.Core.Identity.Abstractions;
-using LegendsTeamVN.Core.Identity.Attributes;
+using LegendsTeamVN.Core.Identity.Authorization;
 using LegendsTeamVN.Core.Identity.Data;
 using LegendsTeamVN.Core.Identity.DependencyInjection.Options;
 using LegendsTeamVN.Core.Identity.Entities;
 using LegendsTeamVN.Core.Identity.Services;
 using LegendsTeamVN.Core.Utilities.Options;
-
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 namespace LegendsTeamVN.Core.Identity.DependencyInjection.Extensions;
 
@@ -25,19 +23,16 @@ public static class ServiceCollectionExtensions
 
         services.AddIdentity<AppUser, AppRole>(options =>
         {
-            options.Password.RequireDigit = true;
-            options.Password.RequireLowercase = true;
-            options.Password.RequireUppercase = true;
+            options.Password.RequireDigit = false;
+            options.Password.RequireLowercase = false;
+            options.Password.RequireUppercase = false;
             options.Password.RequireNonAlphanumeric = false;
-            options.Password.RequiredLength = 6;
+            options.Password.RequiredLength = 3;
         })
         .AddEntityFrameworkStores<AppIdentityDbContext>()
         .AddDefaultTokenProviders();
 
-
         services.AddJwtAuthenticationAPI(jwtOptions);
-
-        
 
         services.AddIdentityContext();
         services.AddIdentityServices();
@@ -45,60 +40,12 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    public static IServiceCollection AddDataSeederIdentity(this IServiceCollection services)
+    public static IServiceCollection AddPostgreSQLIdentity(this IServiceCollection services, ConnectionStringsOptions configureOptions)
     {
-        services.AddTransient<IDataSeeder, IdentityDataSeeder>();
-        return services;
-    }
-
-    public static IServiceCollection AddPostgreSQLIdentity(this IServiceCollection services, ConnectionStringsOptions connectionStrings)
-    {
-        if (connectionStrings.Database != null)
+        services.AddDbContext<AppIdentityDbContext>(options =>
         {
-            services.AddDbContext<AppIdentityDbContext>(options =>
-            {
-                options.UseNpgsql(connectionStrings.Database, npgsqlOptions =>
-                {
-                    if (!string.IsNullOrEmpty(connectionStrings.MigrationsAssembly))
-                    {
-                        npgsqlOptions.MigrationsAssembly(connectionStrings.MigrationsAssembly);
-                    }
-                    if (connectionStrings.CommandTimeout.HasValue)
-                    {
-                        npgsqlOptions.CommandTimeout(connectionStrings.CommandTimeout.Value);
-                    }
-                });
-                options.EnableDetailedErrors()
-               .UseLazyLoadingProxies();
-
-            });
-        }
-
-        return services;
-    }
-
-    public static IServiceCollection AddSqlServerIdentity(this IServiceCollection services, ConnectionStringsOptions connectionStrings)
-    {
-        if (connectionStrings.Database != null)
-        {
-            services.AddDbContext<AppIdentityDbContext>(options =>
-            {
-                options.UseSqlServer(connectionStrings.Database, sqlOptions =>
-                {
-                    if (!string.IsNullOrEmpty(connectionStrings.MigrationsAssembly))
-                    {
-                        sqlOptions.MigrationsAssembly(connectionStrings.MigrationsAssembly);
-                    }
-                    if (connectionStrings.CommandTimeout.HasValue)
-                    {
-                        sqlOptions.CommandTimeout(connectionStrings.CommandTimeout.Value);
-                    }
-                });
-                options.EnableDetailedErrors()
-               .UseLazyLoadingProxies();
-
-            });
-        }
+            options.UseNpgsql(configureOptions.Database, b => b.MigrationsAssembly("LegendsTeamVN.BadmintonClub.Migrator"));
+        });
 
         return services;
     }
@@ -111,48 +58,49 @@ public static class ServiceCollectionExtensions
             options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
             options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
         })
-        .AddJwtBearer(o =>
+        .AddJwtBearer(options =>
         {
-            if (jwtOptions == null) return;
-
-            o.SaveToken = true;
-
-            var Key = Encoding.UTF8.GetBytes(jwtOptions.SecretKey);
-            o.TokenValidationParameters = new TokenValidationParameters
+            options.SaveToken = true;
+            options.RequireHttpsMetadata = false;
+            options.TokenValidationParameters = new TokenValidationParameters
             {
-                ValidateIssuer = true,
-                ValidateAudience = true,
-                ValidateLifetime = true,
+                ValidateIssuer = false,
+                ValidateAudience = false,
+                ValidateLifetime = false, // Disabled Lifetime Validation for Dev
                 ValidateIssuerSigningKey = true,
                 ValidIssuer = jwtOptions.Issuer,
                 ValidAudience = jwtOptions.Audience,
-                IssuerSigningKey = new SymmetricSecurityKey(Key),
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.SecretKey)),
                 ClockSkew = TimeSpan.Zero
             };
-
-            o.EventsType = typeof(SingleSessionJwtBearerEvents);
-
         });
 
-        services.AddScoped<SingleSessionJwtBearerEvents>();
-
         services.AddAuthorization();
+
         return services;
     }
 
     public static IServiceCollection AddIdentityServices(this IServiceCollection services)
     {
+        services.AddHttpContextAccessor();
+        services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<IUserManagerService, UserManagerService>();
         services.AddSingleton<IJwtTokenService, JwtTokenService>();
+        services.AddScoped<IDataSeeder, IdentityDataSeeder>();
 
         return services;
     }
 
     public static IServiceCollection AddIdentityContext(this IServiceCollection services)
     {
+        services.AddScoped<AppIdentityDbContext>();
+        return services;
+    }
 
-        services.AddHttpContextAccessor();
-        services.AddScoped<ICurrentUserService, CurrentUserService>();
+    public static IServiceCollection AddDataSeederIdentity(this IServiceCollection services)
+    {
+        services.AddScoped<IDataSeeder, IdentityDataSeeder>();
         return services;
     }
 }
+

@@ -19,12 +19,43 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
             modelBuilder
                 .HasDefaultSchema("Identity")
                 .HasAnnotation("ProductVersion", "10.0.10")
-                .HasAnnotation("Proxies:ChangeTracking", false)
-                .HasAnnotation("Proxies:CheckEquality", false)
-                .HasAnnotation("Proxies:LazyLoading", true)
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
+
+            modelBuilder.Entity("LegendsTeamVN.Core.Identity.Entities.AppPermission", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("GroupName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("AppPermissions", "Identity");
+                });
 
             modelBuilder.Entity("LegendsTeamVN.Core.Identity.Entities.AppRole", b =>
                 {
@@ -56,6 +87,21 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                         .HasDatabaseName("RoleNameIndex");
 
                     b.ToTable("AppRoles", "Identity");
+                });
+
+            modelBuilder.Entity("LegendsTeamVN.Core.Identity.Entities.AppRolePermission", b =>
+                {
+                    b.Property<Guid>("RoleId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PermissionId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("RoleId", "PermissionId");
+
+                    b.HasIndex("PermissionId");
+
+                    b.ToTable("AppRolePermissions", "Identity");
                 });
 
             modelBuilder.Entity("LegendsTeamVN.Core.Identity.Entities.AppUser", b =>
@@ -227,6 +273,25 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                     b.ToTable("AppUserTokens", "Identity");
                 });
 
+            modelBuilder.Entity("LegendsTeamVN.Core.Identity.Entities.AppRolePermission", b =>
+                {
+                    b.HasOne("LegendsTeamVN.Core.Identity.Entities.AppPermission", "Permission")
+                        .WithMany("RolePermissions")
+                        .HasForeignKey("PermissionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("LegendsTeamVN.Core.Identity.Entities.AppRole", "Role")
+                        .WithMany("RolePermissions")
+                        .HasForeignKey("RoleId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Permission");
+
+                    b.Navigation("Role");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
                 {
                     b.HasOne("LegendsTeamVN.Core.Identity.Entities.AppRole", null)
@@ -278,9 +343,16 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("LegendsTeamVN.Core.Identity.Entities.AppPermission", b =>
+                {
+                    b.Navigation("RolePermissions");
+                });
+
             modelBuilder.Entity("LegendsTeamVN.Core.Identity.Entities.AppRole", b =>
                 {
                     b.Navigation("Claims");
+
+                    b.Navigation("RolePermissions");
 
                     b.Navigation("UserRoles");
                 });

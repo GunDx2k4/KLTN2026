@@ -41,7 +41,19 @@ builder.Services.AddCoreSwagger("Badminton Club API");
 // Add Endpoints Discovery from Presentation assembly
 builder.Services.AddPresentation();
 
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+
 var app = builder.Build();
+
+app.UseCors();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -49,12 +61,25 @@ if (app.Environment.IsDevelopment())
     app.UseCoreSwagger();
 }
 
-app.UseHttpsRedirection();
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 // Use Global Exception Handler
 app.UseExceptionHandler();
 
 // Map all Minimal API endpoints automatically
 app.MapEndpoints();
+
+// Seed initial data & sync permissions in AppPermissions & AppRolePermissions on startup
+using (var scope = app.Services.CreateScope())
+{
+    var seeders = scope.ServiceProvider.GetServices<LegendsTeamVN.Core.Application.Data.IDataSeeder>();
+    foreach (var seeder in seeders)
+    {
+        await seeder.SeedAsync();
+    }
+}
 
 app.Run();

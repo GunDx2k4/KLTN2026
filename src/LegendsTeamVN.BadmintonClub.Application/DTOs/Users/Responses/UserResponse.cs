@@ -1,3 +1,14 @@
+using LegendsTeamVN.Core.Identity.Authorization;
+
 namespace LegendsTeamVN.BadmintonClub.Application.DTOs.Users.Responses;
 
-public sealed record UserResponse(Guid Id, string Email, string? UserName, IList<string>? Roles, IList<string>? Permissions);
+public record UserResponse(
+    Guid Id,
+    string Email,
+    string? UserName,
+    string? PhoneNumber,
+    bool IsLocked,
+    DateTimeOffset? LockoutEnd,
+    IList<string> Roles,
+    List<PermissionGroupModel> Permissions
+);
