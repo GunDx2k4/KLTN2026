@@ -13,6 +13,9 @@ public sealed class UnitOfWorkBehavior<TRequest, TResponse>(IUnitOfWork unitOfWo
 
     public async Task<TResponse> Handle(TRequest request, RequestHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
     {
+        if (request is IManagesOwnTransaction)
+            return await next();
+
         await _unitOfWork.BeginTransactionAsync(cancellationToken: cancellationToken);
 
         try

@@ -4,13 +4,15 @@ using LegendsTeamVN.Core.Identity.Authorization;
 using LegendsTeamVN.Core.Identity.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Hosting;
 
 namespace LegendsTeamVN.Core.Identity.Data;
 
 internal sealed class IdentityDataSeeder(
     UserManager<AppUser> userManager,
     RoleManager<AppRole> roleManager,
-    AppIdentityDbContext dbContext) : IDataSeeder
+    AppIdentityDbContext dbContext,
+    IHostEnvironment environment) : IDataSeeder
 {
     public async Task SeedAsync(CancellationToken cancellationToken = default)
     {
@@ -156,6 +158,46 @@ internal sealed class IdentityDataSeeder(
                 foreach (var claim in userClaims.Where(c => c.Type == "Permission"))
                 {
                     await userManager.RemoveClaimAsync(existingUser, claim);
+                }
+            }
+        }
+
+        if (environment.IsDevelopment())
+        {
+            const string memberEmail = "member@badmintonclub.local";
+            const string memberPassword = "Member123";
+            var member = await userManager.FindByEmailAsync(memberEmail);
+
+            if (member is null)
+            {
+                member = new AppUser
+                {
+                    UserName = "rsvp-member",
+                    Email = memberEmail,
+                    EmailConfirmed = true
+                };
+
+                var result = await userManager.CreateAsync(member, memberPassword);
+                if (!result.Succeeded)
+                {
+                    throw new InvalidOperationException(
+                        $"Could not create RSVP test member: {string.Join("; ", result.Errors.Select(error => error.Description))}");
+                }
+            }
+
+            var userRole = await roleManager.FindByNameAsync("User")
+                ?? throw new InvalidOperationException("The User role was not seeded.");
+            var hasUserRole = await dbContext.UserRoles
+                .AnyAsync(userRoleLink => userRoleLink.UserId == member.Id && userRoleLink.RoleId == userRole.Id,
+                    cancellationToken);
+
+            if (!hasUserRole)
+            {
+                var roleResult = await userManager.AddToRoleAsync(member, "User");
+                if (!roleResult.Succeeded)
+                {
+                    throw new InvalidOperationException(
+                        $"Could not assign the User role to RSVP test member: {string.Join("; ", roleResult.Errors.Select(error => error.Description))}");
                 }
             }
         }

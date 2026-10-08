@@ -1,4 +1,3 @@
-using LegendsTeamVN.BadmintonClub.Application.DependencyInjection.Extensions;
 using LegendsTeamVN.BadmintonClub.Migrator;
 using LegendsTeamVN.BadmintonClub.Persistence.DependencyInjection.Extensions;
 using LegendsTeamVN.Core.Identity.Data;
@@ -16,7 +15,8 @@ builder.Services.Configure<ConnectionStringsOptions>(builder.Configuration.GetSe
 var connectionStrings = new ConnectionStringsOptions();
 builder.Configuration.GetSection(ConnectionStringsOptions.SectionName).Bind(connectionStrings);
 
-builder.Services.AddApplication();
+// Migrations/seeders only need the publisher; they do not run API command handlers.
+builder.Services.AddMediatR(options => options.RegisterServicesFromAssembly(typeof(Worker).Assembly));
 
 builder.Services.AddIdentity<AppUser, AppRole>(options =>
         {
@@ -28,7 +28,7 @@ builder.Services.AddIdentity<AppUser, AppRole>(options =>
         })
         .AddEntityFrameworkStores<AppIdentityDbContext>();
 
-builder.Services.AddPostgreSQLIdentity(connectionStrings).AddDataSeederIdentity();
+builder.Services.AddPostgreSQLIdentity(connectionStrings);
 
 builder.Services.AddIdentityServices().AddIdentityContext();
 

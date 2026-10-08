@@ -27,4 +27,18 @@ public class PersistenceTests
 
         result.IsSuccessful.Should().BeTrue();
     }
+
+    [Fact]
+    public void Uc06Persistence_ShouldNotDependOn_ApplicationPolicyOrDtos()
+    {
+        var result = Types.InAssembly(Persistence.AssemblyReference.Assembly)
+            .ShouldNot()
+            .HaveDependencyOnAny(
+                "LegendsTeamVN.BadmintonClub.Application.Features.Matches",
+                "LegendsTeamVN.BadmintonClub.Application.DTOs.Matches",
+                "LegendsTeamVN.BadmintonClub.Application.Models.Matches")
+            .GetResult();
+
+        result.IsSuccessful.Should().BeTrue();
+    }
 }

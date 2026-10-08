@@ -3,17 +3,20 @@ using System;
 using LegendsTeamVN.BadmintonClub.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
+namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations.BadmintonDb
 {
     [DbContext(typeof(BadmintonDbContext))]
-    partial class BadmintonDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261008040840_AddMatchRsvpRegistration")]
+    partial class AddMatchRsvpRegistration
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

@@ -21,6 +21,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IVenueScheduleRepository, VenueScheduleRepository>();
         services.AddScoped<ICourtPricingRepository, CourtPricingRepository>();
         services.AddScoped<IVenueRepository, VenueRepository>();
+        services.AddScoped<IMatchRepository, MatchRepository>();
 
         return services;
     }
@@ -29,6 +30,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddTransient<IDataSeeder, VenueDataSeeder>();
         services.AddTransient<IDataSeeder, CourtDataSeeder>();
+        services.AddTransient<IDataSeeder, MatchDataSeeder>();
         return services;
     }
 }
