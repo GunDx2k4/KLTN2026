@@ -62,11 +62,22 @@ public static class ServiceCollectionExtensions
         {
             options.SaveToken = true;
             options.RequireHttpsMetadata = false;
+            options.Events = new JwtBearerEvents
+            {
+                OnMessageReceived = context =>
+                {
+                    // Browsers send the JWT in the query string for WebSocket/SSE hub connections only.
+                    if (context.HttpContext.Request.Path.StartsWithSegments("/hubs/matches")
+                        && !string.IsNullOrEmpty(context.Request.Query["access_token"]))
+                        context.Token = context.Request.Query["access_token"];
+                    return Task.CompletedTask;
+                }
+            };
             options.TokenValidationParameters = new TokenValidationParameters
             {
                 ValidateIssuer = false,
                 ValidateAudience = false,
-                ValidateLifetime = false, // Disabled Lifetime Validation for Dev
+                ValidateLifetime = true,
                 ValidateIssuerSigningKey = true,
                 ValidIssuer = jwtOptions.Issuer,
                 ValidAudience = jwtOptions.Audience,

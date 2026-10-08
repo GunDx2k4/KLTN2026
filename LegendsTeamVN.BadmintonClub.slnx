@@ -46,6 +46,7 @@
     <Project Path="src/Hosts/LegendsTeamVN.BadmintonClub.Migrator/LegendsTeamVN.BadmintonClub.Migrator.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/LegendsTeamVN.BadmintonClub.Application.Tests/LegendsTeamVN.BadmintonClub.Application.Tests.csproj" />
     <Project Path="tests/LegendsTeamVN.BadmintonClub.Architecture.Tests/LegendsTeamVN.BadmintonClub.Architecture.Tests.csproj" />
   </Folder>
 </Solution>

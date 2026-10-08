@@ -10,6 +10,8 @@ public class MatchPlayerConfiguration : IEntityTypeConfiguration<MatchPlayer>
     {
         builder.ToTable("MatchPlayers");
         builder.HasKey(mp => mp.Id);
+        builder.HasIndex(mp => new { mp.MatchId, mp.UserId }).IsUnique();
+        builder.HasIndex(mp => new { mp.MatchId, mp.Status, mp.JoinedAt, mp.Id });
 
         builder.HasOne(mp => mp.Match)
             .WithMany(m => m.MatchPlayers)

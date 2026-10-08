@@ -29,4 +29,13 @@ public class MatchPlayer : SoftDeletableEntity<Guid>
     {
         Status = status;
     }
+
+    public void Register(MatchPlayerStatus status, DateTimeOffset joinedAt)
+    {
+        Status = status;
+        JoinedAt = joinedAt;
+        IsDeleted = false;
+        DeletedOnUtc = null;
+        DeletedBy = null;
+    }
 }

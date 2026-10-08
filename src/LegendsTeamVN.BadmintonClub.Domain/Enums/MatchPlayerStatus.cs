@@ -4,5 +4,7 @@ public enum MatchPlayerStatus
 {
     Pending = 1,
     Approved = 2,
-    Rejected = 3
+    Rejected = 3,
+    Waitlisted = 4,
+    Cancelled = 5
 }

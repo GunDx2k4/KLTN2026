@@ -42,6 +42,30 @@ public class ApplicationTests
     }
 
     [Fact]
+    public void ApplicationLayer_ShouldNotHaveDependencyOn_DataOrRealtimeFrameworks()
+    {
+        var result = Types.InAssembly(Application.AssemblyReference.Assembly)
+            .ShouldNot()
+            .HaveDependencyOnAny("Microsoft.EntityFrameworkCore", "StackExchange.Redis", "Microsoft.AspNetCore.SignalR")
+            .GetResult();
+
+        result.IsSuccessful.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Uc06RsvpHandler_ShouldUse_ApplicationIdentityPort()
+    {
+        var result = Types.InAssembly(Application.AssemblyReference.Assembly)
+            .That()
+            .HaveNameEndingWith("MatchRsvpCommandHandler")
+            .ShouldNot()
+            .HaveDependencyOn("LegendsTeamVN.Core.Identity")
+            .GetResult();
+
+        result.IsSuccessful.Should().BeTrue();
+    }
+
+    [Fact]
     public void CommandHandlers_ShouldHave_CommandHandlerPostfix()
     {
         var result = Types.InAssembly(Application.AssemblyReference.Assembly)
