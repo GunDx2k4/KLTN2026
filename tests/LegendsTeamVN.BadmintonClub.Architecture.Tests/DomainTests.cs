@@ -121,4 +121,30 @@ public class DomainTests
 
         failingTypes.Should().BeEmpty("Entities should not have public setters to enforce encapsulation.");
     }
+
+    [Fact]
+    public void FR03_UserCanHoldIndependentRoles_AcrossMultipleClubs()
+    {
+        var userId = Guid.NewGuid();
+        var clubAId = Guid.NewGuid();
+        var clubBId = Guid.NewGuid();
+        var clubCId = Guid.NewGuid();
+
+        // 1 User simultaneously participates in 3 clubs with independent roles
+        var membershipA = new ClubMember(clubAId, userId, Domain.Enums.ClubRole.Host, Domain.Enums.ClubMemberStatus.Active);
+        var membershipB = new ClubMember(clubBId, userId, Domain.Enums.ClubRole.Treasurer, Domain.Enums.ClubMemberStatus.Active);
+        var membershipC = new ClubMember(clubCId, userId, Domain.Enums.ClubRole.Guest, Domain.Enums.ClubMemberStatus.Active);
+
+        membershipA.Role.Should().Be(Domain.Enums.ClubRole.Host);
+        membershipB.Role.Should().Be(Domain.Enums.ClubRole.Treasurer);
+        membershipC.Role.Should().Be(Domain.Enums.ClubRole.Guest);
+
+        membershipA.ClubId.Should().Be(clubAId);
+        membershipB.ClubId.Should().Be(clubBId);
+        membershipC.ClubId.Should().Be(clubCId);
+
+        membershipA.UserId.Should().Be(userId);
+        membershipB.UserId.Should().Be(userId);
+        membershipC.UserId.Should().Be(userId);
+    }
 }

@@ -40,40 +40,14 @@ public static class AppPermissions
         public const string ResetPassword = "Users.ResetPassword";
     }
 
-    public static class Venues
+    public static class Clubs
     {
-        public const string GroupName = "Venues";
-        public const string Read = "Venues.Read";
-        public const string Create = "Venues.Create";
-        public const string Update = "Venues.Update";
-        public const string Delete = "Venues.Delete";
-    }
-
-    public static class Courts
-    {
-        public const string GroupName = "Courts";
-        public const string Read = "Courts.Read";
-        public const string Create = "Courts.Create";
-        public const string Update = "Courts.Update";
-        public const string Delete = "Courts.Delete";
-    }
-
-    public static class VenueSchedules
-    {
-        public const string GroupName = "VenueSchedules";
-        public const string Read = "VenueSchedules.Read";
-        public const string Create = "VenueSchedules.Create";
-        public const string Update = "VenueSchedules.Update";
-        public const string Delete = "VenueSchedules.Delete";
-    }
-
-    public static class CourtPricings
-    {
-        public const string GroupName = "CourtPricings";
-        public const string Read = "CourtPricings.Read";
-        public const string Create = "CourtPricings.Create";
-        public const string Update = "CourtPricings.Update";
-        public const string Delete = "CourtPricings.Delete";
+        public const string GroupName = "Clubs";
+        public const string Read = "Clubs.Read";
+        public const string Create = "Clubs.Create";
+        public const string Update = "Clubs.Update";
+        public const string Delete = "Clubs.Delete";
+        public const string ManageMembers = "Clubs.ManageMembers";
     }
 
     public static List<PermissionGroupModel> GetAllPermissionGroups()
@@ -114,47 +88,15 @@ public static class AppPermissions
                 }
             ),
             new PermissionGroupModel(
-                Venues.GroupName,
-                "Quản lý cụm sân",
+                Clubs.GroupName,
+                "Quản lý câu lạc bộ",
                 Permissions: new List<PermissionItemModel>
                 {
-                    new PermissionItemModel(Venues.Read, "Xem danh sách cụm sân"),
-                    new PermissionItemModel(Venues.Create, "Tạo cụm sân mới"),
-                    new PermissionItemModel(Venues.Update, "Cập nhật cụm sân"),
-                    new PermissionItemModel(Venues.Delete, "Xóa cụm sân")
-                }
-            ),
-            new PermissionGroupModel(
-                Courts.GroupName,
-                "Quản lý sân",
-                Permissions: new List<PermissionItemModel>
-                {
-                    new PermissionItemModel(Courts.Read, "Xem danh sách sân"),
-                    new PermissionItemModel(Courts.Create, "Tạo sân mới"),
-                    new PermissionItemModel(Courts.Update, "Cập nhật sân"),
-                    new PermissionItemModel(Courts.Delete, "Xóa sân")
-                }
-            ),
-            new PermissionGroupModel(
-                VenueSchedules.GroupName,
-                "Quản lý lịch cụm sân",
-                Permissions: new List<PermissionItemModel>
-                {
-                    new PermissionItemModel(VenueSchedules.Read, "Xem lịch cụm sân"),
-                    new PermissionItemModel(VenueSchedules.Create, "Tạo lịch cụm sân mới"),
-                    new PermissionItemModel(VenueSchedules.Update, "Cập nhật lịch cụm sân"),
-                    new PermissionItemModel(VenueSchedules.Delete, "Xóa lịch cụm sân")
-                }
-            ),
-            new PermissionGroupModel(
-                CourtPricings.GroupName,
-                "Quản lý bảng giá sân",
-                Permissions: new List<PermissionItemModel>
-                {
-                    new PermissionItemModel(CourtPricings.Read, "Xem bảng giá sân"),
-                    new PermissionItemModel(CourtPricings.Create, "Tạo bảng giá sân mới"),
-                    new PermissionItemModel(CourtPricings.Update, "Cập nhật bảng giá sân"),
-                    new PermissionItemModel(CourtPricings.Delete, "Xóa bảng giá sân")
+                    new PermissionItemModel(Clubs.Read, "Xem danh sách câu lạc bộ"),
+                    new PermissionItemModel(Clubs.Create, "Tạo câu lạc bộ mới"),
+                    new PermissionItemModel(Clubs.Update, "Cập nhật câu lạc bộ"),
+                    new PermissionItemModel(Clubs.Delete, "Xóa câu lạc bộ"),
+                    new PermissionItemModel(Clubs.ManageMembers, "Quản lý thành viên câu lạc bộ")
                 }
             )
         };
@@ -229,10 +171,7 @@ public static class AppPermissions
         "System" => "Quản trị hệ thống",
         "Roles" => "Nhóm người dùng",
         "Users" => "Danh sách tài khoản",
-        "Venues" => "Quản lý cụm sân",
-        "Courts" => "Quản lý sân",
-        "VenueSchedules" => "Quản lý lịch cụm sân",
-        "CourtPricings" => "Quản lý bảng giá sân",
+        "Clubs" => "Quản lý câu lạc bộ",
         _ => groupName
     };
 
@@ -277,7 +216,7 @@ public static class AppPermissions
         }
 
         // 2. Standard top-level groups order
-        var standardOrder = new[] { "Venues", "Courts", "VenueSchedules", "CourtPricings" };
+        var standardOrder = new[] { "Clubs" };
         foreach (var stdGroup in standardOrder)
         {
             if (groupedByGroupName.Remove(stdGroup, out var perms) && perms.Count > 0)

@@ -129,10 +129,7 @@ Khi API đang chạy, bạn có thể xem danh sách các API và test trực ti
 
 ## 🏗️ Hướng dẫn Lập trình (Development Guidelines)
 
-👉 **[Kiến trúc Hệ thống (Architecture)](docs/ARCHITECTURE.VI.md)**
-👉 **[Thiết kế Cơ sở dữ liệu (Database)](docs/DATABASE.VI.md)**
-👉 **[Hướng dẫn Lập trình API (API Guidelines)](docs/API_GUIDELINES.VI.md)**
-👉 **[Quy tắc Phân quyền RBAC khi tạo API (Permission Guidelines)](docs/PERMISSION_GUIDELINES.vi.md)**
+👉 **[Tài liệu Kiến trúc & Hướng dẫn Phát triển Toàn diện (Development Guide)](docs/DEVELOPMENT_GUIDE.md)**
 
 ## 📜 Giấy phép
 
