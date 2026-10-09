@@ -1,5 +1,0 @@
-Add-Migration -Context BadmintonDbContext Init -OutputDir Migrations
-Update-Database -Context BadmintonDbContext
-
-Add-Migration -Context AppIdentityDbContext InitIdentity -OutputDir Migrations
-Update-Database -Context AppIdentityDbContext

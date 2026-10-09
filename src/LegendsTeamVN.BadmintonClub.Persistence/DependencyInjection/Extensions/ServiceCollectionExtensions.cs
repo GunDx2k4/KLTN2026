@@ -1,10 +1,9 @@
 using LegendsTeamVN.BadmintonClub.Domain.Repositories;
 using LegendsTeamVN.BadmintonClub.Persistence.Repositories;
+using LegendsTeamVN.BadmintonClub.Persistence.Seeders;
+using LegendsTeamVN.Core.Application.Data;
 using LegendsTeamVN.Core.Persistence.DependencyInjection.Extensions;
 using LegendsTeamVN.Core.Utilities.Options;
-using LegendsTeamVN.Core.Application.Data;
-using LegendsTeamVN.BadmintonClub.Persistence.Seeders;
-
 using Microsoft.Extensions.DependencyInjection;
 
 namespace LegendsTeamVN.BadmintonClub.Persistence.DependencyInjection.Extensions;
@@ -17,20 +16,15 @@ public static class ServiceCollectionExtensions
 
         services.AddPostgreSQLDbContextUnitOfWork<BadmintonDbContext>(connectionStrings);
 
-        services.AddScoped<ICourtRepository, CourtRepository>();
-        services.AddScoped<IVenueScheduleRepository, VenueScheduleRepository>();
-        services.AddScoped<ICourtPricingRepository, CourtPricingRepository>();
-        services.AddScoped<IVenueRepository, VenueRepository>();
-        services.AddScoped<IMatchRepository, MatchRepository>();
+        services.AddScoped<IClubRepository, ClubRepository>();
+        services.AddScoped<IClubMemberRepository, ClubMemberRepository>();
 
         return services;
     }
 
     public static IServiceCollection AddDataSeederBadminton(this IServiceCollection services)
     {
-        services.AddTransient<IDataSeeder, VenueDataSeeder>();
-        services.AddTransient<IDataSeeder, CourtDataSeeder>();
-        services.AddTransient<IDataSeeder, MatchDataSeeder>();
+        services.AddTransient<IDataSeeder, ClubDataSeeder>();
         return services;
     }
 }

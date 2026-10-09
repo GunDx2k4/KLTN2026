@@ -4,15 +4,13 @@ using LegendsTeamVN.Core.Identity.Authorization;
 using LegendsTeamVN.Core.Identity.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Hosting;
 
 namespace LegendsTeamVN.Core.Identity.Data;
 
 internal sealed class IdentityDataSeeder(
     UserManager<AppUser> userManager,
     RoleManager<AppRole> roleManager,
-    AppIdentityDbContext dbContext,
-    IHostEnvironment environment) : IDataSeeder
+    AppIdentityDbContext dbContext) : IDataSeeder
 {
     public async Task SeedAsync(CancellationToken cancellationToken = default)
     {
@@ -91,13 +89,13 @@ internal sealed class IdentityDataSeeder(
             }
             else if (roleName == "User")
             {
-                var courtsReadPerm = allDbPermissions.FirstOrDefault(p => p.Name == AppPermissions.Courts.Read);
-                if (courtsReadPerm != null && !currentPermIdSet.Contains(courtsReadPerm.Id))
+                var clubsReadPerm = allDbPermissions.FirstOrDefault(p => p.Name == AppPermissions.Clubs.Read);
+                if (clubsReadPerm != null && !currentPermIdSet.Contains(clubsReadPerm.Id))
                 {
                     await dbContext.RolePermissions.AddAsync(new AppRolePermission
                     {
                         RoleId = role.Id,
-                        PermissionId = courtsReadPerm.Id
+                        PermissionId = clubsReadPerm.Id
                     }, cancellationToken);
                     await dbContext.SaveChangesAsync(cancellationToken);
                 }
@@ -162,42 +160,35 @@ internal sealed class IdentityDataSeeder(
             }
         }
 
-        if (environment.IsDevelopment())
+        // 4. Ensure Test Badminton Users exist
+        var testUsers = new (string UserName, string Email, string Password)[]
         {
-            const string memberEmail = "member@badmintonclub.local";
-            const string memberPassword = "Member123";
-            var member = await userManager.FindByEmailAsync(memberEmail);
+            ("hoang_nam", "nam@badminton.com", "admin"),
+            ("thuy_linh", "linh@badminton.com", "admin"),
+            ("quoc_bao", "bao@badminton.com", "admin"),
+            ("minh_anh", "anh@badminton.com", "admin"),
+            ("tuan_kiet", "kiet@badminton.com", "admin"),
+            ("mai_huong", "huong@badminton.com", "admin")
+        };
 
-            if (member is null)
+        foreach (var userInfo in testUsers)
+        {
+            var existingUser = await userManager.FindByEmailAsync(userInfo.Email) 
+                            ?? await userManager.FindByNameAsync(userInfo.UserName);
+
+            if (existingUser == null)
             {
-                member = new AppUser
+                var user = new AppUser
                 {
-                    UserName = "rsvp-member",
-                    Email = memberEmail,
+                    UserName = userInfo.UserName,
+                    Email = userInfo.Email,
                     EmailConfirmed = true
                 };
 
-                var result = await userManager.CreateAsync(member, memberPassword);
-                if (!result.Succeeded)
+                var result = await userManager.CreateAsync(user, userInfo.Password);
+                if (result.Succeeded)
                 {
-                    throw new InvalidOperationException(
-                        $"Could not create RSVP test member: {string.Join("; ", result.Errors.Select(error => error.Description))}");
-                }
-            }
-
-            var userRole = await roleManager.FindByNameAsync("User")
-                ?? throw new InvalidOperationException("The User role was not seeded.");
-            var hasUserRole = await dbContext.UserRoles
-                .AnyAsync(userRoleLink => userRoleLink.UserId == member.Id && userRoleLink.RoleId == userRole.Id,
-                    cancellationToken);
-
-            if (!hasUserRole)
-            {
-                var roleResult = await userManager.AddToRoleAsync(member, "User");
-                if (!roleResult.Succeeded)
-                {
-                    throw new InvalidOperationException(
-                        $"Could not assign the User role to RSVP test member: {string.Join("; ", roleResult.Errors.Select(error => error.Description))}");
+                    await userManager.AddToRoleAsync(user, "User");
                 }
             }
         }

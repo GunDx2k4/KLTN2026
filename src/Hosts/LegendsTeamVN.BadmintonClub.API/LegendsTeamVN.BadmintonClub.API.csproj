@@ -19,5 +19,9 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
   </ItemGroup>
-
+<ItemGroup>
+  <None Update="sports-venue-cb204-firebase-adminsdk-fbsvc-7f5ec12fb1.json">
+    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+  </None>
+</ItemGroup>
 </Project>

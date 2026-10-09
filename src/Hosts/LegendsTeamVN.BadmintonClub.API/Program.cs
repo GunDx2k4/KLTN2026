@@ -8,7 +8,6 @@ using LegendsTeamVN.Core.Infrastructure.DependencyInjection.Extensions;
 using LegendsTeamVN.Core.Presentation.DependencyInjection.Extensions;
 using LegendsTeamVN.Core.Presentation.Extensions;
 using LegendsTeamVN.Core.Utilities.Options;
-using LegendsTeamVN.BadmintonClub.Presentation.Realtime;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddCoreSerilog();
@@ -41,7 +40,6 @@ builder.Services.AddCoreSwagger("Badminton Club API");
 
 // Add Endpoints Discovery from Presentation assembly
 builder.Services.AddPresentation();
-builder.Services.AddMatchRealtime<MatchHub>(builder.Configuration, MatchHub.GroupName);
 
 builder.Services.AddCors(options =>
 {
@@ -70,12 +68,9 @@ if (!app.Environment.IsDevelopment())
 
 // Use Global Exception Handler
 app.UseExceptionHandler();
-app.UseAuthentication();
-app.UseAuthorization();
 
 // Map all Minimal API endpoints automatically
 app.MapEndpoints();
-app.MapHub<MatchHub>("/hubs/matches", options => options.CloseOnAuthenticationExpiration = true).RequireAuthorization();
 
 // Seed initial data & sync permissions in AppPermissions & AppRolePermissions on startup
 using (var scope = app.Services.CreateScope())

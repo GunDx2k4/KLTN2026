@@ -99,11 +99,9 @@ Once the API is running, you can explore and test the endpoints using the built-
 
 ## 🏗️ Development Guidelines
 
-To ensure the codebase remains clean and maintainable, we have documented the core Architecture, Database Design, and API Guidelines.
+To ensure the codebase remains clean and maintainable, we have documented the core Architecture, Database Design, API Guidelines, and Multi-Group RBAC in one comprehensive guide:
 
-👉 **[Architecture Guide](docs/ARCHITECTURE.md)**
-👉 **[Database Design](docs/DATABASE.md)**
-👉 **[API Guidelines](docs/API_GUIDELINES.md)**
+👉 **[Comprehensive Development Guide](docs/DEVELOPMENT_GUIDE.md)**
 
 ## 📜 License
 

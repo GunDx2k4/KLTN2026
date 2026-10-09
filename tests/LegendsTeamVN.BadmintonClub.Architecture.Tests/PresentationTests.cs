@@ -41,28 +41,4 @@ public class PresentationTests
 
         result.IsSuccessful.Should().BeTrue();
     }
-
-    [Fact]
-    public void PresentationLayer_ShouldNotHaveDependencyOn_Redis()
-    {
-        var result = Types.InAssembly(Presentation.AssemblyReference.Assembly)
-            .ShouldNot()
-            .HaveDependencyOn("StackExchange.Redis")
-            .GetResult();
-
-        result.IsSuccessful.Should().BeTrue();
-    }
-
-    [Fact]
-    public void Hubs_ShouldNotBypass_ApplicationHandlers()
-    {
-        var result = Types.InAssembly(Presentation.AssemblyReference.Assembly)
-            .That()
-            .Inherit(typeof(Microsoft.AspNetCore.SignalR.Hub))
-            .ShouldNot()
-            .HaveDependencyOn("LegendsTeamVN.BadmintonClub.Domain.Repositories")
-            .GetResult();
-
-        result.IsSuccessful.Should().BeTrue();
-    }
 }

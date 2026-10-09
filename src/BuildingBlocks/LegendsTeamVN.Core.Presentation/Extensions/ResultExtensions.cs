@@ -28,8 +28,7 @@ public static class ResultExtensions
             statusCode: GetStatusCode(result.Error.Type),
             title: GetTitle(result.Error.Type),
             type: GetType(result.Error.Type),
-            detail: result.Error.Message,
-            extensions: new Dictionary<string, object?> { ["code"] = result.Error.Code });
+            detail: result.Error.Message);
     }
 
     public static IResult Match<TValue>(this Result<TValue> result, Func<TValue, IResult> onSuccess)
