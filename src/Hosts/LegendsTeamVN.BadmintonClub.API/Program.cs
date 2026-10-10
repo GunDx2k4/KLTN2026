@@ -76,7 +76,7 @@ app.MapEndpoints();
 using (var scope = app.Services.CreateScope())
 {
     var seeders = scope.ServiceProvider.GetServices<LegendsTeamVN.Core.Application.Data.IDataSeeder>()
-        .OrderBy(s => s is LegendsTeamVN.Core.Identity.Data.IdentityDataSeeder ? 0 : 1);
+        .OrderBy(s => s.Order);
     foreach (var seeder in seeders)
     {
         await seeder.SeedAsync();

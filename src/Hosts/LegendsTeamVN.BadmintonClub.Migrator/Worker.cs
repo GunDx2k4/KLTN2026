@@ -25,7 +25,7 @@ public class Worker(IServiceProvider serviceProvider, ILogger<Worker> logger, IH
 
             logger.LogInformation("Running data seeders...");
             var seeders = scope.ServiceProvider.GetServices<LegendsTeamVN.Core.Application.Data.IDataSeeder>()
-                .OrderBy(s => s is IdentityDataSeeder ? 0 : 1);
+                .OrderBy(s => s.Order);
             foreach (var seeder in seeders)
             {
                 logger.LogInformation("Running seeder: {SeederName}", seeder.GetType().Name);

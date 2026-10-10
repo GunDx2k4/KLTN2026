@@ -12,6 +12,8 @@ public class BadmintonUserSeeder(
     UserManager<LegendsTeamVN.Core.Identity.Entities.AppUser> userManager,
     ILogger<BadmintonUserSeeder> logger) : IDataSeeder
 {
+    public int Order => 2;
+
     public async Task SeedAsync(CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Ensuring default Badminton domain users exist...");

@@ -11,6 +11,8 @@ public class GroupPermissionSeeder(
     BadmintonDbContext dbContext,
     ILogger<GroupPermissionSeeder> logger) : IDataSeeder
 {
+    public int Order => 3;
+
     public async Task SeedAsync(CancellationToken cancellationToken = default)
     {
         logger.LogInformation("Ensuring Group Permissions are seeded...");

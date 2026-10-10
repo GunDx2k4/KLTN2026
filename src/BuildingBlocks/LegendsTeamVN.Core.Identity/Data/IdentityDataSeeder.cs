@@ -7,11 +7,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LegendsTeamVN.Core.Identity.Data;
 
-internal sealed class IdentityDataSeeder(
+public sealed class IdentityDataSeeder(
     UserManager<AppUser> userManager,
     RoleManager<AppRole> roleManager,
     AppIdentityDbContext dbContext) : IDataSeeder
 {
+    public int Order => 1;
+
     public async Task SeedAsync(CancellationToken cancellationToken = default)
     {
         // 1. Sync all defined permissions to AppPermissions table
