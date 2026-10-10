@@ -74,7 +74,93 @@ public sealed class UserManagerService(
     {
         var user = new AppUser { UserName = email, Email = email };
         var result = await userManager.CreateAsync(user, password);
-        
+        if (result.Succeeded)
+        {
+            await userManager.AddToRoleAsync(user, "User");
+        }
+        return (result.Succeeded, user.Id, result.Errors.Select(e => e.Description));
+    }
+
+    public async Task<(bool Succeeded, Guid? UserId, IEnumerable<string> Errors)> CreateUserAsync(string userName, string? email, string? phoneNumber, string password)
+    {
+        var user = new AppUser
+        {
+            UserName = userName,
+            Email = email,
+            PhoneNumber = phoneNumber,
+            EmailConfirmed = !string.IsNullOrEmpty(email),
+            PhoneNumberConfirmed = !string.IsNullOrEmpty(phoneNumber)
+        };
+        var result = await userManager.CreateAsync(user, password);
+        if (result.Succeeded)
+        {
+            await userManager.AddToRoleAsync(user, "User");
+        }
+        return (result.Succeeded, user.Id, result.Errors.Select(e => e.Description));
+    }
+
+    public async Task<AppUser?> FindByExternalLoginAsync(string provider, string providerKey)
+    {
+        return await userManager.FindByLoginAsync(provider, providerKey);
+    }
+
+    public async Task<(bool Succeeded, Guid? UserId, IEnumerable<string> Errors)> CreateExternalUserAsync(
+        string provider,
+        string providerKey,
+        string email,
+        string userName)
+    {
+        var existingUser = await userManager.FindByEmailAsync(email);
+        if (existingUser != null)
+        {
+            var logins = await userManager.GetLoginsAsync(existingUser);
+            if (!logins.Any(l => l.LoginProvider == provider && l.ProviderKey == providerKey))
+            {
+                var addLoginResult = await userManager.AddLoginAsync(existingUser, new UserLoginInfo(provider, providerKey, provider));
+                if (!addLoginResult.Succeeded)
+                {
+                    return (false, null, addLoginResult.Errors.Select(e => e.Description));
+                }
+            }
+            return (true, existingUser.Id, Array.Empty<string>());
+        }
+
+        var user = new AppUser
+        {
+            UserName = userName,
+            Email = email,
+            EmailConfirmed = true
+        };
+
+        var result = await userManager.CreateAsync(user);
+        if (!result.Succeeded)
+        {
+            return (false, null, result.Errors.Select(e => e.Description));
+        }
+
+        await userManager.AddToRoleAsync(user, "User");
+        var loginResult = await userManager.AddLoginAsync(user, new UserLoginInfo(provider, providerKey, provider));
+        if (!loginResult.Succeeded)
+        {
+            return (false, null, loginResult.Errors.Select(e => e.Description));
+        }
+
+        return (true, user.Id, Array.Empty<string>());
+    }
+
+    public async Task<(bool Succeeded, Guid? UserId, IEnumerable<string> Errors)> CreateExternalUserAsync(string userName, string email)
+    {
+        var user = new AppUser
+        {
+            UserName = userName,
+            Email = email,
+            EmailConfirmed = true
+        };
+        var result = await userManager.CreateAsync(user);
+        if (result.Succeeded)
+        {
+            await userManager.AddToRoleAsync(user, "User");
+        }
         return (result.Succeeded, user.Id, result.Errors.Select(e => e.Description));
     }
 

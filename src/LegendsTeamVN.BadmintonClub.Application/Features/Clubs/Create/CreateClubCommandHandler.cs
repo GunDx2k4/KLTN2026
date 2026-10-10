@@ -20,10 +20,10 @@ public sealed class CreateClubCommandHandler(
         }
 
         var code = "CLB-" + Guid.NewGuid().ToString("N")[..6].ToUpper();
-        var club = new Club(request.Name, code, request.Description, request.AvatarUrl);
+        var club = new ClubGroup(request.Name, code, request.Description, request.AvatarUrl);
 
-        var hostMembership = new ClubMember(club.Id, userId.Value, ClubRole.Host, ClubMemberStatus.Active, "Chủ phòng");
-        club.Members.Add(hostMembership);
+        var allPermissions = await clubRepository.GetAllPermissionsAsync(cancellationToken);
+        club.InitializeHostRole(allPermissions, userId.Value);
 
         clubRepository.Add(club);
 

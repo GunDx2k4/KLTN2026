@@ -8,7 +8,8 @@ public sealed record MyClubResponse(
     string ClubCode,
     string? Description,
     string? AvatarUrl,
-    ClubRole Role,
+    Guid RoleId,
+    string? RoleName,
     ClubMemberStatus Status,
     DateTime JoinedAt
 );

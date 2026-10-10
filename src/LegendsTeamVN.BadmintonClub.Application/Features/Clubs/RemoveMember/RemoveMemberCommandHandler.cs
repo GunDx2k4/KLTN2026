@@ -20,8 +20,9 @@ public sealed class RemoveMemberCommandHandler(
         }
 
         var targetMembership = await clubMemberRepository.FindSingleAsync(
-            m => m.ClubId == request.ClubId && m.UserId == request.TargetUserId,
-            cancellationToken
+            m => m.GroupId == request.ClubId && m.UserId == request.TargetUserId,
+            cancellationToken,
+            m => m.RoleEntity
         );
 
         if (targetMembership is null)
@@ -33,26 +34,31 @@ public sealed class RemoveMemberCommandHandler(
 
         if (!isSelf)
         {
-            // Caller must be Host to remove another member
+            // Caller must be Host/Admin to remove another member
             var callerMembership = await clubMemberRepository.FindSingleAsync(
-                m => m.ClubId == request.ClubId && m.UserId == currentUserId.Value,
-                cancellationToken
+                m => m.GroupId == request.ClubId && m.UserId == currentUserId.Value,
+                cancellationToken,
+                m => m.RoleEntity
             );
 
-            if (callerMembership is null || callerMembership.Role != ClubRole.Host)
+            var callerRoleName = callerMembership?.RoleEntity?.RoleName ?? string.Empty;
+            var isHost = callerRoleName.Contains("Chủ") || callerRoleName.Contains("Host") || callerRoleName.Contains("Admin");
+
+            if (callerMembership is null || !isHost)
             {
                 return Result.Failure<bool>(Error.Forbidden("Club.Forbidden", "Chỉ Host mới có quyền xóa thành viên khỏi câu lạc bộ."));
             }
         }
         else
         {
-            // If caller is leaving and is Host, ensure they are not the sole Host if there are remaining members
-            if (targetMembership.Role == ClubRole.Host)
+            var targetRoleName = targetMembership.RoleEntity?.RoleName ?? string.Empty;
+            var isHost = targetRoleName.Contains("Chủ") || targetRoleName.Contains("Host") || targetRoleName.Contains("Admin");
+            if (isHost)
             {
-                var totalMembers = await clubMemberRepository.FindAll(m => m.ClubId == request.ClubId)
+                var totalMembers = await clubMemberRepository.FindAll(m => m.GroupId == request.ClubId)
                     .CountAsync(cancellationToken);
 
-                var hostCount = await clubMemberRepository.FindAll(m => m.ClubId == request.ClubId && m.Role == ClubRole.Host)
+                var hostCount = await clubMemberRepository.FindAll(m => m.GroupId == request.ClubId && m.RoleId == targetMembership.RoleId)
                     .CountAsync(cancellationToken);
 
                 if (totalMembers > 1 && hostCount <= 1)

@@ -18,13 +18,25 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<IClubRepository, ClubRepository>();
         services.AddScoped<IClubMemberRepository, ClubMemberRepository>();
+        services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IDeviceRepository, DeviceRepository>();
+        services.AddScoped<LegendsTeamVN.BadmintonClub.Application.Abstractions.IGroupAuthorizationService, LegendsTeamVN.BadmintonClub.Persistence.Services.GroupAuthorizationService>();
 
         return services;
     }
 
     public static IServiceCollection AddDataSeederBadminton(this IServiceCollection services)
     {
-        services.AddTransient<IDataSeeder, ClubDataSeeder>();
+        services.AddTransient<GroupPermissionSeeder>();
+        services.AddTransient<BadmintonUserSeeder>();
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddEnumerable(
+            services,
+            ServiceDescriptor.Transient<IDataSeeder, GroupPermissionSeeder>()
+        );
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddEnumerable(
+            services,
+            ServiceDescriptor.Transient<IDataSeeder, BadmintonUserSeeder>()
+        );
         return services;
     }
 }

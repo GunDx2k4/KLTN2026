@@ -75,7 +75,8 @@ app.MapEndpoints();
 // Seed initial data & sync permissions in AppPermissions & AppRolePermissions on startup
 using (var scope = app.Services.CreateScope())
 {
-    var seeders = scope.ServiceProvider.GetServices<LegendsTeamVN.Core.Application.Data.IDataSeeder>();
+    var seeders = scope.ServiceProvider.GetServices<LegendsTeamVN.Core.Application.Data.IDataSeeder>()
+        .OrderBy(s => s is LegendsTeamVN.Core.Identity.Data.IdentityDataSeeder ? 0 : 1);
     foreach (var seeder in seeders)
     {
         await seeder.SeedAsync();

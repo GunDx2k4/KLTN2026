@@ -19,15 +19,16 @@ public sealed class GetMyClubsQueryHandler(
             return Result.Failure<List<MyClubResponse>>(Error.Unauthorized("User.Unauthorized", "Vui lòng đăng nhập để xem danh sách nhóm của bạn."));
         }
 
-        var memberships = await clubMemberRepository.FindAll(m => m.UserId == userId.Value, m => m.Club)
+        var memberships = await clubMemberRepository.FindAll(m => m.UserId == userId.Value, m => m.Group, m => m.RoleEntity)
             .OrderByDescending(m => m.JoinedAt)
             .Select(m => new MyClubResponse(
-                m.ClubId,
-                m.Club.Name,
-                m.Club.Code,
-                m.Club.Description,
-                m.Club.AvatarUrl,
-                m.Role,
+                m.GroupId,
+                m.Group.GroupName,
+                m.Group.Code ?? string.Empty,
+                m.Group.Description,
+                m.Group.AvatarUrl,
+                m.RoleId,
+                m.RoleEntity.RoleName,
                 m.Status,
                 m.JoinedAt
             ))

@@ -40,16 +40,6 @@ public static class AppPermissions
         public const string ResetPassword = "Users.ResetPassword";
     }
 
-    public static class Clubs
-    {
-        public const string GroupName = "Clubs";
-        public const string Read = "Clubs.Read";
-        public const string Create = "Clubs.Create";
-        public const string Update = "Clubs.Update";
-        public const string Delete = "Clubs.Delete";
-        public const string ManageMembers = "Clubs.ManageMembers";
-    }
-
     public static List<PermissionGroupModel> GetAllPermissionGroups()
     {
         return new List<PermissionGroupModel>
@@ -85,18 +75,6 @@ public static class AppPermissions
                             new PermissionItemModel(Users.ResetPassword, "Đặt lại mật khẩu")
                         }
                     )
-                }
-            ),
-            new PermissionGroupModel(
-                Clubs.GroupName,
-                "Quản lý câu lạc bộ",
-                Permissions: new List<PermissionItemModel>
-                {
-                    new PermissionItemModel(Clubs.Read, "Xem danh sách câu lạc bộ"),
-                    new PermissionItemModel(Clubs.Create, "Tạo câu lạc bộ mới"),
-                    new PermissionItemModel(Clubs.Update, "Cập nhật câu lạc bộ"),
-                    new PermissionItemModel(Clubs.Delete, "Xóa câu lạc bộ"),
-                    new PermissionItemModel(Clubs.ManageMembers, "Quản lý thành viên câu lạc bộ")
                 }
             )
         };

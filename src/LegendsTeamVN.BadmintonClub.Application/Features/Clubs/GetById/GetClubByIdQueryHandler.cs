@@ -17,7 +17,7 @@ public sealed class GetClubByIdQueryHandler(IClubRepository clubRepository) : IQ
 
         return Result.Success(new ClubResponse(
             club.Id,
-            club.Name,
+            club.GroupName,
             club.Code,
             club.Description,
             club.AvatarUrl,

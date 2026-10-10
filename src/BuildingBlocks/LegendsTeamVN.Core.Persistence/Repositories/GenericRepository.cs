@@ -12,11 +12,11 @@ public abstract class GenericRepository<TDbContext, TEntity, TKey>(TDbContext db
     where TDbContext : DbContextUnitOfWork<TDbContext>
     where TEntity : AggregateRoot<TKey>
 {
-    private readonly TDbContext _dbContext = dbContext;
+    protected readonly TDbContext DbContext = dbContext;
 
-    protected DbSet<TEntity> DbSet => _dbContext.Set<TEntity>();
+    protected DbSet<TEntity> DbSet => DbContext.Set<TEntity>();
 
-    public IUnitOfWork UnitOfWork => _dbContext;
+    public IUnitOfWork UnitOfWork => DbContext;
 
     public async Task<TEntity?> FindByIdAsync(TKey id, CancellationToken cancellationToken = default, params Expression<Func<TEntity, object>>[] includeProperties)
     {

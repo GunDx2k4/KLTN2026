@@ -2,4 +2,7 @@ using LegendsTeamVN.Core.Application.Messaging.CQRS;
 
 namespace LegendsTeamVN.BadmintonClub.Application.Features.Auth.Logout;
 
-public record LogoutCommand(string Email) : ICommand;
+public sealed record LogoutCommand(
+    string? DeviceToken = null,
+    string? AccessToken = null
+) : ICommand;

@@ -23,9 +23,8 @@ public sealed class GetClubMembersQueryHandler(
             return Result.Failure<List<ClubMemberResponse>>(Error.NotFound("Club.NotFound", "Không tìm thấy câu lạc bộ."));
         }
 
-        var members = await clubMemberRepository.FindAll(m => m.ClubId == request.ClubId)
-            .OrderBy(m => m.Role == ClubRole.Host ? 1 : m.Role == ClubRole.Treasurer ? 2 : m.Role == ClubRole.Member ? 3 : 4)
-            .ThenBy(m => m.JoinedAt)
+        var members = await clubMemberRepository.FindAll(m => m.GroupId == request.ClubId, m => m.RoleEntity)
+            .OrderBy(m => m.JoinedAt)
             .ToListAsync(cancellationToken);
 
         var userIds = members.Select(m => m.UserId).Distinct().ToList();
@@ -39,11 +38,12 @@ public sealed class GetClubMembersQueryHandler(
             users.TryGetValue(m.UserId, out var user);
             return new ClubMemberResponse(
                 Id: m.Id,
-                ClubId: m.ClubId,
+                ClubId: m.GroupId,
                 UserId: m.UserId,
                 UserName: user?.UserName,
                 Email: user?.Email,
-                Role: m.Role,
+                RoleId: m.RoleId,
+                RoleName: m.RoleEntity?.RoleName,
                 Status: m.Status,
                 Nickname: m.Nickname,
                 JoinedAt: m.JoinedAt

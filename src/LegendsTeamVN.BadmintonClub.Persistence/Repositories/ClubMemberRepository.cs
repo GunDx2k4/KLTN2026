@@ -4,6 +4,6 @@ using LegendsTeamVN.Core.Persistence.Repositories;
 
 namespace LegendsTeamVN.BadmintonClub.Persistence.Repositories;
 
-public class ClubMemberRepository(BadmintonDbContext dbContext) : GenericRepository<BadmintonDbContext, ClubMember, Guid>(dbContext), IClubMemberRepository
+public class ClubMemberRepository(BadmintonDbContext dbContext) : GenericRepository<BadmintonDbContext, GroupMember, Guid>(dbContext), IClubMemberRepository
 {
 }

@@ -86,7 +86,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICurrentUserService, CurrentUserService>();
         services.AddScoped<IUserManagerService, UserManagerService>();
         services.AddSingleton<IJwtTokenService, JwtTokenService>();
-        services.AddScoped<IDataSeeder, IdentityDataSeeder>();
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddEnumerable(
+            services,
+            ServiceDescriptor.Scoped<IDataSeeder, IdentityDataSeeder>()
+        );
 
         return services;
     }
@@ -99,7 +102,10 @@ public static class ServiceCollectionExtensions
 
     public static IServiceCollection AddDataSeederIdentity(this IServiceCollection services)
     {
-        services.AddScoped<IDataSeeder, IdentityDataSeeder>();
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddEnumerable(
+            services,
+            ServiceDescriptor.Scoped<IDataSeeder, IdentityDataSeeder>()
+        );
         return services;
     }
 }

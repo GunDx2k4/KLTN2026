@@ -23,7 +23,8 @@ public sealed class JoinClubCommandHandler(
         var normalizedCode = request.ClubCode.Trim().ToUpperInvariant();
         var club = await clubRepository.FindSingleAsync(
             c => c.Code == normalizedCode,
-            cancellationToken
+            cancellationToken,
+            c => c.Roles
         );
 
         if (club is null)
@@ -37,7 +38,7 @@ public sealed class JoinClubCommandHandler(
         }
 
         var existingMember = await clubMemberRepository.FindSingleAsync(
-            m => m.ClubId == club.Id && m.UserId == userId.Value,
+            m => m.GroupId == club.Id && m.UserId == userId.Value,
             cancellationToken
         );
 
@@ -46,11 +47,15 @@ public sealed class JoinClubCommandHandler(
             return Result.Failure<Guid>(Error.Conflict("ClubMember.AlreadyJoined", "Bạn đã là thành viên của câu lạc bộ này."));
         }
 
-        var newMember = new ClubMember(
-            clubId: club.Id,
+        var roleId = request.RoleId ?? club.Roles.FirstOrDefault(r => r.IsDefault)?.Id ?? club.Roles.FirstOrDefault()?.Id ?? Guid.Empty;
+
+        var newMember = new GroupMember(
+            groupId: club.Id,
             userId: userId.Value,
-            role: request.Role,
-            status: ClubMemberStatus.Active,
+            roleId: roleId,
+            memberType: "MONTHLY",
+            monthlyExpiryDate: null,
+            status: ClubMemberStatus.ACTIVE,
             nickname: request.Nickname
         );
 

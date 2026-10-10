@@ -89,14 +89,26 @@ internal sealed class IdentityDataSeeder(
             }
             else if (roleName == "User")
             {
-                var clubsReadPerm = allDbPermissions.FirstOrDefault(p => p.Name == AppPermissions.Clubs.Read);
-                if (clubsReadPerm != null && !currentPermIdSet.Contains(clubsReadPerm.Id))
+                // User gets basic permissions: Users.Read, Roles.Read, Users.ResetPassword
+                var basicPermNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
                 {
-                    await dbContext.RolePermissions.AddAsync(new AppRolePermission
+                    AppPermissions.Users.Read,
+                    AppPermissions.Roles.Read,
+                    AppPermissions.Users.ResetPassword
+                };
+
+                var missingPerms = allDbPermissions
+                    .Where(p => basicPermNames.Contains(p.Name) && !currentPermIdSet.Contains(p.Id))
+                    .Select(p => new AppRolePermission
                     {
                         RoleId = role.Id,
-                        PermissionId = clubsReadPerm.Id
-                    }, cancellationToken);
+                        PermissionId = p.Id
+                    })
+                    .ToList();
+
+                if (missingPerms.Count > 0)
+                {
+                    await dbContext.RolePermissions.AddRangeAsync(missingPerms, cancellationToken);
                     await dbContext.SaveChangesAsync(cancellationToken);
                 }
             }
@@ -109,46 +121,54 @@ internal sealed class IdentityDataSeeder(
             }
         }
 
-        // 3. Ensure Default Admin Users exist
-        var defaultAdmins = new (string UserName, string Email, string Password)[]
+        // 3. Remove old admin account if exists
+        var oldAdmin = await userManager.FindByEmailAsync("admin@admin.com");
+        if (oldAdmin != null)
         {
-            ("admin", "admin@admin.com", "admin"),
-            ("admin@l7ungdz.id.vn", "admin@l7ungdz.id.vn", "admin")
+            await userManager.DeleteAsync(oldAdmin);
+        }
+
+        // 4. Ensure Default Users with @l7ungdz.id.vn exist (All are 'User' role)
+        var defaultUsers = new (string UserName, string Email, string Password)[]
+        {
+            ("user1", "user1@l7ungdz.id.vn", "admin"),
+            ("user2", "user2@l7ungdz.id.vn", "admin"),
+            ("user3", "user3@l7ungdz.id.vn", "admin")
         };
 
-        foreach (var adminInfo in defaultAdmins)
+        foreach (var userInfo in defaultUsers)
         {
-            var existingUser = await userManager.FindByEmailAsync(adminInfo.Email) 
-                            ?? await userManager.FindByNameAsync(adminInfo.UserName);
+            var existingUser = await userManager.FindByEmailAsync(userInfo.Email) 
+                            ?? await userManager.FindByNameAsync(userInfo.UserName);
 
             if (existingUser == null)
             {
-                var adminUser = new AppUser
+                var newUser = new AppUser
                 {
-                    UserName = adminInfo.UserName,
-                    Email = adminInfo.Email,
+                    UserName = userInfo.UserName,
+                    Email = userInfo.Email,
                     EmailConfirmed = true
                 };
 
-                var result = await userManager.CreateAsync(adminUser, adminInfo.Password);
+                var result = await userManager.CreateAsync(newUser, userInfo.Password);
                 if (result.Succeeded)
                 {
-                    await userManager.AddToRoleAsync(adminUser, "Admin");
+                    await userManager.AddToRoleAsync(newUser, "User");
                 }
             }
             else
             {
                 var userRoles = await userManager.GetRolesAsync(existingUser);
-                if (!userRoles.Contains("Admin"))
+                if (!userRoles.Contains("User"))
                 {
-                    await userManager.AddToRoleAsync(existingUser, "Admin");
+                    await userManager.AddToRoleAsync(existingUser, "User");
                 }
 
                 // Reset password to 'admin'
                 var removeResult = await userManager.RemovePasswordAsync(existingUser);
                 if (removeResult.Succeeded || !await userManager.HasPasswordAsync(existingUser))
                 {
-                    await userManager.AddPasswordAsync(existingUser, adminInfo.Password);
+                    await userManager.AddPasswordAsync(existingUser, userInfo.Password);
                 }
 
                 // Purge direct user claims
@@ -156,39 +176,6 @@ internal sealed class IdentityDataSeeder(
                 foreach (var claim in userClaims.Where(c => c.Type == "Permission"))
                 {
                     await userManager.RemoveClaimAsync(existingUser, claim);
-                }
-            }
-        }
-
-        // 4. Ensure Test Badminton Users exist
-        var testUsers = new (string UserName, string Email, string Password)[]
-        {
-            ("hoang_nam", "nam@badminton.com", "admin"),
-            ("thuy_linh", "linh@badminton.com", "admin"),
-            ("quoc_bao", "bao@badminton.com", "admin"),
-            ("minh_anh", "anh@badminton.com", "admin"),
-            ("tuan_kiet", "kiet@badminton.com", "admin"),
-            ("mai_huong", "huong@badminton.com", "admin")
-        };
-
-        foreach (var userInfo in testUsers)
-        {
-            var existingUser = await userManager.FindByEmailAsync(userInfo.Email) 
-                            ?? await userManager.FindByNameAsync(userInfo.UserName);
-
-            if (existingUser == null)
-            {
-                var user = new AppUser
-                {
-                    UserName = userInfo.UserName,
-                    Email = userInfo.Email,
-                    EmailConfirmed = true
-                };
-
-                var result = await userManager.CreateAsync(user, userInfo.Password);
-                if (result.Succeeded)
-                {
-                    await userManager.AddToRoleAsync(user, "User");
                 }
             }
         }

@@ -13,6 +13,10 @@ public interface IUserManagerService
     Task<IList<string>> GetRolesAsync(Guid userId);
     Task<IList<string>> GetPermissionsAsync(Guid userId);
     Task<(bool Succeeded, Guid? UserId, IEnumerable<string> Errors)> CreateUserAsync(string email, string password);
+    Task<(bool Succeeded, Guid? UserId, IEnumerable<string> Errors)> CreateUserAsync(string userName, string? email, string? phoneNumber, string password);
+    Task<AppUser?> FindByExternalLoginAsync(string provider, string providerKey);
+    Task<(bool Succeeded, Guid? UserId, IEnumerable<string> Errors)> CreateExternalUserAsync(string provider, string providerKey, string email, string userName);
+    Task<(bool Succeeded, Guid? UserId, IEnumerable<string> Errors)> CreateExternalUserAsync(string userName, string email);
     Task<(bool Succeeded, IEnumerable<string> Errors)> UpdateUserAsync(Guid userId, string email, string? userName, string? phoneNumber);
     Task<(bool Succeeded, IEnumerable<string> Errors)> DeleteUserAsync(Guid userId);
     Task<(bool Succeeded, Guid? UserId)> CheckPasswordAsync(string email, string password);

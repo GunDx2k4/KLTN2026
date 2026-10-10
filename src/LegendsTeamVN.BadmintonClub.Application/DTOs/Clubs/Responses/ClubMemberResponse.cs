@@ -8,7 +8,8 @@ public record ClubMemberResponse(
     Guid UserId,
     string? UserName,
     string? Email,
-    ClubRole Role,
+    Guid RoleId,
+    string? RoleName,
     ClubMemberStatus Status,
     string? Nickname,
     DateTime JoinedAt

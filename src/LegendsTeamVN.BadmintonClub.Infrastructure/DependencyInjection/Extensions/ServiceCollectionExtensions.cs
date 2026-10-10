@@ -26,6 +26,7 @@ public static class ServiceCollectionExtensions
         }
         // Đăng ký Service Notification
         services.AddScoped<INotificationService, FirebaseNotificationService>();
+        services.AddScoped<IExternalAuthService, ExternalAuthService>();
         return services;
     }
 }

@@ -130,18 +130,22 @@ public class DomainTests
         var clubBId = Guid.NewGuid();
         var clubCId = Guid.NewGuid();
 
+        var roleAId = Guid.NewGuid();
+        var roleBId = Guid.NewGuid();
+        var roleCId = Guid.NewGuid();
+
         // 1 User simultaneously participates in 3 clubs with independent roles
-        var membershipA = new ClubMember(clubAId, userId, Domain.Enums.ClubRole.Host, Domain.Enums.ClubMemberStatus.Active);
-        var membershipB = new ClubMember(clubBId, userId, Domain.Enums.ClubRole.Treasurer, Domain.Enums.ClubMemberStatus.Active);
-        var membershipC = new ClubMember(clubCId, userId, Domain.Enums.ClubRole.Guest, Domain.Enums.ClubMemberStatus.Active);
+        var membershipA = new GroupMember(clubAId, userId, roleAId, status: Domain.Enums.ClubMemberStatus.ACTIVE);
+        var membershipB = new GroupMember(clubBId, userId, roleBId, status: Domain.Enums.ClubMemberStatus.ACTIVE);
+        var membershipC = new GroupMember(clubCId, userId, roleCId, status: Domain.Enums.ClubMemberStatus.ACTIVE);
 
-        membershipA.Role.Should().Be(Domain.Enums.ClubRole.Host);
-        membershipB.Role.Should().Be(Domain.Enums.ClubRole.Treasurer);
-        membershipC.Role.Should().Be(Domain.Enums.ClubRole.Guest);
+        membershipA.RoleId.Should().Be(roleAId);
+        membershipB.RoleId.Should().Be(roleBId);
+        membershipC.RoleId.Should().Be(roleCId);
 
-        membershipA.ClubId.Should().Be(clubAId);
-        membershipB.ClubId.Should().Be(clubBId);
-        membershipC.ClubId.Should().Be(clubCId);
+        membershipA.GroupId.Should().Be(clubAId);
+        membershipB.GroupId.Should().Be(clubBId);
+        membershipC.GroupId.Should().Be(clubCId);
 
         membershipA.UserId.Should().Be(userId);
         membershipB.UserId.Should().Be(userId);

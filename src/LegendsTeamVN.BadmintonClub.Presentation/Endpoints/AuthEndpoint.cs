@@ -1,3 +1,4 @@
+using LegendsTeamVN.BadmintonClub.Application.Features.Auth.ExternalRegister;
 using LegendsTeamVN.BadmintonClub.Application.Features.Auth.Register;
 using LegendsTeamVN.BadmintonClub.Application.Features.Auth.Login;
 using LegendsTeamVN.Core.Presentation.Abstractions;
@@ -23,6 +24,11 @@ public class AuthEndpoint : EndpointGroupBase
              .WithSummary("Register a new user")
              .WithDescription("Creates a new user account.");
 
+        group.MapPost("external-register", ExternalRegister)
+             .WithName("ExternalRegisterUser")
+             .WithSummary("Register or login with external provider")
+             .WithDescription("Registers or authenticates a user via external provider like Google or Apple.");
+
         group.MapPost("login", Login)
              .WithName("LoginUser")
              .WithSummary("Login to the system")
@@ -41,18 +47,55 @@ public class AuthEndpoint : EndpointGroupBase
 
     }
 
-    private static async Task<IResult> Register(RegisterCommand command, ISender sender)
+    private static async Task<IResult> Register(RegisterCommand command, ISender sender, HttpContext context)
     {
         var result = await sender.Send(command);
 
         return result.Match(
-            onSuccess: id => Results.Ok(new { UserId = id, Message = "User created successfully." })
+            onSuccess: response =>
+            {
+                if (!string.IsNullOrEmpty(response.RefreshToken))
+                {
+                    context.Response.Cookies.Append("refreshToken", response.RefreshToken, new CookieOptions
+                    {
+                        HttpOnly = true,
+                        Secure = true,
+                        SameSite = SameSiteMode.Strict,
+                        Expires = response.RefreshTokenExpiryTime
+                    });
+                }
+
+                return Results.Created($"/api/v1/users/{response.UserId}", response);
+            }
         );
     }
 
-    private static async Task<IResult> Login(LoginQuery query, ISender sender, HttpContext context)
+    private static async Task<IResult> ExternalRegister(ExternalRegisterCommand command, ISender sender, HttpContext context)
     {
-        var result = await sender.Send(query);
+        var result = await sender.Send(command);
+
+        return result.Match(
+            onSuccess: response =>
+            {
+                if (!string.IsNullOrEmpty(response.RefreshToken))
+                {
+                    context.Response.Cookies.Append("refreshToken", response.RefreshToken, new CookieOptions
+                    {
+                        HttpOnly = true,
+                        Secure = true,
+                        SameSite = SameSiteMode.Strict,
+                        Expires = response.RefreshTokenExpiryTime
+                    });
+                }
+
+                return Results.Ok(response);
+            }
+        );
+    }
+
+    private static async Task<IResult> Login(LoginCommand command, ISender sender, HttpContext context)
+    {
+        var result = await sender.Send(command);
 
         return result.Match(
             onSuccess: response =>
@@ -68,7 +111,7 @@ public class AuthEndpoint : EndpointGroupBase
                     });
                 }
                 
-                return Results.Ok(new { AccessToken = response.AccessToken });
+                return Results.Ok(response);
             }
         );
     }
@@ -109,16 +152,24 @@ public class AuthEndpoint : EndpointGroupBase
         );
     }
 
-    private static async Task<IResult> Logout(HttpContext context, ISender sender)
+    private static async Task<IResult> Logout(LogoutRequest? request, HttpContext context, ISender sender)
     {
-        var email = context.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
-        if (string.IsNullOrEmpty(email)) return Results.Unauthorized();
+        string? accessToken = null;
+        var authorizationHeader = context.Request.Headers.Authorization.FirstOrDefault();
+        if (!string.IsNullOrEmpty(authorizationHeader) && authorizationHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        {
+            accessToken = authorizationHeader.Substring("Bearer ".Length).Trim();
+        }
 
-        var command = new LogoutCommand(email);
-        await sender.Send(command);
+        var command = new LogoutCommand(request?.DeviceToken, accessToken);
+        var result = await sender.Send(command);
 
         context.Response.Cookies.Delete("refreshToken");
-        return Results.Ok(new { Message = "Logged out successfully." });
+        return result.Match(
+            onSuccess: () => Results.Ok(new { Message = "Đăng xuất thành công." })
+        );
     }
 
 }
+
+public record LogoutRequest(string? DeviceToken = null);

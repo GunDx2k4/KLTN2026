@@ -1,4 +1,3 @@
-using LegendsTeamVN.BadmintonClub.Domain.Enums;
 using LegendsTeamVN.Core.Application.Messaging.CQRS;
 
 namespace LegendsTeamVN.BadmintonClub.Application.Features.Clubs.UpdateMemberRole;
@@ -6,5 +5,5 @@ namespace LegendsTeamVN.BadmintonClub.Application.Features.Clubs.UpdateMemberRol
 public record UpdateMemberRoleCommand(
     Guid ClubId,
     Guid TargetUserId,
-    ClubRole NewRole
+    Guid RoleId
 ) : ICommand<bool>;

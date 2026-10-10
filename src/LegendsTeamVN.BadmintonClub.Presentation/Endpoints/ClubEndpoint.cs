@@ -7,6 +7,7 @@ using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.Join;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.RemoveMember;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.SwitchContext;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.UpdateMemberRole;
+using LegendsTeamVN.BadmintonClub.Presentation.Security;
 using LegendsTeamVN.Core.Presentation.Abstractions;
 using LegendsTeamVN.Core.Presentation.Extensions;
 using MediatR;
@@ -46,12 +47,12 @@ public class ClubEndpoint : EndpointGroupBase
         group.MapGet("{id:guid}/members", GetClubMembers)
             .WithName("GetClubMembers")
             .WithSummary("Xem danh sách thành viên và vai trò trong câu lạc bộ (FR03)")
-            .RequireAuthorization();
+            .RequireGroupPermission(Domain.Constants.GroupPermissions.Member.View);
 
         group.MapPut("{id:guid}/members/{userId:guid}/role", UpdateMemberRole)
             .WithName("UpdateMemberRole")
-            .WithSummary("Cập nhật vai trò của thành viên trong câu lạc bộ (Chỉ Host)")
-            .RequireAuthorization();
+            .WithSummary("Cập nhật vai trò của thành viên trong câu lạc bộ")
+            .RequireGroupPermission(Domain.Constants.GroupPermissions.Member.RoleManage);
 
         group.MapDelete("{id:guid}/members/{userId:guid}", RemoveMember)
             .WithName("RemoveClubMember")
@@ -98,7 +99,7 @@ public class ClubEndpoint : EndpointGroupBase
         ISender sender,
         CancellationToken cancellationToken)
     {
-        var command = new JoinClubCommand(request.ClubCode, request.Role, request.Nickname);
+        var command = new JoinClubCommand(request.ClubCode, request.RoleId, request.Nickname);
         var result = await sender.Send(command, cancellationToken);
         return result.Match(onSuccess: memberId => Results.Ok(new { MemberId = memberId }));
     }
@@ -120,7 +121,7 @@ public class ClubEndpoint : EndpointGroupBase
         ISender sender,
         CancellationToken cancellationToken)
     {
-        var command = new UpdateMemberRoleCommand(id, userId, request.Role);
+        var command = new UpdateMemberRoleCommand(id, userId, request.RoleId);
         var result = await sender.Send(command, cancellationToken);
         return result.Match(onSuccess: success => Results.Ok(new { Success = success }));
     }
