@@ -4,9 +4,18 @@ using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.GetById;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.GetMembers;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.GetMyClubs;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.Join;
+using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.JoinRequests.Approve;
+using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.JoinRequests.Create;
+using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.JoinRequests.GetList;
+using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.JoinRequests.Reject;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.RemoveMember;
+using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.Roles.Create;
+using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.Roles.Delete;
+using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.Roles.GetList;
+using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.Roles.UpdatePermissions;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.SwitchContext;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.UpdateMemberRole;
+using LegendsTeamVN.BadmintonClub.Domain.Enums;
 using LegendsTeamVN.BadmintonClub.Presentation.Security;
 using LegendsTeamVN.Core.Presentation.Abstractions;
 using LegendsTeamVN.Core.Presentation.Extensions;
@@ -63,6 +72,48 @@ public class ClubEndpoint : EndpointGroupBase
             .WithName("SwitchClubContext")
             .WithSummary("Chuyển đổi câu lạc bộ đang hoạt động, trả về Token đồng bộ vai trò & quyền hạn (FR04)")
             .RequireAuthorization();
+
+        // --- GROUP ROLES MANAGEMENT ---
+        group.MapGet("{id:guid}/roles", GetClubRoles)
+            .WithName("GetClubRoles")
+            .WithSummary("Lấy danh sách các vai trò nội bộ của câu lạc bộ")
+            .RequireGroupPermission(Domain.Constants.GroupPermissions.Member.View);
+
+        group.MapPost("{id:guid}/roles", CreateClubRole)
+            .WithName("CreateClubRole")
+            .WithSummary("Tạo vai trò tùy chỉnh mới cho câu lạc bộ")
+            .RequireGroupPermission(Domain.Constants.GroupPermissions.Member.RoleManage);
+
+        group.MapPut("{id:guid}/roles/{roleId:guid}/permissions", UpdateClubRolePermissions)
+            .WithName("UpdateClubRolePermissions")
+            .WithSummary("Cập nhật danh sách quyền cho vai trò trong câu lạc bộ")
+            .RequireGroupPermission(Domain.Constants.GroupPermissions.Member.RoleManage);
+
+        group.MapDelete("{id:guid}/roles/{roleId:guid}", DeleteClubRole)
+            .WithName("DeleteClubRole")
+            .WithSummary("Xóa vai trò tùy chỉnh khỏi câu lạc bộ")
+            .RequireGroupPermission(Domain.Constants.GroupPermissions.Member.RoleManage);
+
+        // --- JOIN REQUESTS MANAGEMENT ---
+        group.MapPost("{id:guid}/join-requests", CreateJoinRequest)
+            .WithName("CreateJoinRequest")
+            .WithSummary("Gửi yêu cầu xin tham gia câu lạc bộ")
+            .RequireAuthorization();
+
+        group.MapGet("{id:guid}/join-requests", GetJoinRequests)
+            .WithName("GetJoinRequests")
+            .WithSummary("Xem danh sách yêu cầu xin gia nhập câu lạc bộ")
+            .RequireGroupPermission(Domain.Constants.GroupPermissions.Member.JoinRequestManage);
+
+        group.MapPut("{id:guid}/join-requests/{requestId:guid}/approve", ApproveJoinRequest)
+            .WithName("ApproveJoinRequest")
+            .WithSummary("Duyệt yêu cầu gia nhập câu lạc bộ và gán vai trò ban đầu")
+            .RequireGroupPermission(Domain.Constants.GroupPermissions.Member.JoinRequestManage);
+
+        group.MapPut("{id:guid}/join-requests/{requestId:guid}/reject", RejectJoinRequest)
+            .WithName("RejectJoinRequest")
+            .WithSummary("Từ chối yêu cầu gia nhập câu lạc bộ")
+            .RequireGroupPermission(Domain.Constants.GroupPermissions.Member.JoinRequestManage);
     }
 
     private static async Task<IResult> CreateClub(
@@ -145,5 +196,94 @@ public class ClubEndpoint : EndpointGroupBase
         var command = new SwitchClubContextCommand(id);
         var result = await sender.Send(command, cancellationToken);
         return result.Match(onSuccess: response => Results.Ok(response));
+    }
+
+    private static async Task<IResult> GetClubRoles(
+        [FromRoute] Guid id,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var query = new GetClubRolesQuery(id);
+        var result = await sender.Send(query, cancellationToken);
+        return result.Match(onSuccess: roles => Results.Ok(roles));
+    }
+
+    private static async Task<IResult> CreateClubRole(
+        [FromRoute] Guid id,
+        [FromBody] CreateClubRoleRequest request,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var command = new CreateClubRoleCommand(id, request.RoleName, request.Description, request.PermissionIds, request.IsDefault);
+        var result = await sender.Send(command, cancellationToken);
+        return result.Match(onSuccess: roleId => Results.Created($"/api/v1/clubs/{id}/roles/{roleId}", new { RoleId = roleId }));
+    }
+
+    private static async Task<IResult> UpdateClubRolePermissions(
+        [FromRoute] Guid id,
+        [FromRoute] Guid roleId,
+        [FromBody] UpdateClubRolePermissionsRequest request,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var command = new UpdateClubRolePermissionsCommand(id, roleId, request.PermissionIds);
+        var result = await sender.Send(command, cancellationToken);
+        return result.Match(onSuccess: success => Results.Ok(new { Success = success }));
+    }
+
+    private static async Task<IResult> DeleteClubRole(
+        [FromRoute] Guid id,
+        [FromRoute] Guid roleId,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var command = new DeleteClubRoleCommand(id, roleId);
+        var result = await sender.Send(command, cancellationToken);
+        return result.Match(onSuccess: success => Results.NoContent());
+    }
+
+    private static async Task<IResult> CreateJoinRequest(
+        [FromRoute] Guid id,
+        [FromBody] CreateJoinRequest request,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var command = new CreateJoinRequestCommand(id, request.Introduction);
+        var result = await sender.Send(command, cancellationToken);
+        return result.Match(onSuccess: requestId => Results.Created($"/api/v1/clubs/{id}/join-requests/{requestId}", new { RequestId = requestId }));
+    }
+
+    private static async Task<IResult> GetJoinRequests(
+        [FromRoute] Guid id,
+        [FromQuery] JoinRequestStatus? status,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var query = new GetJoinRequestsQuery(id, status);
+        var result = await sender.Send(query, cancellationToken);
+        return result.Match(onSuccess: requests => Results.Ok(requests));
+    }
+
+    private static async Task<IResult> ApproveJoinRequest(
+        [FromRoute] Guid id,
+        [FromRoute] Guid requestId,
+        [FromBody] ApproveJoinRequest request,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var command = new ApproveJoinRequestCommand(id, requestId, request.RoleId, request.MemberType);
+        var result = await sender.Send(command, cancellationToken);
+        return result.Match(onSuccess: memberId => Results.Ok(new { MemberId = memberId }));
+    }
+
+    private static async Task<IResult> RejectJoinRequest(
+        [FromRoute] Guid id,
+        [FromRoute] Guid requestId,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var command = new RejectJoinRequestCommand(id, requestId);
+        var result = await sender.Send(command, cancellationToken);
+        return result.Match(onSuccess: success => Results.Ok(new { Success = success }));
     }
 }
