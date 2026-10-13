@@ -11,6 +11,7 @@ Tài liệu này là cẩm nang phát triển chính thức cho toàn bộ dự 
 4. [Chuẩn Thiết Kế RESTful Minimal API](#4-chuẩn-thiết-kế-restful-minimal-api)
 5. [Quy Trình Phát Triển Tính Năng Mới (Feature Workflow)](#5-quy-trình-phát-triển-tính-năng-mới-feature-workflow)
 6. [Lệnh Thao Tác, Di Trú Dữ Liệu & Kiểm Thử](#6-lệnh-thao-tác-di-trú-dữ-liệu--kiểm-thử)
+7. [📖 Danh Sách & Đặc Tả Toàn Bộ API (API Specification)](API_DOCUMENTATION.md)
 
 ---
 

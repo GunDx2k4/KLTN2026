@@ -30,89 +30,95 @@ namespace LegendsTeamVN.BadmintonClub.Presentation.Endpoints;
 public class ClubEndpoint : EndpointGroupBase
 {
     protected override string Name => "clubs";
+    protected override string? Tag => null;
 
     protected override void Map(RouteGroupBuilder group)
     {
-        group.MapPost("", CreateClub)
+        var generalGroup = group.MapGroup("").WithTags("Clubs");
+        var fr03Group = group.MapGroup("").WithTags("FR03 - Quản lý CLB & Thành viên");
+
+        // --- GENERAL CLUB APIS ---
+        generalGroup.MapPost("", CreateClub)
             .WithName("CreateClub")
             .WithSummary("Tạo một câu lạc bộ mới (Người tạo tự động thành Host)")
             .RequireAuthorization();
 
-        group.MapGet("my-clubs", GetMyClubs)
-            .WithName("GetMyClubs")
-            .WithSummary("Lấy danh sách các câu lạc bộ người dùng hiện tại đang tham gia và vai trò (FR03)")
-            .RequireAuthorization();
-
-        group.MapGet("{id:guid}", GetClubById)
+        generalGroup.MapGet("{id:guid}", GetClubById)
             .WithName("GetClubById")
             .WithSummary("Xem thông tin chi tiết câu lạc bộ")
             .RequireAuthorization();
 
-        group.MapPost("join", JoinClub)
-            .WithName("JoinClub")
-            .WithSummary("Tham gia câu lạc bộ bằng mã Code với vai trò mong muốn (FR03)")
-            .RequireAuthorization();
-
-        group.MapGet("{id:guid}/members", GetClubMembers)
-            .WithName("GetClubMembers")
-            .WithSummary("Xem danh sách thành viên và vai trò trong câu lạc bộ (FR03)")
-            .RequireGroupPermission(Domain.Constants.GroupPermissions.Member.View);
-
-        group.MapPut("{id:guid}/members/{userId:guid}/role", UpdateMemberRole)
-            .WithName("UpdateMemberRole")
-            .WithSummary("Cập nhật vai trò của thành viên trong câu lạc bộ")
-            .RequireGroupPermission(Domain.Constants.GroupPermissions.Member.RoleManage);
-
-        group.MapDelete("{id:guid}/members/{userId:guid}", RemoveMember)
-            .WithName("RemoveClubMember")
-            .WithSummary("Rời khỏi câu lạc bộ hoặc xóa thành viên khỏi nhóm")
-            .RequireAuthorization();
-
-        group.MapPost("{id:guid}/switch-context", SwitchContext)
+        generalGroup.MapPost("{id:guid}/switch-context", SwitchContext)
             .WithName("SwitchClubContext")
             .WithSummary("Chuyển đổi câu lạc bộ đang hoạt động, trả về Token đồng bộ vai trò & quyền hạn (FR04)")
             .RequireAuthorization();
 
-        // --- GROUP ROLES MANAGEMENT ---
-        group.MapGet("{id:guid}/roles", GetClubRoles)
-            .WithName("GetClubRoles")
-            .WithSummary("Lấy danh sách các vai trò nội bộ của câu lạc bộ")
-            .RequireGroupPermission(Domain.Constants.GroupPermissions.Member.View);
-
-        group.MapPost("{id:guid}/roles", CreateClubRole)
-            .WithName("CreateClubRole")
-            .WithSummary("Tạo vai trò tùy chỉnh mới cho câu lạc bộ")
-            .RequireGroupPermission(Domain.Constants.GroupPermissions.Member.RoleManage);
-
-        group.MapPut("{id:guid}/roles/{roleId:guid}/permissions", UpdateClubRolePermissions)
-            .WithName("UpdateClubRolePermissions")
-            .WithSummary("Cập nhật danh sách quyền cho vai trò trong câu lạc bộ")
-            .RequireGroupPermission(Domain.Constants.GroupPermissions.Member.RoleManage);
-
-        group.MapDelete("{id:guid}/roles/{roleId:guid}", DeleteClubRole)
-            .WithName("DeleteClubRole")
-            .WithSummary("Xóa vai trò tùy chỉnh khỏi câu lạc bộ")
-            .RequireGroupPermission(Domain.Constants.GroupPermissions.Member.RoleManage);
-
-        // --- JOIN REQUESTS MANAGEMENT ---
-        group.MapPost("{id:guid}/join-requests", CreateJoinRequest)
-            .WithName("CreateJoinRequest")
-            .WithSummary("Gửi yêu cầu xin tham gia câu lạc bộ")
+        // --- FR03: MEMBERSHIP & ROLES MANAGEMENT ---
+        fr03Group.MapGet("my-clubs", GetMyClubs)
+            .WithName("GetMyClubs")
+            .WithSummary("Lấy danh sách các câu lạc bộ người dùng hiện tại đang tham gia và vai trò (FR03)")
             .RequireAuthorization();
 
-        group.MapGet("{id:guid}/join-requests", GetJoinRequests)
+        fr03Group.MapPost("join", JoinClub)
+            .WithName("JoinClub")
+            .WithSummary("Tham gia câu lạc bộ bằng mã Code với vai trò mong muốn (FR03)")
+            .RequireAuthorization();
+
+        fr03Group.MapGet("{id:guid}/members", GetClubMembers)
+            .WithName("GetClubMembers")
+            .WithSummary("Xem danh sách thành viên và vai trò trong câu lạc bộ (FR03)")
+            .RequireGroupPermission(Domain.Constants.GroupPermissions.Member.View);
+
+        fr03Group.MapPut("{id:guid}/members/{userId:guid}/role", UpdateMemberRole)
+            .WithName("UpdateMemberRole")
+            .WithSummary("Cập nhật vai trò của thành viên trong câu lạc bộ (FR03)")
+            .RequireGroupPermission(Domain.Constants.GroupPermissions.Member.RoleManage);
+
+        fr03Group.MapDelete("{id:guid}/members/{userId:guid}", RemoveMember)
+            .WithName("RemoveClubMember")
+            .WithSummary("Rời khỏi câu lạc bộ hoặc xóa thành viên khỏi nhóm (FR03)")
+            .RequireAuthorization();
+
+        // --- GROUP ROLES MANAGEMENT (FR03) ---
+        fr03Group.MapGet("{id:guid}/roles", GetClubRoles)
+            .WithName("GetClubRoles")
+            .WithSummary("Lấy danh sách các vai trò nội bộ của câu lạc bộ (FR03)")
+            .RequireGroupPermission(Domain.Constants.GroupPermissions.Member.View);
+
+        fr03Group.MapPost("{id:guid}/roles", CreateClubRole)
+            .WithName("CreateClubRole")
+            .WithSummary("Tạo vai trò tùy chỉnh mới cho câu lạc bộ (FR03)")
+            .RequireGroupPermission(Domain.Constants.GroupPermissions.Member.RoleManage);
+
+        fr03Group.MapPut("{id:guid}/roles/{roleId:guid}/permissions", UpdateClubRolePermissions)
+            .WithName("UpdateClubRolePermissions")
+            .WithSummary("Cập nhật danh sách quyền cho vai trò trong câu lạc bộ (FR03)")
+            .RequireGroupPermission(Domain.Constants.GroupPermissions.Member.RoleManage);
+
+        fr03Group.MapDelete("{id:guid}/roles/{roleId:guid}", DeleteClubRole)
+            .WithName("DeleteClubRole")
+            .WithSummary("Xóa vai trò tùy chỉnh khỏi câu lạc bộ (FR03)")
+            .RequireGroupPermission(Domain.Constants.GroupPermissions.Member.RoleManage);
+
+        // --- JOIN REQUESTS MANAGEMENT (FR03) ---
+        fr03Group.MapPost("{id:guid}/join-requests", CreateJoinRequest)
+            .WithName("CreateJoinRequest")
+            .WithSummary("Gửi yêu cầu xin tham gia câu lạc bộ (FR03)")
+            .RequireAuthorization();
+
+        fr03Group.MapGet("{id:guid}/join-requests", GetJoinRequests)
             .WithName("GetJoinRequests")
-            .WithSummary("Xem danh sách yêu cầu xin gia nhập câu lạc bộ")
+            .WithSummary("Xem danh sách yêu cầu xin gia nhập câu lạc bộ (FR03)")
             .RequireGroupPermission(Domain.Constants.GroupPermissions.Member.JoinRequestManage);
 
-        group.MapPut("{id:guid}/join-requests/{requestId:guid}/approve", ApproveJoinRequest)
+        fr03Group.MapPut("{id:guid}/join-requests/{requestId:guid}/approve", ApproveJoinRequest)
             .WithName("ApproveJoinRequest")
-            .WithSummary("Duyệt yêu cầu gia nhập câu lạc bộ và gán vai trò ban đầu")
+            .WithSummary("Duyệt yêu cầu gia nhập câu lạc bộ và gán vai trò ban đầu (FR03)")
             .RequireGroupPermission(Domain.Constants.GroupPermissions.Member.JoinRequestManage);
 
-        group.MapPut("{id:guid}/join-requests/{requestId:guid}/reject", RejectJoinRequest)
+        fr03Group.MapPut("{id:guid}/join-requests/{requestId:guid}/reject", RejectJoinRequest)
             .WithName("RejectJoinRequest")
-            .WithSummary("Từ chối yêu cầu gia nhập câu lạc bộ")
+            .WithSummary("Từ chối yêu cầu gia nhập câu lạc bộ (FR03)")
             .RequireGroupPermission(Domain.Constants.GroupPermissions.Member.JoinRequestManage);
     }
 

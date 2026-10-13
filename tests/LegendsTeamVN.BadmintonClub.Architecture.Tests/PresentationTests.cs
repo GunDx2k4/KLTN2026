@@ -41,4 +41,13 @@ public class PresentationTests
 
         result.IsSuccessful.Should().BeTrue();
     }
+
+    [Fact]
+    public void ClubEndpoint_ShouldHaveNullGroupTag_ToAllowCustomSwaggerTags()
+    {
+        var endpoint = new Presentation.Endpoints.ClubEndpoint();
+        var prop = typeof(Presentation.Endpoints.ClubEndpoint).GetProperty("Tag", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        var tagValue = prop?.GetValue(endpoint);
+        tagValue.Should().BeNull();
+    }
 }
