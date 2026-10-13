@@ -18,6 +18,8 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<IClubRepository, ClubRepository>();
         services.AddScoped<IClubMemberRepository, ClubMemberRepository>();
+        services.AddScoped<IGroupRoleRepository, GroupRoleRepository>();
+        services.AddScoped<IJoinRequestRepository, JoinRequestRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IDeviceRepository, DeviceRepository>();
         services.AddScoped<LegendsTeamVN.BadmintonClub.Application.Abstractions.IGroupAuthorizationService, LegendsTeamVN.BadmintonClub.Persistence.Services.GroupAuthorizationService>();

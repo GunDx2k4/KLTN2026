@@ -10,7 +10,7 @@ public abstract class EndpointGroupBase : IEndpoint
 {
     protected abstract string Name { get; }
     protected virtual string Prefix => "api";
-    protected virtual string Tag => char.ToUpper(Name[0]) + Name[1..];
+    protected virtual string? Tag => !string.IsNullOrEmpty(Name) ? char.ToUpper(Name[0]) + Name[1..] : null;
     
     protected virtual ApiVersion[] SupportedVersions => new[] { new ApiVersion(1) };
 
@@ -26,8 +26,12 @@ public abstract class EndpointGroupBase : IEndpoint
         var versionSet = versionSetBuilder.ReportApiVersions().Build();
 
         var group = app.MapGroup(path)
-                       .WithApiVersionSet(versionSet)
-                       .WithTags(Tag);
+                       .WithApiVersionSet(versionSet);
+
+        if (!string.IsNullOrEmpty(Tag))
+        {
+            group = group.WithTags(Tag);
+        }
 
         Map(group);
     }
