@@ -6,6 +6,8 @@ using LegendsTeamVN.BadmintonClub.Application.Features.Users.GetById;
 using LegendsTeamVN.BadmintonClub.Application.Features.Users.GetList;
 using LegendsTeamVN.BadmintonClub.Application.Features.Users.GetPermissions;
 using LegendsTeamVN.BadmintonClub.Application.Features.Users.Me;
+using LegendsTeamVN.BadmintonClub.Application.Features.Users.Profile.Get;
+using LegendsTeamVN.BadmintonClub.Application.Features.Users.Profile.Update;
 using LegendsTeamVN.BadmintonClub.Application.Features.Users.ResetPassword;
 using LegendsTeamVN.BadmintonClub.Application.Features.Users.ToggleLock;
 using LegendsTeamVN.BadmintonClub.Application.Features.Users.Update;
@@ -16,6 +18,7 @@ using LegendsTeamVN.Core.Presentation.Extensions;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 
 namespace LegendsTeamVN.BadmintonClub.Presentation.Endpoints;
@@ -23,76 +26,108 @@ namespace LegendsTeamVN.BadmintonClub.Presentation.Endpoints;
 public class UserEndpoint : EndpointGroupBase
 {
     protected override string Name => "user";
+    protected override string? Tag => null;
 
     protected override void Map(RouteGroupBuilder group)
     {
-        group.MapGet("me", GetMe)
+        var usersGroup = group.MapGroup("").WithTags("Users");
+        var fr05Group = group.MapGroup("").WithTags("FR05 - Quản lý hồ sơ cá nhân & Trình độ");
+
+        // --- FR05: QUẢN LÝ HỒ SƠ CÁ NHÂN & TRÌNH ĐỘ ---
+        fr05Group.MapGet("profile", GetProfile)
+             .WithName("GetUserProfile")
+             .WithSummary("Xem thông tin chi tiết hồ sơ cá nhân và trình độ chuyên môn (FR05)")
+             .WithDescription("Trả về thông tin hồ sơ cá nhân, trình độ tự đánh giá (NB, Y, TB, K, G), ảnh đại diện và điểm uy tín.")
+             .RequireAuthorization();
+
+        fr05Group.MapPut("profile", UpdateProfile)
+             .WithName("UpdateUserProfile")
+             .WithSummary("Cập nhật họ tên, giới tính, ảnh đại diện và trình độ chuyên môn tự đánh giá (FR05)")
+             .WithDescription("Cập nhật hồ sơ cá nhân của người dùng hiện tại.")
+             .RequireAuthorization();
+
+        // --- USERS MANAGEMENT (IDENTITY) ---
+        usersGroup.MapGet("me", GetMe)
              .WithName("GetMe")
              .WithSummary("Get current user details")
              .WithDescription("Returns details, roles, and tree permissions of the currently authenticated user.")
              .RequireAuthorization();
 
-        group.MapGet("permissions", GetMyPermissions)
+        usersGroup.MapGet("permissions", GetMyPermissions)
              .WithName("GetMyPermissions")
              .WithSummary("Get current user permissions")
              .WithDescription("Returns roles and grouped tree permissions of the currently authenticated user.")
              .RequireAuthorization();
 
-        group.MapGet("all-permissions", GetAllPermissions)
+        usersGroup.MapGet("all-permissions", GetAllPermissions)
              .WithName("GetAllPermissions")
              .WithSummary("Get all system permissions")
              .WithDescription("Returns all system permissions grouped in a multi-level tree hierarchy.")
              .RequirePermission(AppPermissions.Users.Read);
 
-        group.MapGet("", GetUsers)
+        usersGroup.MapGet("", GetUsers)
              .WithName("GetUsers")
              .WithSummary("Gets all users with pagination")
              .WithDescription("Retrieves a paged list of all users based on filter criteria.")
              .RequirePermission(AppPermissions.Users.Read);
 
-        group.MapGet("{id:guid}", GetUserById)
+        usersGroup.MapGet("{id:guid}", GetUserById)
              .WithName("GetUserById")
              .WithSummary("Get user details by ID")
              .WithDescription("Retrieves details, roles, and permissions of a specific user by ID.")
              .RequirePermission(AppPermissions.Users.Read);
 
-        group.MapPost("", CreateUser)
+        usersGroup.MapPost("", CreateUser)
              .WithName("CreateUser")
              .WithSummary("Create user")
              .WithDescription("Creates a new user account.")
              .RequirePermission(AppPermissions.Users.Create);
 
-        group.MapPut("{id:guid}", UpdateUser)
+        usersGroup.MapPut("{id:guid}", UpdateUser)
              .WithName("UpdateUser")
              .WithSummary("Update user")
              .WithDescription("Updates user email, username, or phone number.")
              .RequirePermission(AppPermissions.Users.Update);
 
-        group.MapDelete("{id:guid}", DeleteUser)
+        usersGroup.MapDelete("{id:guid}", DeleteUser)
              .WithName("DeleteUser")
              .WithSummary("Delete user")
              .WithDescription("Deletes a user account.")
              .RequirePermission(AppPermissions.Users.Delete);
 
-        group.MapPut("{id:guid}/lock", ToggleUserLock)
+        usersGroup.MapPut("{id:guid}/lock", ToggleUserLock)
              .WithName("ToggleUserLock")
              .WithSummary("Lock or unlock user")
              .WithDescription("Locks or unlocks a user account.")
              .RequirePermission(AppPermissions.Users.Lock);
 
-        group.MapPut("{id:guid}/roles", UpdateUserRoles)
+        usersGroup.MapPut("{id:guid}/roles", UpdateUserRoles)
              .WithName("UpdateUserRoles")
              .WithSummary("Assign roles to user")
              .WithDescription("Assigns roles to a user account.")
              .RequirePermission(AppPermissions.Users.AssignRoles);
 
-        group.MapPost("{id:guid}/reset-password", ResetUserPassword)
+        usersGroup.MapPost("{id:guid}/reset-password", ResetUserPassword)
              .WithName("ResetUserPassword")
              .WithSummary("Reset user password")
              .WithDescription("Resets password for a user account.")
              .RequirePermission(AppPermissions.Users.ResetPassword);
     }
 
+    // --- FR05 Handlers ---
+    private static async Task<IResult> GetProfile(ISender sender)
+    {
+        var result = await sender.Send(new GetUserProfileQuery());
+        return result.Match(onSuccess: response => Results.Ok(response));
+    }
+
+    private static async Task<IResult> UpdateProfile([FromBody] UpdateUserProfileRequest request, ISender sender)
+    {
+        var result = await sender.Send(new UpdateUserProfileCommand(request));
+        return result.Match(onSuccess: () => Results.NoContent());
+    }
+
+    // --- User Handlers ---
     private static async Task<IResult> GetMe(ISender sender)
     {
         var result = await sender.Send(new MeQuery());
