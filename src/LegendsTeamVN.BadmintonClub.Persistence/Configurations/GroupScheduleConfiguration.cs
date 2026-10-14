@@ -34,6 +34,14 @@ public class GroupScheduleConfiguration : IEntityTypeConfiguration<GroupSchedule
             .HasColumnName("is_active")
             .HasDefaultValue(true);
 
+        builder.Ignore(s => s.CreatedBy);
+        builder.Ignore(s => s.CreatedOnUtc);
+        builder.Ignore(s => s.ModifiedBy);
+        builder.Ignore(s => s.ModifiedOnUtc);
+        builder.Ignore(s => s.IsDeleted);
+        builder.Ignore(s => s.DeletedBy);
+        builder.Ignore(s => s.DeletedOnUtc);
+
         builder.HasOne(s => s.Group)
             .WithMany(g => g.Schedules)
             .HasForeignKey(s => s.GroupId)

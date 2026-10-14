@@ -172,5 +172,114 @@ public class DomainTests
         request2.Status.Should().Be(Domain.Enums.JoinRequestStatus.REJECTED);
         request2.ApprovedBy.Should().Be(approverId);
     }
+
+    [Fact]
+    public void FR13_CreateBadmintonSession_ShouldInitializeCorrectly()
+    {
+        var groupId = Guid.NewGuid();
+        var startTime = DateTime.UtcNow.AddDays(1);
+        var endTime = startTime.AddHours(3);
+        var session = new BadmintonSession(
+            groupId: groupId,
+            title: "Buổi sinh hoạt cuối tuần",
+            startTime: startTime,
+            endTime: endTime,
+            courtLocation: "Sân Kỳ Hòa",
+            courtCount: 2,
+            targetPlayerPerCourt: 6,
+            maxPlayers: 12
+        );
+
+        session.GroupId.Should().Be(groupId);
+        session.Title.Should().Be("Buổi sinh hoạt cuối tuần");
+        session.MaxPlayers.Should().Be(12);
+        session.Status.Should().Be(Domain.Enums.SessionStatus.OPEN);
+        session.DeadlineBooking.Should().BeBefore(startTime);
+    }
+
+    [Fact]
+    public void FR08_FR10_SessionBooking_QueueAndCheckIn_ShouldWorkAsExpected()
+    {
+        var sessionId = Guid.NewGuid();
+        var user1 = Guid.NewGuid();
+        var user2 = Guid.NewGuid();
+
+        // User 1: Confirmed
+        var booking1 = new SessionBooking(sessionId, user1, status: Domain.Enums.BookingStatus.CONFIRMED, queueOrder: 0);
+        booking1.Status.Should().Be(Domain.Enums.BookingStatus.CONFIRMED);
+        booking1.QueueOrder.Should().Be(0);
+
+        // User 2: Waiting in queue (Order 1)
+        var booking2 = new SessionBooking(sessionId, user2, status: Domain.Enums.BookingStatus.WAITING, queueOrder: 1);
+        booking2.Status.Should().Be(Domain.Enums.BookingStatus.WAITING);
+        booking2.QueueOrder.Should().Be(1);
+
+        // Auto-promote booking 2 when booking 1 is absent
+        booking1.UpdateStatus(Domain.Enums.BookingStatus.ABSENT);
+        booking2.UpdateStatus(Domain.Enums.BookingStatus.CONFIRMED);
+        booking2.UpdateQueueOrder(0);
+
+        booking1.Status.Should().Be(Domain.Enums.BookingStatus.ABSENT);
+        booking2.Status.Should().Be(Domain.Enums.BookingStatus.CONFIRMED);
+        booking2.QueueOrder.Should().Be(0);
+
+        // Check in
+        booking2.CheckIn();
+        booking2.Status.Should().Be(Domain.Enums.BookingStatus.CHECKED_IN);
+        booking2.CheckinAt.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void FR11_FR12_GuestRecruitment_Transitions_ShouldWorkCorrectly()
+    {
+        var sessionId = Guid.NewGuid();
+        var recruitment = new GuestRecruitment(sessionId, slotsNeeded: 2, sharedCost: 50000);
+
+        recruitment.Status.Should().Be(Domain.Enums.RecruitmentStatus.ACTIVE);
+        recruitment.SlotsNeeded.Should().Be(2);
+        recruitment.SharedCost.Should().Be(50000);
+
+        recruitment.UpdateStatus(Domain.Enums.RecruitmentStatus.FILLED);
+        recruitment.Status.Should().Be(Domain.Enums.RecruitmentStatus.FILLED);
+    }
+
+    [Fact]
+    public void FR05_AppUser_UpdateProfile_ShouldUpdateFieldsCorrectly()
+    {
+        var user = AppUser.CreateStandard(Guid.NewGuid(), "Nguyễn Văn A", "a@test.com", "0901234567", 1, Domain.Enums.SkillLevel.NB);
+        user.SkillLevel.Should().Be(Domain.Enums.SkillLevel.NB);
+
+        user.UpdateProfile("Nguyễn Văn A Updated", 1, "https://avatar.png", Domain.Enums.SkillLevel.TB, isOpenForGuest: true);
+
+        user.FullName.Should().Be("Nguyễn Văn A Updated");
+        user.AvatarUrl.Should().Be("https://avatar.png");
+        user.SkillLevel.Should().Be(Domain.Enums.SkillLevel.TB);
+        user.IsOpenForGuest.Should().BeTrue();
+    }
+
+    [Fact]
+    public void FR07_ClubGroup_UpdateInfoAndSchedule_ShouldWorkCorrectly()
+    {
+        var club = new ClubGroup("CLB Test", description: "Mô tả", avatarUrl: "https://avatar.png");
+        club.FixedVenueName.Should().BeNull();
+
+        club.UpdateInfo("CLB Test 2", "Mô tả 2", "https://new.png", "Sân Kỳ Hòa", "238 Đường 3/2", 10.77m, 106.69m, Domain.Enums.SkillLevel.TB, Domain.Enums.SkillLevel.K);
+        club.SetRecruiting(true);
+
+        club.GroupName.Should().Be("CLB Test 2");
+        club.FixedVenueName.Should().Be("Sân Kỳ Hòa");
+        club.FixedAddress.Should().Be("238 Đường 3/2");
+        club.Lat.Should().Be(10.77m);
+        club.Lng.Should().Be(106.69m);
+        club.MinSkillLevel.Should().Be(Domain.Enums.SkillLevel.TB);
+        club.MaxSkillLevel.Should().Be(Domain.Enums.SkillLevel.K);
+        club.IsRecruiting.Should().BeTrue();
+
+        var schedule = new GroupSchedule(club.Id, 2, new TimeOnly(18, 0), new TimeOnly(21, 0));
+        schedule.DayOfWeek.Should().Be(2);
+        schedule.StartTime.Should().Be(new TimeOnly(18, 0));
+        schedule.EndTime.Should().Be(new TimeOnly(21, 0));
+        schedule.IsActive.Should().BeTrue();
+    }
 }
 

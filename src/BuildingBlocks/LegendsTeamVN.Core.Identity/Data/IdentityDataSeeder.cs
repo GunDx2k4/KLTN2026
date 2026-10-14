@@ -123,19 +123,18 @@ public sealed class IdentityDataSeeder(
             }
         }
 
-        // 3. Remove old admin account if exists
-        var oldAdmin = await userManager.FindByEmailAsync("admin@admin.com");
-        if (oldAdmin != null)
+        // 3. Ensure Default Users with @l7ungdz.id.vn exist with password 'admin'
+        var defaultUsers = new (string UserName, string Email, string Password, string[] Roles)[]
         {
-            await userManager.DeleteAsync(oldAdmin);
-        }
-
-        // 4. Ensure Default Users with @l7ungdz.id.vn exist (All are 'User' role)
-        var defaultUsers = new (string UserName, string Email, string Password)[]
-        {
-            ("user1", "user1@l7ungdz.id.vn", "admin"),
-            ("user2", "user2@l7ungdz.id.vn", "admin"),
-            ("user3", "user3@l7ungdz.id.vn", "admin")
+            ("admin", "admin@l7ungdz.id.vn", "admin", new[] { "Admin" }),
+            ("user1", "user1@l7ungdz.id.vn", "admin", new[] { "Admin", "User" }),
+            ("user2", "user2@l7ungdz.id.vn", "admin", new[] { "User" }),
+            ("user3", "user3@l7ungdz.id.vn", "admin", new[] { "User" }),
+            ("user4", "user4@l7ungdz.id.vn", "admin", new[] { "User" }),
+            ("user5", "user5@l7ungdz.id.vn", "admin", new[] { "User" }),
+            ("user6", "user6@l7ungdz.id.vn", "admin", new[] { "User" }),
+            ("user7", "user7@l7ungdz.id.vn", "admin", new[] { "User" }),
+            ("user8", "user8@l7ungdz.id.vn", "admin", new[] { "User" })
         };
 
         foreach (var userInfo in defaultUsers)
@@ -155,15 +154,21 @@ public sealed class IdentityDataSeeder(
                 var result = await userManager.CreateAsync(newUser, userInfo.Password);
                 if (result.Succeeded)
                 {
-                    await userManager.AddToRoleAsync(newUser, "User");
+                    foreach (var roleName in userInfo.Roles)
+                    {
+                        await userManager.AddToRoleAsync(newUser, roleName);
+                    }
                 }
             }
             else
             {
                 var userRoles = await userManager.GetRolesAsync(existingUser);
-                if (!userRoles.Contains("User"))
+                foreach (var roleName in userInfo.Roles)
                 {
-                    await userManager.AddToRoleAsync(existingUser, "User");
+                    if (!userRoles.Contains(roleName))
+                    {
+                        await userManager.AddToRoleAsync(existingUser, roleName);
+                    }
                 }
 
                 // Reset password to 'admin'

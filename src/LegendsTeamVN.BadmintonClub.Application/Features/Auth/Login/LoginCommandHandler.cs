@@ -19,22 +19,35 @@ public sealed class LoginCommandHandler(
 {
     public async Task<Result<LoginResponse>> Handle(LoginCommand request, CancellationToken cancellationToken)
     {
-        // 1. Tìm người dùng trong Domain qua số điện thoại hoặc email
-        var domainUser = await userRepository.FindByEmailOrPhoneAsync(request.Identifier, cancellationToken);
-        if (domainUser == null || !domainUser.IsActive)
+        // 1. So khớp mật khẩu với Identity (hỗ trợ cả UserName, Email hoặc SĐT)
+        var (succeeded, identityUserId) = await userManagerService.CheckPasswordAsync(request.Identifier, request.Password);
+
+        AppUser? domainUser = null;
+        if (succeeded && identityUserId.HasValue)
         {
-            return Result.Failure<LoginResponse>(
-                Error.Unauthorized("User.Unauthorized", "Tài khoản hoặc mật khẩu không chính xác hoặc đã bị vô hiệu hóa."));
+            domainUser = await userRepository.FindByIdAsync(identityUserId.Value, cancellationToken);
         }
 
-        // 2. So khớp mật khẩu với Identity
-        var identifierToVerify = domainUser.EmailAddress ?? domainUser.PhoneNumber ?? request.Identifier;
-        var (succeeded, identityUserId) = await userManagerService.CheckPasswordAsync(identifierToVerify, request.Password);
+        if (domainUser == null)
+        {
+            domainUser = await userRepository.FindByEmailOrPhoneAsync(request.Identifier, cancellationToken);
+            if (domainUser != null && (!succeeded || !identityUserId.HasValue))
+            {
+                var identifierToVerify = domainUser.EmailAddress ?? domainUser.PhoneNumber ?? request.Identifier;
+                (succeeded, identityUserId) = await userManagerService.CheckPasswordAsync(identifierToVerify, request.Password);
+            }
+        }
 
         if (!succeeded || identityUserId == null)
         {
             return Result.Failure<LoginResponse>(
                 Error.Unauthorized("User.Unauthorized", "Tài khoản hoặc mật khẩu không chính xác."));
+        }
+
+        if (domainUser == null || !domainUser.IsActive)
+        {
+            return Result.Failure<LoginResponse>(
+                Error.Unauthorized("User.Unauthorized", "Tài khoản hoặc mật khẩu không chính xác hoặc đã bị vô hiệu hóa."));
         }
 
         // 3. Cấp phát phiên an toàn (JWT AccessToken & RefreshToken)

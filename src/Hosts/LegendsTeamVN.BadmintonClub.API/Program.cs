@@ -30,7 +30,7 @@ builder.Services.AddCoreIdentity(connectionStrings, jwtOptions);
 builder.Services.AddApplication();
 
 #region Persistence Services
-builder.Services.AddPersistence(connectionStrings);
+builder.Services.AddPersistence(connectionStrings).AddDataSeederBadminton();
 #endregion
 
 #region Presentation Services

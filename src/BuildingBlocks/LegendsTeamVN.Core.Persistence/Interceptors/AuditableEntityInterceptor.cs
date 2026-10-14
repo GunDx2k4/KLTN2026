@@ -26,16 +26,21 @@ public class AuditableEntityInterceptor(ICurrentUserService currentUserService) 
 
         foreach (var entry in context.ChangeTracker.Entries<IAuditable>())
         {
+            var hasCreatedOnUtc = entry.Metadata.FindProperty(nameof(IAuditable.CreatedOnUtc)) != null;
+            var hasCreatedBy = entry.Metadata.FindProperty(nameof(IAuditable.CreatedBy)) != null;
+            var hasModifiedOnUtc = entry.Metadata.FindProperty(nameof(IAuditable.ModifiedOnUtc)) != null;
+            var hasModifiedBy = entry.Metadata.FindProperty(nameof(IAuditable.ModifiedBy)) != null;
+
             if (entry.State == EntityState.Added)
             {
-                entry.Property(a => a.CreatedOnUtc).CurrentValue = DateTimeOffset.UtcNow;
-                entry.Property(a => a.CreatedBy).CurrentValue = currentUserService.UserName ?? "System";
+                if (hasCreatedOnUtc) entry.Property(nameof(IAuditable.CreatedOnUtc)).CurrentValue = DateTimeOffset.UtcNow;
+                if (hasCreatedBy) entry.Property(nameof(IAuditable.CreatedBy)).CurrentValue = currentUserService.UserName ?? "System";
             }
 
             if (entry.State == EntityState.Modified || entry.HasChangedOwnedEntities())
             {
-                entry.Property(a => a.ModifiedOnUtc).CurrentValue = DateTimeOffset.UtcNow;
-                entry.Property(a => a.ModifiedBy).CurrentValue = currentUserService.UserName ?? "System";
+                if (hasModifiedOnUtc) entry.Property(nameof(IAuditable.ModifiedOnUtc)).CurrentValue = DateTimeOffset.UtcNow;
+                if (hasModifiedBy) entry.Property(nameof(IAuditable.ModifiedBy)).CurrentValue = currentUserService.UserName ?? "System";
             }
         }
     }

@@ -22,6 +22,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IJoinRequestRepository, JoinRequestRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<IDeviceRepository, DeviceRepository>();
+        services.AddScoped<ISessionRepository, SessionRepository>();
+        services.AddScoped<IBookingRepository, BookingRepository>();
+        services.AddScoped<IRecruitmentRepository, RecruitmentRepository>();
+        services.AddScoped<IScheduleRepository, ScheduleRepository>();
         services.AddScoped<LegendsTeamVN.BadmintonClub.Application.Abstractions.IGroupAuthorizationService, LegendsTeamVN.BadmintonClub.Persistence.Services.GroupAuthorizationService>();
 
         return services;
@@ -31,6 +35,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddTransient<GroupPermissionSeeder>();
         services.AddTransient<BadmintonUserSeeder>();
+        services.AddTransient<BadmintonDemoDataSeeder>();
         Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddEnumerable(
             services,
             ServiceDescriptor.Transient<IDataSeeder, GroupPermissionSeeder>()
@@ -38,6 +43,10 @@ public static class ServiceCollectionExtensions
         Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddEnumerable(
             services,
             ServiceDescriptor.Transient<IDataSeeder, BadmintonUserSeeder>()
+        );
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddEnumerable(
+            services,
+            ServiceDescriptor.Transient<IDataSeeder, BadmintonDemoDataSeeder>()
         );
         return services;
     }

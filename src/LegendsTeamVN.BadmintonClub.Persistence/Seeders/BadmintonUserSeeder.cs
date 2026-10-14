@@ -18,11 +18,17 @@ public class BadmintonUserSeeder(
     {
         logger.LogInformation("Ensuring default Badminton domain users exist...");
 
-        var defaultUsers = new (string UserName, string Email, string FullName)[]
+        var defaultUsers = new (string UserName, string Email, string FullName, short Gender, SkillLevel SkillLevel, string? AvatarUrl, string? PhoneNumber)[]
         {
-            ("user1", "user1@l7ungdz.id.vn", "Người Dùng 1"),
-            ("user2", "user2@l7ungdz.id.vn", "Người Dùng 2"),
-            ("user3", "user3@l7ungdz.id.vn", "Người Dùng 3")
+            ("admin", "admin@l7ungdz.id.vn", "Hệ Thống Admin", 1, SkillLevel.K, "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150", "0909999999"),
+            ("user1", "user1@l7ungdz.id.vn", "Nguyễn Văn Dũng (User 1)", 1, SkillLevel.TBK, "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150", "0901234567"),
+            ("user2", "user2@l7ungdz.id.vn", "Trần Thị Mai (User 2)", 2, SkillLevel.TB, "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150", "0902345678"),
+            ("user3", "user3@l7ungdz.id.vn", "Lê Hoàng Long (User 3)", 1, SkillLevel.K, "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?w=150", "0903456789"),
+            ("user4", "user4@l7ungdz.id.vn", "Phạm Tuấn Anh", 1, SkillLevel.TBY, "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150", "0904567890"),
+            ("user5", "user5@l7ungdz.id.vn", "Võ Minh Triết", 1, SkillLevel.K, "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150", "0905678901"),
+            ("user6", "user6@l7ungdz.id.vn", "Đặng Thu Thảo", 2, SkillLevel.Y, "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=150", "0906789012"),
+            ("user7", "user7@l7ungdz.id.vn", "Hoàng Gia Bảo", 1, SkillLevel.TB, "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150", "0907890123"),
+            ("user8", "user8@l7ungdz.id.vn", "Bùi Phương Linh", 2, SkillLevel.NB, "https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150", "0908901234")
         };
 
         foreach (var info in defaultUsers)
@@ -32,24 +38,29 @@ public class BadmintonUserSeeder(
 
             if (identityUser != null)
             {
-                var existsInDomain = await dbContext.AppUsers.AnyAsync(u => u.Id == identityUser.Id, cancellationToken);
-                if (!existsInDomain)
+                var domainUser = await dbContext.AppUsers.FirstOrDefaultAsync(u => u.Id == identityUser.Id, cancellationToken);
+                if (domainUser == null)
                 {
-                    var domainUser = AppUser.CreateStandard(
+                    domainUser = AppUser.CreateStandard(
                         id: identityUser.Id,
                         fullName: info.FullName,
                         emailAddress: info.Email,
-                        phoneNumber: null,
-                        gender: 0,
-                        skillLevel: SkillLevel.NB
+                        phoneNumber: info.PhoneNumber,
+                        gender: info.Gender,
+                        skillLevel: info.SkillLevel
                     );
-
+                    domainUser.UpdateProfile(info.FullName, info.Gender, info.AvatarUrl, info.SkillLevel, true);
                     await dbContext.AppUsers.AddAsync(domainUser, cancellationToken);
+                }
+                else
+                {
+                    // Cập nhật lại thông tin để bảo đảm tài khoản luôn có đủ Avatar và SkillLevel
+                    domainUser.UpdateProfile(info.FullName, info.Gender, info.AvatarUrl, info.SkillLevel, true);
                 }
             }
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
-        logger.LogInformation("Badminton domain users verified.");
+        logger.LogInformation("Badminton domain users verified with rich profiles.");
     }
 }

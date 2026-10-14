@@ -1,8 +1,8 @@
-using LegendsTeamVN.Core.Domain.Entities;
+using LegendsTeamVN.Core.Domain.Aggregates;
 
 namespace LegendsTeamVN.BadmintonClub.Domain.Entities;
 
-public class GroupSchedule : Entity<Guid>
+public class GroupSchedule : AggregateRoot<Guid>
 {
     public Guid GroupId { get; private set; }
     public int DayOfWeek { get; private set; }

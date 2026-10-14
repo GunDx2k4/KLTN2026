@@ -1,5 +1,6 @@
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Clubs.Requests;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.Create;
+using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.Explore;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.GetById;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.GetMembers;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.GetMyClubs;
@@ -13,7 +14,9 @@ using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.Roles.Create;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.Roles.Delete;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.Roles.GetList;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.Roles.UpdatePermissions;
+using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.Schedules.Update;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.SwitchContext;
+using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.UpdateInfo;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.UpdateMemberRole;
 using LegendsTeamVN.BadmintonClub.Domain.Enums;
 using LegendsTeamVN.BadmintonClub.Presentation.Security;
@@ -36,16 +39,13 @@ public class ClubEndpoint : EndpointGroupBase
     {
         var generalGroup = group.MapGroup("").WithTags("Clubs");
         var fr03Group = group.MapGroup("").WithTags("FR03 - Quản lý CLB & Thành viên");
+        var fr06Group = group.MapGroup("").WithTags("FR06 - Khám phá nhóm theo vị trí");
+        var fr07Group = group.MapGroup("").WithTags("FR07 - Thông tin chi tiết & Lịch sinh hoạt nhóm");
 
         // --- GENERAL CLUB APIS ---
         generalGroup.MapPost("", CreateClub)
             .WithName("CreateClub")
             .WithSummary("Tạo một câu lạc bộ mới (Người tạo tự động thành Host)")
-            .RequireAuthorization();
-
-        generalGroup.MapGet("{id:guid}", GetClubById)
-            .WithName("GetClubById")
-            .WithSummary("Xem thông tin chi tiết câu lạc bộ")
             .RequireAuthorization();
 
         generalGroup.MapPost("{id:guid}/switch-context", SwitchContext)
@@ -108,20 +108,96 @@ public class ClubEndpoint : EndpointGroupBase
 
         fr03Group.MapGet("{id:guid}/join-requests", GetJoinRequests)
             .WithName("GetJoinRequests")
-            .WithSummary("Xem danh sách yêu cầu xin gia nhập câu lạc bộ (FR03)")
+            .WithSummary("Xem danh sách các yêu cầu xin tham gia câu lạc bộ (FR03)")
             .RequireGroupPermission(Domain.Constants.GroupPermissions.Member.JoinRequestManage);
 
         fr03Group.MapPut("{id:guid}/join-requests/{requestId:guid}/approve", ApproveJoinRequest)
             .WithName("ApproveJoinRequest")
-            .WithSummary("Duyệt yêu cầu gia nhập câu lạc bộ và gán vai trò ban đầu (FR03)")
+            .WithSummary("Duyệt yêu cầu xin tham gia câu lạc bộ (FR03)")
             .RequireGroupPermission(Domain.Constants.GroupPermissions.Member.JoinRequestManage);
 
         fr03Group.MapPut("{id:guid}/join-requests/{requestId:guid}/reject", RejectJoinRequest)
             .WithName("RejectJoinRequest")
-            .WithSummary("Từ chối yêu cầu gia nhập câu lạc bộ (FR03)")
+            .WithSummary("Từ chối yêu cầu xin tham gia câu lạc bộ (FR03)")
             .RequireGroupPermission(Domain.Constants.GroupPermissions.Member.JoinRequestManage);
+
+        // --- FR06: KHÁM PHÁ NHÓM THEO VỊ TRÍ GPS & BÁN KÍNH ---
+        fr06Group.MapGet("explore", ExploreClubs)
+            .WithName("ExploreClubs")
+            .WithSummary("Quét tìm các câu lạc bộ cầu lông xung quanh vị trí GPS (FR06)")
+            .WithDescription("Tìm kiếm các câu lạc bộ lân cận dựa trên tọa độ GPS, bán kính km, trình độ và trạng thái tuyển thành viên.")
+            .RequireAuthorization();
+
+        // --- FR07: THÔNG TIN CHI TIẾT & LỊCH SINH HOẠT NHÓM ---
+        fr07Group.MapGet("{id:guid}", GetClubById)
+            .WithName("GetClubById")
+            .WithSummary("Xem thông tin chi tiết đầy đủ câu lạc bộ, sân bãi và lịch sinh hoạt (FR07)")
+            .WithDescription("Trả về thông tin chi tiết CLB, sân cố định, lịch sinh hoạt hàng tuần, thông tin Host và trạng thái gia nhập của user hiện tại.")
+            .RequireAuthorization();
+
+        fr07Group.MapPut("{id:guid}/info", UpdateClubInfo)
+            .WithName("UpdateClubInfo")
+            .WithSummary("Host cập nhật thông tin chi tiết sân bãi, tọa độ GPS và tiêu chuẩn tuyển chọn của CLB (FR07)")
+            .WithDescription("Host hoặc Ban quản trị nhóm cấu hình sân cố định, địa chỉ, GPS, khoảng trình độ và bật/tắt mở tuyển.")
+            .RequireGroupPermission(Domain.Constants.GroupPermissions.Member.InfoUpdate);
+
+        fr07Group.MapPut("{id:guid}/schedules", UpdateClubSchedules)
+            .WithName("UpdateClubSchedules")
+            .WithSummary("Host thiết lập lịch sinh hoạt định kỳ lặp lại hàng tuần của nhóm (FR07)")
+            .WithDescription("Thiết lập các khung giờ sinh hoạt cố định trong tuần của CLB.")
+            .RequireGroupPermission(Domain.Constants.GroupPermissions.Operations.ScheduleManage);
     }
 
+    // --- FR06 Handlers ---
+    private static async Task<IResult> ExploreClubs(
+        [FromQuery] double? latitude,
+        [FromQuery] double? longitude,
+        [FromQuery] double? radiusKm,
+        [FromQuery] SkillLevel? skillLevel,
+        [FromQuery] bool? isRecruiting,
+        [FromQuery] string? searchTerm,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var query = new ExploreClubsQuery(latitude, longitude, radiusKm ?? 10, skillLevel, isRecruiting, searchTerm);
+        var result = await sender.Send(query, cancellationToken);
+        return result.Match(onSuccess: clubs => Results.Ok(clubs));
+    }
+
+    // --- FR07 Handlers ---
+    private static async Task<IResult> GetClubById(
+        [FromRoute] Guid id,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var query = new GetClubByIdQuery(id);
+        var result = await sender.Send(query, cancellationToken);
+        return result.Match(onSuccess: club => Results.Ok(club));
+    }
+
+    private static async Task<IResult> UpdateClubInfo(
+        [FromRoute] Guid id,
+        [FromBody] UpdateClubInfoRequest request,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var command = new UpdateClubInfoCommand(id, request);
+        var result = await sender.Send(command, cancellationToken);
+        return result.Match(onSuccess: () => Results.NoContent());
+    }
+
+    private static async Task<IResult> UpdateClubSchedules(
+        [FromRoute] Guid id,
+        [FromBody] UpdateClubSchedulesRequest request,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var command = new UpdateClubSchedulesCommand(id, request);
+        var result = await sender.Send(command, cancellationToken);
+        return result.Match(onSuccess: () => Results.NoContent());
+    }
+
+    // --- General & FR03 Handlers ---
     private static async Task<IResult> CreateClub(
         [FromBody] CreateClubRequest request,
         ISender sender,
@@ -139,16 +215,6 @@ public class ClubEndpoint : EndpointGroupBase
         var query = new GetMyClubsQuery();
         var result = await sender.Send(query, cancellationToken);
         return result.Match(onSuccess: clubs => Results.Ok(clubs));
-    }
-
-    private static async Task<IResult> GetClubById(
-        [FromRoute] Guid id,
-        ISender sender,
-        CancellationToken cancellationToken)
-    {
-        var query = new GetClubByIdQuery(id);
-        var result = await sender.Send(query, cancellationToken);
-        return result.Match(onSuccess: club => Results.Ok(club));
     }
 
     private static async Task<IResult> JoinClub(

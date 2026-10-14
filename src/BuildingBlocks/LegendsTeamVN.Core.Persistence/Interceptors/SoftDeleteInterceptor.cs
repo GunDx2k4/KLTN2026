@@ -25,12 +25,17 @@ public class SoftDeleteInterceptor(ICurrentUserService currentUserService) : Sav
 
         foreach (var entry in context.ChangeTracker.Entries<ISoftDeletable>())
         {
-            if (entry.State == EntityState.Deleted)
+            var hasIsDeleted = entry.Metadata.FindProperty(nameof(ISoftDeletable.IsDeleted)) != null;
+            if (entry.State == EntityState.Deleted && hasIsDeleted)
             {
                 entry.State = EntityState.Modified;
-                entry.Property(a => a.IsDeleted).CurrentValue = true;
-                entry.Property(a => a.DeletedOnUtc).CurrentValue = DateTimeOffset.UtcNow;
-                entry.Property(a => a.DeletedBy).CurrentValue = currentUserService.UserName;
+                entry.Property(nameof(ISoftDeletable.IsDeleted)).CurrentValue = true;
+
+                if (entry.Metadata.FindProperty(nameof(ISoftDeletable.DeletedOnUtc)) != null)
+                    entry.Property(nameof(ISoftDeletable.DeletedOnUtc)).CurrentValue = DateTimeOffset.UtcNow;
+
+                if (entry.Metadata.FindProperty(nameof(ISoftDeletable.DeletedBy)) != null)
+                    entry.Property(nameof(ISoftDeletable.DeletedBy)).CurrentValue = currentUserService.UserName;
             }
         }
     }
