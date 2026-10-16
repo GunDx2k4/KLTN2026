@@ -18,8 +18,13 @@ public sealed class CurrentUserService(IHttpContextAccessor httpContextAccessor)
     {
         get 
         {
-            var userIdString = _httpContextAccessor.HttpContext?.User?.FindFirstValue(ClaimTypes.NameIdentifier) ?? 
-                               _httpContextAccessor.HttpContext?.User?.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
+            var user = _httpContextAccessor.HttpContext?.User;
+            var userIdString = user?.FindFirstValue(ClaimTypes.NameIdentifier) ?? 
+                               user?.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub) ??
+                               user?.FindFirstValue("sub") ??
+                               user?.FindFirstValue("id") ??
+                               user?.FindFirstValue("uid") ??
+                               user?.FindFirstValue("userId");
             
             return Guid.TryParse(userIdString, out var userId) ? userId : null;
         }

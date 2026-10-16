@@ -107,8 +107,8 @@ public class ClubGroup : AggregateRoot<Guid>
     }
 
     /// <summary>
-    /// Khởi tạo nhóm: chỉ tạo DUY NHẤT vai trò Host (quản trị tối cao) với full 100% quyền hạn
-    /// và gán người tạo nhóm vào vai trò này. KHÔNG tự tạo thêm bất kỳ vai trò nào khác.
+    /// Khởi tạo nhóm: tạo vai trò Host (quản trị tối cao) với full 100% quyền hạn,
+    /// đồng thời khởi tạo các vai trò tiêu chuẩn (Phó nhóm, Thủ quỹ, Thành viên [default], Khách vãng lai).
     /// </summary>
     public (GroupRole HostRole, GroupMember HostMembership) InitializeHostRole(
         IEnumerable<GroupPermission> allPermissions,
@@ -117,7 +117,7 @@ public class ClubGroup : AggregateRoot<Guid>
     {
         var permissionList = allPermissions.ToList();
 
-        // 1. Chỉ tạo DUY NHẤT vai trò Host/Admin (Full 100% quyền hạn)
+        // 1. Vai trò Host/Admin (Full 100% quyền hạn)
         var hostRole = new GroupRole(Id, roleName, "Chủ sở hữu và quản trị viên tối cao của câu lạc bộ", isDefault: false);
         foreach (var perm in permissionList)
         {
@@ -125,7 +125,43 @@ public class ClubGroup : AggregateRoot<Guid>
         }
         Roles.Add(hostRole);
 
-        // 2. Thêm người tạo CLB làm Host
+        // 2. Vai trò Phó nhóm (toàn quyền trừ bổ nhiệm vai trò khác)
+        var deputyRole = new GroupRole(Id, "Phó nhóm", "Hỗ trợ Host điều hành buổi chơi và thành viên", isDefault: false);
+        foreach (var perm in permissionList.Where(p => !string.Equals(p.PermissionCode, Constants.GroupPermissions.Member.RoleManage, StringComparison.OrdinalIgnoreCase)))
+        {
+            deputyRole.AddPermission(perm.Id);
+        }
+        Roles.Add(deputyRole);
+
+        // 3. Vai trò Thủ quỹ (Quản lý quỹ và tài chính nhóm)
+        var treasurerRole = new GroupRole(Id, "Thủ quỹ", "Quản lý thu chi và quỹ nhóm", isDefault: false);
+        foreach (var perm in permissionList.Where(p => p.ModuleGroup == Enums.ModuleGroup.FINANCE ||
+                                                       string.Equals(p.PermissionCode, Constants.GroupPermissions.Operations.SessionView, StringComparison.OrdinalIgnoreCase) ||
+                                                       string.Equals(p.PermissionCode, Constants.GroupPermissions.Member.View, StringComparison.OrdinalIgnoreCase)))
+        {
+            treasurerRole.AddPermission(perm.Id);
+        }
+        Roles.Add(treasurerRole);
+
+        // 4. Vai trò Thành viên chính thức (Mặc định cho người mới join CLB)
+        var memberRole = new GroupRole(Id, "Thành viên", "Thành viên chính thức của câu lạc bộ", isDefault: true);
+        foreach (var perm in permissionList.Where(p => string.Equals(p.PermissionCode, Constants.GroupPermissions.Operations.SessionView, StringComparison.OrdinalIgnoreCase) ||
+                                                       string.Equals(p.PermissionCode, Constants.GroupPermissions.Member.View, StringComparison.OrdinalIgnoreCase) ||
+                                                       string.Equals(p.PermissionCode, Constants.GroupPermissions.Finance.LedgerView, StringComparison.OrdinalIgnoreCase)))
+        {
+            memberRole.AddPermission(perm.Id);
+        }
+        Roles.Add(memberRole);
+
+        // 5. Vai trò Khách vãng lai
+        var guestRole = new GroupRole(Id, "Khách vãng lai", "Người chơi tham gia giao lưu theo buổi", isDefault: false);
+        foreach (var perm in permissionList.Where(p => string.Equals(p.PermissionCode, Constants.GroupPermissions.Operations.SessionView, StringComparison.OrdinalIgnoreCase)))
+        {
+            guestRole.AddPermission(perm.Id);
+        }
+        Roles.Add(guestRole);
+
+        // 6. Thêm người tạo CLB làm Host
         var hostMembership = new GroupMember(
             groupId: Id,
             userId: creatorUserId,

@@ -20,10 +20,29 @@ public sealed class CreateClubCommandHandler(
         }
 
         var code = "CLB-" + Guid.NewGuid().ToString("N")[..6].ToUpper();
-        var club = new ClubGroup(request.Name, code, request.Description, request.AvatarUrl);
+        var club = new ClubGroup(
+            groupName: request.Name,
+            description: request.Description,
+            avatarUrl: request.AvatarUrl,
+            fixedVenueName: request.FixedVenueName,
+            fixedAddress: request.FixedAddress,
+            lat: request.Lat,
+            lng: request.Lng,
+            minSkillLevel: request.MinSkillLevel,
+            maxSkillLevel: request.MaxSkillLevel,
+            code: code
+        );
 
         var allPermissions = await clubRepository.GetAllPermissionsAsync(cancellationToken);
         club.InitializeHostRole(allPermissions, userId.Value);
+
+        if (request.Schedules != null && request.Schedules.Count > 0)
+        {
+            foreach (var s in request.Schedules)
+            {
+                club.Schedules.Add(new GroupSchedule(club.Id, s.DayOfWeek, s.StartTime, s.EndTime));
+            }
+        }
 
         clubRepository.Add(club);
 

@@ -42,9 +42,10 @@ public sealed class ApproveJoinRequestCommandHandler(
             return Result.Failure<Guid>(Error.NotFound("Club.NotFound", "Không tìm thấy câu lạc bộ."));
         }
 
+        var defaultRole = club.GetDefaultRole() ?? club.Roles.FirstOrDefault(r => r.IsDefault) ?? club.Roles.FirstOrDefault(r => r.RoleName == "Thành viên");
         var targetRoleId = request.RoleId.HasValue && club.FindRole(request.RoleId.Value) is not null
             ? request.RoleId.Value
-            : club.GetDefaultRole()?.Id ?? club.Roles.FirstOrDefault()?.Id ?? Guid.Empty;
+            : defaultRole?.Id ?? club.Roles.FirstOrDefault(r => !r.IsHostRole)?.Id ?? club.Roles.FirstOrDefault()?.Id ?? Guid.Empty;
 
         var existingMember = await clubMemberRepository.FindSingleAsync(
             m => m.GroupId == request.ClubId && m.UserId == joinRequest.UserId,

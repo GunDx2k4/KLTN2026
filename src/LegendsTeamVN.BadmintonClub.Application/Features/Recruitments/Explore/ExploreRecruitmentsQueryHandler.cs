@@ -18,7 +18,7 @@ public sealed class ExploreRecruitmentsQueryHandler(IRecruitmentRepository recru
             .Include(r => r.Session)
                 .ThenInclude(s => s.Group)
             .Include(r => r.Session.Bookings)
-            .Where(r => r.Session.Status == SessionStatus.OPEN && r.Session.StartTime > now)
+            .Where(r => r.Session.Status == SessionStatus.OPEN && r.Session.EndTime > now)
             .OrderBy(r => r.Session.StartTime)
             .ToListAsync(cancellationToken);
 
