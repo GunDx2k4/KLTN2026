@@ -20,9 +20,19 @@ public sealed class GroupPermissionHandler(
             return;
         }
 
+        // 0. SuperAdmin / System Admin luôn có toàn quyền truy cập
+        if (context.User.IsInRole("Admin") || context.User.IsInRole("SystemAdmin") || context.User.IsInRole("SuperAdmin"))
+        {
+            context.Succeed(requirement);
+            return;
+        }
+
         // 1. Lấy UserId từ ClaimsPrincipal
         var userIdString = context.User.FindFirstValue(ClaimTypes.NameIdentifier) ??
-                           context.User.FindFirstValue("sub");
+                           context.User.FindFirstValue("sub") ??
+                           context.User.FindFirstValue("id") ??
+                           context.User.FindFirstValue("uid") ??
+                           context.User.FindFirstValue("userId");
 
         if (!Guid.TryParse(userIdString, out var userId))
         {
@@ -56,7 +66,19 @@ public sealed class GroupPermissionHandler(
             return;
         }
 
-        // 3. Kiểm tra quyền của User trong Group cụ thể
+        // 2.1. Fast-Path: Nếu Token hiện tại đã cấp claim tenant_id trùng khớp và chứa permission này
+        var tokenTenantId = context.User.FindFirstValue("tenant_id");
+        if (Guid.TryParse(tokenTenantId, out var tenantId) && tenantId == groupId.Value)
+        {
+            var tokenPermissions = context.User.FindAll("permissions").Select(c => c.Value);
+            if (tokenPermissions.Contains(requirement.Permission, StringComparer.OrdinalIgnoreCase))
+            {
+                context.Succeed(requirement);
+                return;
+            }
+        }
+
+        // 3. Kiểm tra quyền của User trong Group cụ thể qua Database / Cache
         var hasPermission = await groupAuthService.HasPermissionAsync(userId, groupId.Value, requirement.Permission, httpContext.RequestAborted);
         if (hasPermission)
         {

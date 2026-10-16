@@ -210,7 +210,17 @@ public class ClubEndpoint : EndpointGroupBase
         ISender sender,
         CancellationToken cancellationToken)
     {
-        var command = new CreateClubCommand(request.Name, request.Description, request.AvatarUrl);
+        var command = new CreateClubCommand(
+            request.Name,
+            request.Description,
+            request.AvatarUrl,
+            request.FixedVenueName,
+            request.FixedAddress,
+            request.Lat,
+            request.Lng,
+            request.MinSkillLevel,
+            request.MaxSkillLevel,
+            request.Schedules);
         var result = await sender.Send(command, cancellationToken);
         return result.Match(onSuccess: clubId => Results.Created($"/api/v1/clubs/{clubId}", clubId));
     }

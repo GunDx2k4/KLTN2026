@@ -1,4 +1,5 @@
 using LegendsTeamVN.BadmintonClub.Application.Abstractions;
+using LegendsTeamVN.BadmintonClub.Domain.Constants;
 using LegendsTeamVN.BadmintonClub.Domain.Enums;
 using LegendsTeamVN.Core.Application.Caching;
 using Microsoft.EntityFrameworkCore;
@@ -41,10 +42,31 @@ public sealed class GroupAuthorizationService(
             return Array.Empty<string>();
         }
 
-        var permissions = member.RoleEntity.RolePermissions
+        // 1. Host sở hữu toàn bộ 100% quyền hạn của hệ thống
+        if (member.RoleEntity != null && 
+            (string.Equals(member.RoleEntity.RoleName, "Host", StringComparison.OrdinalIgnoreCase) || member.RoleEntity.IsHostRole))
+        {
+            var allPerms = GroupPermissions.All.Select(p => p.Code).ToList();
+            await cacheService.SetAsync(cacheKey, allPerms, TimeSpan.FromMinutes(10), cancellationToken);
+            return allPerms;
+        }
+
+        // 2. Trích xuất quyền hạn được cấu hình an toàn (phòng thủ null)
+        var permissions = member.RoleEntity?.RolePermissions?
+            .Where(rp => rp.Permission != null && !string.IsNullOrEmpty(rp.Permission.PermissionCode))
             .Select(rp => rp.Permission.PermissionCode)
             .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
+            .ToList() ?? new List<string>();
+
+        // 3. Mọi thành viên ACTIVE của nhóm luôn có quyền tối thiểu: Xem danh sách thành viên và xem các buổi chơi
+        if (!permissions.Contains(GroupPermissions.Operations.SessionView, StringComparer.OrdinalIgnoreCase))
+        {
+            permissions.Add(GroupPermissions.Operations.SessionView);
+        }
+        if (!permissions.Contains(GroupPermissions.Member.View, StringComparer.OrdinalIgnoreCase))
+        {
+            permissions.Add(GroupPermissions.Member.View);
+        }
 
         await cacheService.SetAsync(cacheKey, permissions, TimeSpan.FromMinutes(10), cancellationToken);
 

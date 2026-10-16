@@ -10,6 +10,7 @@ namespace LegendsTeamVN.BadmintonClub.Application.Features.Clubs.Join;
 public sealed class JoinClubCommandHandler(
     IClubRepository clubRepository,
     IClubMemberRepository clubMemberRepository,
+    IJoinRequestRepository joinRequestRepository,
     ICurrentUserService currentUserService) : ICommandHandler<JoinClubCommand, Guid>
 {
     public async Task<Result<Guid>> Handle(JoinClubCommand request, CancellationToken cancellationToken)
@@ -38,7 +39,7 @@ public sealed class JoinClubCommandHandler(
         }
 
         var existingMember = await clubMemberRepository.FindSingleAsync(
-            m => m.GroupId == club.Id && m.UserId == userId.Value,
+            m => m.GroupId == club.Id && m.UserId == userId.Value && m.Status == ClubMemberStatus.ACTIVE,
             cancellationToken
         );
 
@@ -47,20 +48,29 @@ public sealed class JoinClubCommandHandler(
             return Result.Failure<Guid>(Error.Conflict("ClubMember.AlreadyJoined", "Bạn đã là thành viên của câu lạc bộ này."));
         }
 
-        var roleId = request.RoleId ?? club.Roles.FirstOrDefault(r => r.IsDefault)?.Id ?? club.Roles.FirstOrDefault()?.Id ?? Guid.Empty;
-
-        var newMember = new GroupMember(
-            groupId: club.Id,
-            userId: userId.Value,
-            roleId: roleId,
-            memberType: "MONTHLY",
-            monthlyExpiryDate: null,
-            status: ClubMemberStatus.ACTIVE,
-            nickname: request.Nickname
+        var existingRequest = await joinRequestRepository.FindSingleAsync(
+            r => r.GroupId == club.Id && r.UserId == userId.Value && r.Status == JoinRequestStatus.PENDING,
+            cancellationToken
         );
 
-        clubMemberRepository.Add(newMember);
+        if (existingRequest is not null)
+        {
+            return Result.Failure<Guid>(Error.Conflict("JoinRequest.AlreadyPending", "Bạn đã gửi yêu cầu gia nhập câu lạc bộ này và đang chờ Ban quản trị duyệt."));
+        }
 
-        return Result.Success(newMember.Id);
+        var intro = !string.IsNullOrWhiteSpace(request.Nickname)
+            ? $"Biệt danh: {request.Nickname}"
+            : $"Xin gia nhập nhóm bằng mã {normalizedCode}";
+
+        var newJoinRequest = new JoinRequest(
+            groupId: club.Id,
+            userId: userId.Value,
+            introduction: intro,
+            status: JoinRequestStatus.PENDING
+        );
+
+        joinRequestRepository.Add(newJoinRequest);
+
+        return Result.Success(newJoinRequest.Id);
     }
 }
