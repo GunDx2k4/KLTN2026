@@ -5,5 +5,7 @@ namespace LegendsTeamVN.BadmintonClub.Application.Features.Clubs.UpdateMemberRol
 public record UpdateMemberRoleCommand(
     Guid ClubId,
     Guid TargetUserId,
-    Guid RoleId
+    Guid? RoleId = null,
+    int? Role = null,
+    string? RoleName = null
 ) : ICommand<bool>;

@@ -36,6 +36,21 @@ public class GroupRole : AggregateRoot<Guid>
     /// </summary>
     public bool IsHostRole => RolePermissions.Count >= Constants.GroupPermissions.TotalCount;
 
+    public int GetRoleCode()
+    {
+        return MapRoleCode(RoleName, IsHostRole);
+    }
+
+    public static int MapRoleCode(string? roleName, bool isHost = false)
+    {
+        if (isHost || string.Equals(roleName, "Host", StringComparison.OrdinalIgnoreCase)) return 3;
+        if (string.IsNullOrWhiteSpace(roleName)) return 1;
+        if (roleName.Contains("Thủ quỹ", StringComparison.OrdinalIgnoreCase) || roleName.Contains("Treasurer", StringComparison.OrdinalIgnoreCase)) return 2;
+        if (roleName.Contains("Phó nhóm", StringComparison.OrdinalIgnoreCase) || roleName.Contains("Deputy", StringComparison.OrdinalIgnoreCase)) return 5;
+        if (roleName.Contains("Khách", StringComparison.OrdinalIgnoreCase) || roleName.Contains("Guest", StringComparison.OrdinalIgnoreCase)) return 4;
+        return 1;
+    }
+
     public void Update(string roleName, string? description, bool isDefault)
     {
         RoleName = roleName;

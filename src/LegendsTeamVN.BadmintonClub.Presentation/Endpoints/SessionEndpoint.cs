@@ -3,6 +3,7 @@ using LegendsTeamVN.BadmintonClub.Application.DTOs.Sessions.Responses;
 using LegendsTeamVN.BadmintonClub.Application.Features.Bookings.Cancel;
 using LegendsTeamVN.BadmintonClub.Application.Features.Bookings.GetList;
 using LegendsTeamVN.BadmintonClub.Application.Features.Bookings.GetMyBooking;
+using LegendsTeamVN.BadmintonClub.Application.Features.Bookings.GetMyBookings;
 using LegendsTeamVN.BadmintonClub.Application.Features.Bookings.Vote;
 using LegendsTeamVN.BadmintonClub.Application.Features.Recruitments.Cancel;
 using LegendsTeamVN.BadmintonClub.Application.Features.Recruitments.Create;
@@ -85,6 +86,11 @@ public class SessionEndpoint : EndpointGroupBase
         fr08fr10Group.MapDelete("{sessionId:guid}/bookings/me", CancelBooking)
             .WithName("CancelBooking")
             .WithSummary("Hủy giữ chỗ / Báo vắng (Tự động đôn người chờ đầu hàng đợi lên chính thức) (FR10)")
+            .RequireAuthorization();
+
+        fr08fr10Group.MapGet("my-bookings", GetMyBookings)
+            .WithName("GetMyBookings")
+            .WithSummary("Xem danh sách tất cả các lịch/buổi chơi mình đã đăng ký giữ chỗ (FR08, FR10)")
             .RequireAuthorization();
 
         fr08fr10Group.MapGet("{sessionId:guid}/bookings", GetSessionBookings)
@@ -217,6 +223,15 @@ public class SessionEndpoint : EndpointGroupBase
     {
         var query = new GetSessionBookingsQuery(sessionId);
         var result = await sender.Send(query);
+        return result.Match(Results.Ok);
+    }
+
+    private static async Task<IResult> GetMyBookings(
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var query = new GetMyBookingsQuery();
+        var result = await sender.Send(query, cancellationToken);
         return result.Match(Results.Ok);
     }
 

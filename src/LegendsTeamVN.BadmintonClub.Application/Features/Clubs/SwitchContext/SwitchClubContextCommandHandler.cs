@@ -62,7 +62,8 @@ public sealed class SwitchClubContextCommandHandler(
             ClubName: membership.Group.GroupName,
             RoleId: membership.RoleId,
             RoleName: roleName,
-            Permissions: permissions.ToList()
+            Permissions: permissions.ToList(),
+            Role: membership.RoleEntity?.GetRoleCode() ?? 1
         ));
     }
 }
