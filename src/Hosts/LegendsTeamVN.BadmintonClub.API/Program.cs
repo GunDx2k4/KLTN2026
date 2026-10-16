@@ -41,6 +41,11 @@ builder.Services.AddCoreSwagger("Badminton Club API");
 // Add Endpoints Discovery from Presentation assembly
 builder.Services.AddPresentation();
 
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+});
+
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>

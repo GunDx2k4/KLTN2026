@@ -11,5 +11,6 @@ public sealed record MyClubResponse(
     Guid RoleId,
     string? RoleName,
     ClubMemberStatus Status,
-    DateTime JoinedAt
+    DateTime JoinedAt,
+    int Role = 1
 );

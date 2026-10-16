@@ -8,6 +8,7 @@ public sealed class UpdateMemberRoleCommandValidator : AbstractValidator<UpdateM
     {
         RuleFor(x => x.ClubId).NotEmpty().WithMessage("ClubId không được để trống.");
         RuleFor(x => x.TargetUserId).NotEmpty().WithMessage("TargetUserId không được để trống.");
-        RuleFor(x => x.RoleId).NotEmpty().WithMessage("RoleId không được để trống.");
+        RuleFor(x => x).Must(x => (x.RoleId.HasValue && x.RoleId.Value != Guid.Empty) || x.Role.HasValue || !string.IsNullOrWhiteSpace(x.RoleName))
+            .WithMessage("RoleId hoặc vai trò không được để trống.");
     }
 }

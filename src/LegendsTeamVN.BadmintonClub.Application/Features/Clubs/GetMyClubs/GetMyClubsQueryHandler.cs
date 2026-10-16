@@ -21,19 +21,21 @@ public sealed class GetMyClubsQueryHandler(
 
         var memberships = await clubMemberRepository.FindAll(m => m.UserId == userId.Value, m => m.Group, m => m.RoleEntity)
             .OrderByDescending(m => m.JoinedAt)
-            .Select(m => new MyClubResponse(
-                m.GroupId,
-                m.Group.GroupName,
-                m.Group.Code ?? string.Empty,
-                m.Group.Description,
-                m.Group.AvatarUrl,
-                m.RoleId,
-                m.RoleEntity.RoleName,
-                m.Status,
-                m.JoinedAt
-            ))
             .ToListAsync(cancellationToken);
 
-        return Result.Success(memberships);
+        var result = memberships.Select(m => new MyClubResponse(
+            m.GroupId,
+            m.Group.GroupName,
+            m.Group.Code ?? string.Empty,
+            m.Group.Description,
+            m.Group.AvatarUrl,
+            m.RoleId,
+            m.RoleEntity?.RoleName,
+            m.Status,
+            m.JoinedAt,
+            m.RoleEntity?.GetRoleCode() ?? 1
+        )).ToList();
+
+        return Result.Success(result);
     }
 }

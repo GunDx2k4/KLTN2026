@@ -1,4 +1,6 @@
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Clubs.Requests;
+using LegendsTeamVN.BadmintonClub.Application.DTOs.Clubs.Responses;
+using LegendsTeamVN.BadmintonClub.Domain.Repositories;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.Create;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.Explore;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.GetById;
@@ -80,6 +82,11 @@ public class ClubEndpoint : EndpointGroupBase
             .RequireAuthorization();
 
         // --- GROUP ROLES MANAGEMENT (FR03) ---
+        fr03Group.MapGet("permissions", GetAllClubPermissions)
+            .WithName("GetAllClubPermissions")
+            .WithSummary("Lấy danh sách tất cả các quyền hạn chuẩn của câu lạc bộ (FR03)")
+            .RequireAuthorization();
+
         fr03Group.MapGet("{id:guid}/roles", GetClubRoles)
             .WithName("GetClubRoles")
             .WithSummary("Lấy danh sách các vai trò nội bộ của câu lạc bộ (FR03)")
@@ -244,7 +251,7 @@ public class ClubEndpoint : EndpointGroupBase
         ISender sender,
         CancellationToken cancellationToken)
     {
-        var command = new UpdateMemberRoleCommand(id, userId, request.RoleId);
+        var command = new UpdateMemberRoleCommand(id, userId, request.RoleId, request.Role, request.RoleName);
         var result = await sender.Send(command, cancellationToken);
         return result.Match(onSuccess: success => Results.Ok(new { Success = success }));
     }
@@ -268,6 +275,20 @@ public class ClubEndpoint : EndpointGroupBase
         var command = new SwitchClubContextCommand(id);
         var result = await sender.Send(command, cancellationToken);
         return result.Match(onSuccess: response => Results.Ok(response));
+    }
+
+    private static async Task<IResult> GetAllClubPermissions(
+        IClubRepository clubRepository,
+        CancellationToken cancellationToken)
+    {
+        var permissions = await clubRepository.GetAllPermissionsAsync(cancellationToken);
+        var response = permissions.Select(p => new ClubRolePermissionItemResponse(
+            p.Id,
+            p.PermissionCode,
+            p.PermissionName,
+            p.ModuleGroup.ToString()
+        )).ToList();
+        return Results.Ok(response);
     }
 
     private static async Task<IResult> GetClubRoles(

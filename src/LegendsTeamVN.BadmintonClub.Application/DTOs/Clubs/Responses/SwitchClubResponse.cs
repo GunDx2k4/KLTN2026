@@ -6,5 +6,6 @@ public sealed record SwitchClubResponse(
     string ClubName,
     Guid RoleId,
     string RoleName,
-    List<string> Permissions
+    List<string> Permissions,
+    int Role = 1
 );

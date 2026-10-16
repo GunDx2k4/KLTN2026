@@ -46,6 +46,7 @@ public sealed class GetUserProfileQueryHandler(
             SkillLevel.TB => "Trung bình",
             SkillLevel.TBK => "Trung bình khá",
             SkillLevel.K => "Khá",
+            SkillLevel.G => "Giỏi / Bán chuyên",
             _ => "Phong trào"
         };
 

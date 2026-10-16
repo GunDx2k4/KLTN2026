@@ -46,7 +46,8 @@ public sealed class GetClubMembersQueryHandler(
                 RoleName: m.RoleEntity?.RoleName,
                 Status: m.Status,
                 Nickname: m.Nickname,
-                JoinedAt: m.JoinedAt
+                JoinedAt: m.JoinedAt,
+                Role: m.RoleEntity?.GetRoleCode() ?? 1
             );
         }).ToList();
 

@@ -12,5 +12,6 @@ public record ClubMemberResponse(
     string? RoleName,
     ClubMemberStatus Status,
     string? Nickname,
-    DateTime JoinedAt
+    DateTime JoinedAt,
+    int Role = 1
 );

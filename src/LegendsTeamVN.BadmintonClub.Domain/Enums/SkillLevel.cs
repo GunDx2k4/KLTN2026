@@ -1,7 +1,7 @@
 namespace LegendsTeamVN.BadmintonClub.Domain.Enums;
 
 /// <summary>
-/// Trình độ tự đánh giá của người dùng. Miền giá trị: 1=NB, 2=Y, 3=TBY, 4=TB, 5=TBK, 6=K.
+/// Trình độ tự đánh giá của người dùng. Miền giá trị: 1=NB, 2=Y, 3=TBY, 4=TB, 5=TBK, 6=K, 7=G.
 /// </summary>
 public enum SkillLevel : short
 {
@@ -21,5 +21,8 @@ public enum SkillLevel : short
     TBK = 5,
 
     /// <summary>6 = K (Khá)</summary>
-    K = 6
+    K = 6,
+
+    /// <summary>7 = G (Giỏi / Bán chuyên)</summary>
+    G = 7
 }
