@@ -4,11 +4,13 @@ using LegendsTeamVN.BadmintonClub.Domain.Enums;
 using LegendsTeamVN.Core.Application.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using LegendsTeamVN.BadmintonClub.Application.Abstractions;
 
 namespace LegendsTeamVN.BadmintonClub.Persistence.Seeders;
 
 public class GroupPermissionSeeder(
     BadmintonDbContext dbContext,
+    IGroupAuthorizationService groupAuthorization,
     ILogger<GroupPermissionSeeder> logger) : IDataSeeder
 {
     public int Order => 3;
@@ -18,8 +20,26 @@ public class GroupPermissionSeeder(
         logger.LogInformation("Ensuring Group Permissions are seeded...");
 
         await SeedPermissionsAsync(cancellationToken);
+        await EnsureTreasurerAttendanceAsync(cancellationToken);
 
         logger.LogInformation("Group Permissions verified successfully.");
+    }
+
+    private async Task EnsureTreasurerAttendanceAsync(CancellationToken cancellationToken)
+    {
+        var permission = await dbContext.GroupPermissions.SingleAsync(
+            p => p.PermissionCode == GroupPermissions.Operations.BookingManage, cancellationToken);
+        var roles = await dbContext.GroupRoles.Where(r => !r.IsDeleted &&
+            (r.RoleName == "Thủ quỹ" || r.RoleName == "Treasurer") &&
+            !r.RolePermissions.Any(p => p.PermissionId == permission.Id)).ToListAsync(cancellationToken);
+        if (roles.Count == 0) return;
+        dbContext.RolePermissions.AddRange(roles.Select(r => new RolePermission(r.Id, permission.Id)));
+        await dbContext.SaveChangesAsync(cancellationToken);
+        var roleIds = roles.Select(r => r.Id).ToList();
+        var members = await dbContext.GroupMembers.Where(m => roleIds.Contains(m.RoleId))
+            .Select(m => new { m.GroupId, m.UserId }).Distinct().ToListAsync(cancellationToken);
+        foreach (var member in members)
+            await groupAuthorization.InvalidateUserPermissionsCacheAsync(member.UserId, member.GroupId, cancellationToken);
     }
 
     public async Task SeedPermissionsAsync(CancellationToken cancellationToken = default)
@@ -72,6 +92,7 @@ public class GroupPermissionSeeder(
             "Host" => GroupPermissions.All.Select(p => p.Code).ToList(),
             "Thủ quỹ" => GroupPermissions.All
                 .Where(p => p.ModuleGroup == ModuleGroup.FINANCE ||
+                            p.Code == GroupPermissions.Operations.BookingManage ||
                             p.Code == GroupPermissions.Operations.SessionView ||
                             p.Code == GroupPermissions.Member.View)
                 .Select(p => p.Code).ToList(),

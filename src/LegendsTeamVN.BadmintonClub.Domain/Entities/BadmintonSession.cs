@@ -14,6 +14,8 @@ public class BadmintonSession : AggregateRoot<Guid>
     public int TargetPlayerPerCourt { get; private set; }
     public int MaxPlayers { get; private set; }
     public DateTime DeadlineBooking { get; private set; }
+    public DateTime? AttendanceCompletedAt { get; private set; }
+    public Guid? AttendanceCompletedBy { get; private set; }
     public int ShuttlecockUsed { get; private set; }
     public decimal CourtRentalCost { get; private set; }
     public decimal ExtraExpense { get; private set; }
@@ -142,10 +144,29 @@ public class BadmintonSession : AggregateRoot<Guid>
         ExtraExpense = extraExpense;
     }
 
+    public void CompleteAttendance(Guid actorId, DateTime now)
+    {
+        if (AttendanceCompletedAt.HasValue) return;
+        AttendanceCompletedAt = now;
+        AttendanceCompletedBy = actorId;
+    }
+
     public void UpdateStatus(SessionStatus status)
     {
+        if (!CanTransitionTo(status))
+            throw new InvalidOperationException("Invalid session status transition.");
         Status = status;
     }
+
+    public bool CanTransitionTo(SessionStatus target) => Enum.IsDefined(target) &&
+        (Status == target || Status switch
+        {
+            SessionStatus.OPEN => target is SessionStatus.LOCKED or SessionStatus.PLAYING or SessionStatus.CALCULATED or SessionStatus.COMPLETED,
+            SessionStatus.LOCKED => target is SessionStatus.OPEN or SessionStatus.PLAYING or SessionStatus.CALCULATED or SessionStatus.COMPLETED,
+            SessionStatus.PLAYING => target is SessionStatus.CALCULATED or SessionStatus.COMPLETED,
+            SessionStatus.CALCULATED => target == SessionStatus.COMPLETED,
+            _ => false
+        });
 
     public void UpdateStatus(string status)
     {

@@ -52,6 +52,9 @@ public class BadmintonSessionConfiguration : IEntityTypeConfiguration<BadmintonS
             .HasColumnName("deadline_booking")
             .IsRequired();
 
+        builder.Property(s => s.AttendanceCompletedAt).HasColumnName("attendance_completed_at");
+        builder.Property(s => s.AttendanceCompletedBy).HasColumnName("attendance_completed_by");
+
         builder.Property(s => s.ShuttlecockUsed)
             .HasColumnName("shuttlecock_used")
             .HasDefaultValue(0);

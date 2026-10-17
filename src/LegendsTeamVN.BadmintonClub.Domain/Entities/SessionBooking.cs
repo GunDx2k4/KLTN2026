@@ -17,6 +17,8 @@ public class SessionBooking : AggregateRoot<Guid>
     public int QueueOrder { get; private set; }
     public DateTime BookedAt { get; private set; }
     public DateTime? CheckinAt { get; private set; }
+    public DateTime? AttendanceMarkedAt { get; private set; }
+    public Guid? AttendanceMarkedBy { get; private set; }
 
     public virtual BadmintonSession Session { get; private set; } = default!;
     public virtual AppUser User { get; private set; } = default!;
@@ -52,8 +54,35 @@ public class SessionBooking : AggregateRoot<Guid>
 
     public void CheckIn()
     {
+        if (Status == BookingStatus.CHECKED_IN && CheckinAt.HasValue) return;
         Status = BookingStatus.CHECKED_IN;
-        CheckinAt = DateTime.UtcNow;
+        CheckinAt ??= DateTime.UtcNow;
+        QueueOrder = 0;
+    }
+
+    public void MarkPresent(Guid actorId, DateTime now)
+    {
+        if (Status == BookingStatus.CHECKED_IN && !IsDeleted) return;
+        IsDeleted = false;
+        DeletedOnUtc = null;
+        DeletedBy = null;
+        Status = BookingStatus.CHECKED_IN;
+        CheckinAt = now;
+        QueueOrder = 0;
+        AttendanceMarkedAt = now;
+        AttendanceMarkedBy = actorId;
+    }
+
+    public void MarkNoShow(Guid actorId, DateTime now)
+    {
+        if (Status == BookingStatus.NO_SHOW) return;
+        if (Status is not (BookingStatus.CONFIRMED or BookingStatus.CHECKED_IN))
+            throw new InvalidOperationException("Only an official participant can be marked no-show.");
+        Status = BookingStatus.NO_SHOW;
+        CheckinAt = null;
+        QueueOrder = 0;
+        AttendanceMarkedAt = now;
+        AttendanceMarkedBy = actorId;
     }
 
     public void UpdateStatus(BookingStatus status)
@@ -70,6 +99,8 @@ public class SessionBooking : AggregateRoot<Guid>
     {
         QueueOrder = order;
     }
+
+    public void AssignRecruitment(Guid? recruitmentId) => RecruitmentId = recruitmentId;
 
     private static BookingStatus ParseStatus(string status)
     {

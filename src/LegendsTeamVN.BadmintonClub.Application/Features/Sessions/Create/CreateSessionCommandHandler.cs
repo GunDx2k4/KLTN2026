@@ -25,13 +25,13 @@ public sealed class CreateSessionCommandHandler(
         var session = new BadmintonSession(
             groupId: request.ClubId,
             title: req.Title,
-            startTime: req.StartTime,
-            endTime: req.EndTime,
+            startTime: req.StartTime.UtcDateTime,
+            endTime: req.EndTime.UtcDateTime,
             courtLocation: req.CourtLocation,
             courtCount: req.CourtCount,
             targetPlayerPerCourt: req.TargetPlayerPerCourt,
             maxPlayers: maxPlayers,
-            deadlineBooking: deadline,
+            deadlineBooking: deadline.UtcDateTime,
             courtRentalCost: req.CourtRentalCost,
             status: SessionStatus.OPEN
         );

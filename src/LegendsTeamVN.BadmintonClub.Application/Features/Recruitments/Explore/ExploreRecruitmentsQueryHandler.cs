@@ -14,11 +14,11 @@ public sealed class ExploreRecruitmentsQueryHandler(IRecruitmentRepository recru
     {
         var now = DateTime.UtcNow;
 
-        var recruitments = await recruitmentRepository.FindAll(r => r.Status == RecruitmentStatus.ACTIVE)
+        var recruitments = await recruitmentRepository.FindAll(r => !r.IsDeleted && r.Status == RecruitmentStatus.ACTIVE)
             .Include(r => r.Session)
                 .ThenInclude(s => s.Group)
             .Include(r => r.Session.Bookings)
-            .Where(r => r.Session.Status == SessionStatus.OPEN && r.Session.EndTime > now)
+            .Where(r => !r.Session.IsDeleted && r.Session.Status == SessionStatus.OPEN && r.Session.EndTime > now)
             .OrderBy(r => r.Session.StartTime)
             .ToListAsync(cancellationToken);
 
@@ -26,8 +26,7 @@ public sealed class ExploreRecruitmentsQueryHandler(IRecruitmentRepository recru
 
         foreach (var r in recruitments)
         {
-            var confirmedCount = r.Session.Bookings.Count(b => b.RecruitmentId == r.Id && b.Status == BookingStatus.CONFIRMED);
-            var slotsRemaining = r.SlotsNeeded - confirmedCount;
+            var slotsRemaining = RecruitmentRules.RemainingSlots(r.Session, r);
             if (slotsRemaining <= 0)
             {
                 continue;

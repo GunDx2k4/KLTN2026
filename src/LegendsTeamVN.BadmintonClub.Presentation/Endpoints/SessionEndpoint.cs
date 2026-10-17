@@ -1,5 +1,9 @@
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Sessions.Requests;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Sessions.Responses;
+using LegendsTeamVN.BadmintonClub.Application.Features.Attendance.AddWalkIn;
+using LegendsTeamVN.BadmintonClub.Application.Features.Attendance.Complete;
+using LegendsTeamVN.BadmintonClub.Application.Features.Attendance.GetList;
+using LegendsTeamVN.BadmintonClub.Application.Features.Attendance.Update;
 using LegendsTeamVN.BadmintonClub.Application.Features.Bookings.Cancel;
 using LegendsTeamVN.BadmintonClub.Application.Features.Bookings.GetList;
 using LegendsTeamVN.BadmintonClub.Application.Features.Bookings.GetMyBooking;
@@ -41,6 +45,7 @@ public class SessionEndpoint : EndpointGroupBase
         var fr08fr10Group = group.MapGroup("").WithTags("FR08-FR10 - Biểu quyết giữ chỗ & Hàng đợi");
         var fr11Group = group.MapGroup("").WithTags("FR11 - Phát tín hiệu tìm khách giao lưu");
         var fr12Group = group.MapGroup("").WithTags("FR12 - Khách vãng lai đăng ký tham gia");
+        var fr14Group = group.MapGroup("").WithTags("FR14 - Điểm danh tại sân");
 
         // ==========================================
         // --- FR13: KHỞI TẠO & CẤU HÌNH BUỔI CHƠI ---
@@ -138,6 +143,34 @@ public class SessionEndpoint : EndpointGroupBase
             .WithName("CancelRecruitmentBooking")
             .WithSummary("Khách vãng lai hủy suất giao lưu đã đăng ký (FR12)")
             .RequireAuthorization();
+
+        // ======================================
+        // --- FR14: ĐIỂM DANH THÀNH VIÊN TẠI SÂN ---
+        // ======================================
+        // Quyền tại nhóm sở hữu session được kiểm tra trong AttendanceService.
+        fr14Group.MapGet("{sessionId:guid}/attendance", GetSessionAttendance)
+            .WithName("GetSessionAttendance")
+            .WithSummary("Xem danh sách điểm danh và sĩ số thực tế tại sân (FR14)")
+            .Produces<SessionAttendanceResponse>()
+            .RequireAuthorization();
+
+        fr14Group.MapPut("{sessionId:guid}/attendance/{userId:guid}", UpdateSessionAttendance)
+            .WithName("UpdateSessionAttendance")
+            .WithSummary("Đánh dấu có mặt hoặc không đến sân cho người chơi (FR14)")
+            .Produces<SessionAttendanceResponse>()
+            .RequireAuthorization();
+
+        fr14Group.MapPost("{sessionId:guid}/attendance/walk-ins", AddSessionWalkIn)
+            .WithName("AddSessionWalkIn")
+            .WithSummary("Thêm nhanh người chơi có tài khoản và xác nhận có mặt (FR14)")
+            .Produces<SessionAttendanceResponse>()
+            .RequireAuthorization();
+
+        fr14Group.MapPost("{sessionId:guid}/attendance/complete", CompleteSessionAttendance)
+            .WithName("CompleteSessionAttendance")
+            .WithSummary("Hoàn tất điểm danh, cung cấp danh sách sẵn sàng cho điều phối (FR14)")
+            .Produces<SessionAttendanceResponse>()
+            .RequireAuthorization();
     }
 
     // --- FR13 Handlers ---
@@ -184,7 +217,7 @@ public class SessionEndpoint : EndpointGroupBase
         [FromBody] UpdateSessionStatusRequest request,
         ISender sender)
     {
-        var command = new UpdateSessionStatusCommand(sessionId, request.Status);
+        var command = new UpdateSessionStatusCommand(sessionId, request.Status, request.ConfirmRemainingNoShows);
         var result = await sender.Send(command);
         return result.Match(Results.NoContent);
     }
@@ -302,5 +335,49 @@ public class SessionEndpoint : EndpointGroupBase
         var command = new CancelRecruitmentBookingCommand(recruitmentId);
         var result = await sender.Send(command);
         return result.Match(Results.NoContent);
+    }
+
+    // --- FR14 Handlers ---
+    private static async Task<IResult> GetSessionAttendance(
+        [FromRoute] Guid sessionId,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var query = new GetSessionAttendanceQuery(sessionId);
+        var result = await sender.Send(query, cancellationToken);
+        return result.Match(Results.Ok);
+    }
+
+    private static async Task<IResult> UpdateSessionAttendance(
+        [FromRoute] Guid sessionId,
+        [FromRoute] Guid userId,
+        [FromBody] UpdateAttendanceRequest request,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var command = new UpdateAttendanceCommand(sessionId, userId, request.Status);
+        var result = await sender.Send(command, cancellationToken);
+        return result.Match(Results.Ok);
+    }
+
+    private static async Task<IResult> AddSessionWalkIn(
+        [FromRoute] Guid sessionId,
+        [FromBody] AddWalkInRequest request,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var command = new AddWalkInCommand(sessionId, request.UserId);
+        var result = await sender.Send(command, cancellationToken);
+        return result.Match(Results.Ok);
+    }
+
+    private static async Task<IResult> CompleteSessionAttendance(
+        [FromRoute] Guid sessionId,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var command = new CompleteAttendanceCommand(sessionId);
+        var result = await sender.Send(command, cancellationToken);
+        return result.Match(Results.Ok);
     }
 }

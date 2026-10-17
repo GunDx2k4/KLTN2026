@@ -3,12 +3,14 @@ using LegendsTeamVN.BadmintonClub.Application.Abstractions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using LegendsTeamVN.BadmintonClub.Domain.Repositories;
 
 namespace LegendsTeamVN.BadmintonClub.Presentation.Security;
 
 public sealed class GroupPermissionHandler(
     IGroupAuthorizationService groupAuthService,
-    IHttpContextAccessor httpContextAccessor) : AuthorizationHandler<GroupPermissionRequirement>
+    IHttpContextAccessor httpContextAccessor,
+    ISessionRepository sessions) : AuthorizationHandler<GroupPermissionRequirement>
 {
     protected override async Task HandleRequirementAsync(
         AuthorizationHandlerContext context,
@@ -39,11 +41,17 @@ public sealed class GroupPermissionHandler(
             return;
         }
 
-        // 2. Lấy GroupId từ RouteValues (hỗ trợ "id", "groupId", "clubId") hoặc Header "X-Group-Id"
+        // Session routes resolve their owning group from the resource, never from a client header.
         Guid? groupId = null;
         var routeValues = httpContext.GetRouteData().Values;
 
-        if (routeValues.TryGetValue("groupId", out var routeGroupId) && Guid.TryParse(routeGroupId?.ToString(), out var gId1))
+        if (routeValues.TryGetValue("sessionId", out var routeSessionId) && Guid.TryParse(routeSessionId?.ToString(), out var sessionId))
+        {
+            var session = await sessions.FindByIdAsync(sessionId, httpContext.RequestAborted);
+            if (session is null || session.IsDeleted) return;
+            groupId = session.GroupId;
+        }
+        else if (routeValues.TryGetValue("groupId", out var routeGroupId) && Guid.TryParse(routeGroupId?.ToString(), out var gId1))
         {
             groupId = gId1;
         }

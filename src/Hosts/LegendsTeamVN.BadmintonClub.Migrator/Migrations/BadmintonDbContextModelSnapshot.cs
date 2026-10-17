@@ -143,6 +143,14 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id_session");
 
+                    b.Property<DateTime?>("AttendanceCompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("attendance_completed_at");
+
+                    b.Property<Guid?>("AttendanceCompletedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("attendance_completed_by");
+
                     b.Property<int>("CourtCount")
                         .HasColumnType("integer")
                         .HasColumnName("court_count");
@@ -1279,6 +1287,14 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id_booking");
+
+                    b.Property<DateTime?>("AttendanceMarkedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("attendance_marked_at");
+
+                    b.Property<Guid?>("AttendanceMarkedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("attendance_marked_by");
 
                     b.Property<DateTime>("BookedAt")
                         .ValueGeneratedOnAdd()
