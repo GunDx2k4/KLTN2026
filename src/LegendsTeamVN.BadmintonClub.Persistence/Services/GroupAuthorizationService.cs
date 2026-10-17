@@ -79,4 +79,27 @@ public sealed class GroupAuthorizationService(
         await cacheService.RemoveAsync(cacheKey, cancellationToken);
         logger.LogDebug("Invalidated group permission cache for user {UserId} in group {GroupId}", userId, groupId);
     }
+
+    public async Task<Guid?> GetGroupIdBySessionIdAsync(Guid sessionId, CancellationToken cancellationToken = default)
+    {
+        var cacheKey = $"session:group:{sessionId}";
+        var cached = await cacheService.GetAsync<Guid?>(cacheKey, cancellationToken);
+        if (cached.HasValue && cached.Value != Guid.Empty)
+        {
+            return cached.Value;
+        }
+
+        var groupId = await dbContext.BadmintonSessions
+            .AsNoTracking()
+            .Where(s => s.Id == sessionId)
+            .Select(s => (Guid?)s.GroupId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (groupId.HasValue)
+        {
+            await cacheService.SetAsync(cacheKey, groupId, TimeSpan.FromMinutes(30), cancellationToken);
+        }
+
+        return groupId;
+    }
 }
