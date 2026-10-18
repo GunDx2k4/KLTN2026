@@ -1,4 +1,4 @@
-﻿using FluentAssertions;
+using FluentAssertions;
 using LegendsTeamVN.BadmintonClub.Application.Features.Bookings.Vote;
 using LegendsTeamVN.BadmintonClub.Application.Tests.Common;
 using LegendsTeamVN.BadmintonClub.Domain.Entities;
@@ -17,7 +17,7 @@ public class UT_BOOK_03_BookingWaitingQueueTests
     {
         // Arrange
         using var dbContext = TestDbContextFactory.Create();
-        var sessionRepo = new SessionRepository(dbContext);
+        var sessionRepo = TestDbContextFactory.CreateAttendanceSessionRepository(dbContext);
         var bookingRepo = new BookingRepository(dbContext);
         var userRepo = new UserRepository(dbContext);
         var currentUserService = Substitute.For<ICurrentUserService>();

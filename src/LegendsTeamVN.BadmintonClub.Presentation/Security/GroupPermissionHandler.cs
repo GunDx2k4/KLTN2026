@@ -63,10 +63,6 @@ public sealed class GroupPermissionHandler(
         {
             groupId = gId3;
         }
-        else if (routeValues.TryGetValue("sessionId", out var routeSessionId) && Guid.TryParse(routeSessionId?.ToString(), out var sId))
-        {
-            groupId = await groupAuthService.GetGroupIdBySessionIdAsync(sId, httpContext.RequestAborted);
-        }
         else if (httpContext.Request.Headers.TryGetValue("X-Group-Id", out var headerVal) &&
                  Guid.TryParse(headerVal.ToString(), out var hId))
         {
