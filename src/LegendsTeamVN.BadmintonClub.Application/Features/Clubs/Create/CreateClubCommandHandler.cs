@@ -44,6 +44,9 @@ public sealed class CreateClubCommandHandler(
             }
         }
 
+        // Khởi tạo quy tắc tính phí mặc định (Dynamic Fee Mode, làm tròn 1.000 VNĐ)
+        club.FeeRules.Add(new GroupFeeRule(club.Id, FeeMode.DYNAMIC, roundRule: 1000));
+
         clubRepository.Add(club);
 
         return Result.Success(club.Id);
