@@ -152,25 +152,25 @@ public class SessionEndpoint : EndpointGroupBase
             .WithName("GetSessionAttendance")
             .WithSummary("Xem danh sách điểm danh và sĩ số thực tế tại sân (FR14)")
             .Produces<SessionAttendanceResponse>()
-            .RequireAuthorization();
+            .RequireGroupPermission(GroupPermissions.Operations.BookingManage);
 
         fr14Group.MapPut("{sessionId:guid}/attendance/{userId:guid}", UpdateSessionAttendance)
             .WithName("UpdateSessionAttendance")
             .WithSummary("Đánh dấu có mặt hoặc không đến sân cho người chơi (FR14)")
             .Produces<SessionAttendanceResponse>()
-            .RequireAuthorization();
+            .RequireGroupPermission(GroupPermissions.Operations.BookingManage);
 
         fr14Group.MapPost("{sessionId:guid}/attendance/walk-ins", AddSessionWalkIn)
             .WithName("AddSessionWalkIn")
             .WithSummary("Thêm nhanh người chơi có tài khoản và xác nhận có mặt (FR14)")
             .Produces<SessionAttendanceResponse>()
-            .RequireAuthorization();
+            .RequireGroupPermission(GroupPermissions.Operations.BookingManage);
 
         fr14Group.MapPost("{sessionId:guid}/attendance/complete", CompleteSessionAttendance)
             .WithName("CompleteSessionAttendance")
             .WithSummary("Hoàn tất điểm danh, cung cấp danh sách sẵn sàng cho điều phối (FR14)")
             .Produces<SessionAttendanceResponse>()
-            .RequireAuthorization();
+            .RequireGroupPermission(GroupPermissions.Operations.BookingManage);
     }
 
     // --- FR13 Handlers ---

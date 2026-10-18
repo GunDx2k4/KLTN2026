@@ -10,7 +10,7 @@ public class SessionBooking : AggregateRoot<Guid>
     public Guid? RecruitmentId { get; private set; }
 
     /// <summary>
-    /// Trạng thái đăng ký của biểu quyết giữ chỗ. Miền giá trị: CONFIRMED, WAITING, ABSENT, CHECKED_IN.
+    /// Trạng thái đăng ký và điểm danh: CONFIRMED, WAITING, ABSENT, CHECKED_IN, NO_SHOW.
     /// </summary>
     public BookingStatus Status { get; private set; } = BookingStatus.CONFIRMED;
 
@@ -72,6 +72,8 @@ public class SessionBooking : AggregateRoot<Guid>
         AttendanceMarkedAt = now;
         AttendanceMarkedBy = actorId;
     }
+
+    public bool OccupiesSlot() => !IsDeleted && Status is BookingStatus.CONFIRMED or BookingStatus.CHECKED_IN;
 
     public void MarkNoShow(Guid actorId, DateTime now)
     {

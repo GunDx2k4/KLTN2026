@@ -322,6 +322,8 @@ Lưu thông tin các buổi chơi (kèo đấu) do câu lạc bộ tổ chức.
 | `target_player_per_court`| INT | NOT NULL | 6 | Định mức người tối ưu/sân (thường 6-8) |
 | `max_players` | INT | NOT NULL | - | Sĩ số trần tiếp nhận (`courtCount * target`) |
 | `deadline_booking`| TIMESTAMP | NOT NULL | - | Hạn chốt giữ chỗ (trước `start_time`) |
+| `attendance_completed_at` | TIMESTAMP WITH TIME ZONE | NULL | - | Thời điểm hoàn tất lượt điểm danh đầu tiên; không đồng nghĩa khóa buổi |
+| `attendance_completed_by` | UUID | NULL | - | ID người hoàn tất điểm danh; dấu vết thực hiện, không khai báo FK trong migration hiện tại |
 | `shuttlecock_used`| INT | NOT NULL | 0 | Số quả cầu lông bóc mới thực tế |
 | `court_rental_cost`| DECIMAL(18,2)| NOT NULL | 0 | Chi phí thuê sân cố định |
 | `extra_expense` | DECIMAL(18,2)| NOT NULL | 0 | Phụ phí phát sinh (tiền nước, thảm) |
@@ -338,10 +340,12 @@ Lưu danh sách người đăng ký tham gia buổi chơi và hàng đợi.
 | `id_session` | UUID | FK, NOT NULL | - | Tham chiếu `badminton_session.id_session` |
 | `id_user` | UUID | FK, NOT NULL | - | Người đăng ký (`app_user.id_user`) |
 | `id_recruitment` | UUID | FK, NULL | - | Mã tin tuyển khách nếu vào từ luồng Radar GPS |
-| `status` | VARCHAR(20) | NOT NULL | - | `CONFIRMED`, `WAITING`, `ABSENT`, `CHECKED_IN` |
+| `status` | VARCHAR(20) | NOT NULL | - | `CONFIRMED`, `WAITING`, `ABSENT`, `CHECKED_IN`, `NO_SHOW`; ABSENT là hủy đăng ký, NO_SHOW là xác nhận không đến sân |
 | `queue_order` | INT | NOT NULL | 0 | Thứ tự hàng đợi (0: chính thức, 1, 2...: hàng đợi) |
 | `booked_at` | TIMESTAMP | NOT NULL | `now()` | Thời điểm bấm giữ chỗ |
 | `checkin_at` | TIMESTAMP | NULL | - | Thời điểm điểm danh có mặt tại sân |
+| `attendance_marked_at` | TIMESTAMP WITH TIME ZONE | NULL | - | Thời điểm cập nhật điểm danh gần nhất |
+| `attendance_marked_by` | UUID | NULL | - | ID người cập nhật điểm danh; dấu vết thực hiện, không khai báo FK trong migration hiện tại |
 
 *Ràng buộc*: Cặp `(id_session, id_user)` là duy nhất.
 

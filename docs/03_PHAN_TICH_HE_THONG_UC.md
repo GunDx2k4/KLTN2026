@@ -156,9 +156,11 @@ graph TD
 
 ### UC12: Điểm danh thành viên tại sân
 - **FR đáp ứng**: FR14 (F3.2) | **Tác nhân**: Trưởng nhóm (Host), Thủ quỹ.
-- **Tiền điều kiện**: Buổi sinh hoạt bước vào khung giờ diễn ra.
+- **Tiền điều kiện**: Người gọi có quyền điểm danh tại nhóm sở hữu buổi. Cho phép thao tác từ 1 giờ trước giờ bắt đầu đến trước giờ kết thúc; buổi ở trạng thái OPEN, LOCKED hoặc PLAYING.
 - **Luồng chính**: Host mở danh sách những người đã đăng ký ➔ Bấm "Điểm danh" cho những người thực tế đã có mặt tại sân ➔ Chuyển trạng thái booking sang `CHECKED_IN` ➔ Chỉ những người này mới được nạp vào hàng đợi xoay tua.
 - **Hậu điều kiện**: Xác lập danh sách người sẵn sàng thi đấu thực tế.
+- **Luồng bổ sung**: Host/Thủ quỹ thêm nhanh tài khoản chưa đăng ký nếu còn sức chứa; đánh dấu NO_SHOW thủ công để giải phóng suất. Không tự đánh dấu NO_SHOW sau 15 phút và không tự đôn hàng chờ khi điểm danh vắng.
+- **Hoàn tất điểm danh**: Ghi nhận người/thời điểm hoàn tất lượt đầu; không tự khóa buổi hay bắt đầu trận. Người chưa đến giữ CONFIRMED và giữ suất; vẫn được điểm danh bổ sung. Khi đóng cả buổi, cần xác nhận trước khi đổi những người còn CONFIRMED thành NO_SHOW. Hợp đồng API và các giới hạn xem [UC12-BE.md](Detail%20Design/UC12-BE.md).
 
 ---
 

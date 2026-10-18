@@ -181,7 +181,7 @@ public sealed class AttendanceTests
     public void AttendanceTimeWindowHasExactBoundaries(int minutes, bool expected)
     {
         var f = new Fixture();
-        Assert.Equal(expected, AttendanceRules.CanEdit(f.Session, Now.AddMinutes(minutes)));
+        Assert.Equal(expected, f.Session.CanEditAttendance(Now.AddMinutes(minutes)));
     }
 
     [Theory]
@@ -226,7 +226,7 @@ public sealed class AttendanceTests
         match.Players.Add(new MatchPlayer(match.Id, booking.UserId));
         match.Players.Add(new MatchPlayer(match.Id, other.UserId));
         f.Session.Matches.Add(match);
-        Assert.Equal(0, AttendanceRules.Map(f.Session, Now).ReadyCount);
+        Assert.Equal(0, AttendanceResponseMapper.Map(f.Session, Now).ReadyCount);
         match.StartMatch();
         Assert.Equal("Attendance.PlayerPlaying", (await f.Service.UpdateAsync(f.Session.Id, booking.UserId, BookingStatus.NO_SHOW, default)).Error.Code);
         match.UpdateStatus(MatchStatus.WAITING);

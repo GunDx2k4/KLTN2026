@@ -7,6 +7,7 @@ Tài liệu này mô tả hợp đồng API hiện tại để triển khai màn
 ## 1. Ai được dùng và khi nào
 
 - Người dùng phải đăng nhập bằng JWT.
+- Bốn endpoint attendance gắn `RequireGroupPermission(GroupPermissions.Operations.BookingManage)`. Application vẫn kiểm tra quyền hiện hành trên nhóm thực tế của buổi, kể cả khi policy bỏ qua kiểm tra cho Admin hoặc dùng claim quyền trong JWT.
 - Chỉ Host hoặc thành viên ACTIVE có quyền `OPERATIONS.BOOKING.MANAGE` trong đúng nhóm sở hữu buổi chơi. Role Admin toàn hệ thống hoặc `X-Group-Id` không cấp quyền điểm danh.
 - Có thể mở màn hình xem danh sách ngoài giờ điểm danh; `canEdit` trong response quyết định trạng thái cho phép thao tác.
 - Các thay đổi được chấp nhận trong cửa sổ `StartTime - 1 giờ <= giờ UTC hiện tại < EndTime`, nếu buổi ở trạng thái `OPEN`, `LOCKED` hoặc `PLAYING`. Cửa sổ này dùng chung cho điểm danh, vắng mặt và thêm nhanh.
@@ -212,7 +213,7 @@ Lỗi nghiệp vụ trả theo Problem Details. Ví dụ:
 | `400` | Status không hỗ trợ hoặc request sai | Báo lỗi dữ liệu/request |
 | `401` | Chưa đăng nhập hoặc JWT hết hạn | Thực hiện luồng đăng nhập/refresh hiện có |
 | `403` | Không phải Host/Thủ quỹ có quyền ở nhóm của buổi | Báo không có quyền; không tiếp tục gửi mutation |
-| `404` | Buổi, booking hoặc tài khoản không tồn tại | Làm mới dữ liệu hoặc báo đối tượng không còn |
+| `404` | Buổi, booking hoặc tài khoản không tồn tại khi request đã qua policy | Làm mới dữ liệu hoặc báo đối tượng không còn; người không qua policy có thể nhận 403 trước khi Application kiểm tra tồn tại |
 | `409 Attendance.Closed` | Ngoài cửa sổ điểm danh hoặc buổi đã đóng | Chuyển sang chỉ xem và tải GET lại |
 | `409 Attendance.NoShowConfirmationRequired` | Đóng buổi/chuyển CALCULATED khi còn CONFIRMED và chưa xác nhận | Hiển thị danh sách chưa đến, hỏi Host trước khi gửi lại cờ xác nhận |
 | `409 Session.ActiveMatches` | Đóng buổi khi còn trận PLAYING | Yêu cầu kết thúc các trận trước |
@@ -365,3 +366,21 @@ Lỗi quyền trả 403. Chuyển ngược không hợp lệ trả 409 `Session.
 Đạt **50 unit test, 37 architecture test**, **41 request Postman/64 assertion** và **36 kiểm tra HTTP hồi quy liên chức năng**. Những kiểm tra HTTP dùng API build riêng ở cổng 54806 và DB local; đã xóa các buổi test mới sau khi chạy. Các kết quả này không thay thế kiểm thử giao diện hoặc kiểm thử tải dài hạn.
 
 Khởi động lại BE sau khi cập nhật vì có thay đổi constructor của handler và kiểu request thời gian. FE vẫn dùng các trường JSON hiện tại. Complete tiếp tục giữ CONFIRMED và suất, không tự khóa buổi, không tự no-show theo lịch. Luồng UC13/UC20 và API tìm tài khoản cho bộ chọn Thêm nhanh chưa được triển khai trong đợt sửa lỗi này.
+
+## 11. Chuẩn hóa theo skill ngày 18/10/2026
+
+| Tầng | Trách nhiệm hiện tại |
+|---|---|
+| Domain — `BadmintonSession` | `CanEditAttendance`, `HasAttendanceRoom`, `IsPlayerReady`, `CanStartRotation` xác định điều kiện hợp lệ. `ChangeAttendance`, `AdmitWalkIn`, `CompleteAttendance` bảo vệ bất biến trước khi thay đổi; `ChangeOperationalStatus` xử lý việc xác nhận NO_SHOW khi đóng buổi. |
+| Domain — `SessionBooking` | Ghi nhận có mặt, vắng mặt, thời điểm/người thực hiện và quy tắc chiếm suất qua `OccupiesSlot()`. |
+| Application — `AttendanceService` | Lấy tài khoản từ JWT, kiểm tra quyền nhóm hiện hành, nạp aggregate với khóa DB, gọi Domain, đăng ký booking mới với repository và trả DTO. |
+| Application — `AttendanceResponseMapper` | Thay `AttendanceRules`; chỉ tạo response và lấy kết quả tính nghiệp vụ từ Domain. |
+| Application — validators | `UpdateAttendanceCommandValidator`, `AddWalkInCommandValidator`, `CompleteAttendanceCommandValidator` được quét tự động bởi FluentValidation. ID rỗng/trạng thái không hỗ trợ trả 400 qua ValidationBehavior trước UnitOfWork. |
+| Presentation | Cả bốn route gắn policy `OPERATIONS.BOOKING.MANAGE`; vẫn giữ kiểm tra quyền thực tế ở Application để không cho Admin/claim/header vượt quyền nhóm. |
+| Persistence | Giữ khóa dòng PostgreSQL trong transaction đến commit; không đưa SQL vào Application hoặc Domain. |
+
+Đồng bộ tin tuyển sau thay đổi điểm danh được xử lý tại Domain (`SynchronizeRecruitments` / `RemainingRecruitmentSlots`). `RecruitmentRules` còn là facade chuyển tiếp cho các caller booking/tuyển khách hiện có, không chứa bản sao logic nghiệp vụ.
+
+Seed cơ bản hoàn tất điểm danh buổi lịch sử trước khi chuyển sang COMPLETED, phù hợp kiểm tra Domain mới. Không thêm cột hoặc migration. Không đổi URL/body/response hợp lệ của UC12; không cần sinh lại Postman chỉ vì đổi cấu trúc nội bộ. Với session không tồn tại, policy có thể trả 403 trước bước kiểm tra tồn tại trong Application.
+
+Kiểm chứng đợt refactor: build Release thành công; **50 unit test, 44 Application test và 37 architecture test** đạt. Các test hiện có kiểm tra hồi quy nghiệp vụ; chưa chạy lại Postman/HTTP hoặc kiểm thử tải cho đợt refactor này. Kết quả HTTP ở các mục trước thuộc đợt kiểm chứng trước đó.

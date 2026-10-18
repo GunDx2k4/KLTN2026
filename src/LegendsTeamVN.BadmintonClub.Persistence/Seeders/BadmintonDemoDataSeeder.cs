@@ -180,7 +180,7 @@ public class BadmintonDemoDataSeeder(
                 courtCount: 2,
                 maxPlayers: 12,
                 courtRentalCost: 360000,
-                status: SessionStatus.COMPLETED
+                status: SessionStatus.OPEN
             );
             await dbContext.BadmintonSessions.AddAsync(s4, cancellationToken);
             await dbContext.SaveChangesAsync(cancellationToken);
@@ -191,6 +191,7 @@ public class BadmintonDemoDataSeeder(
                 CreateCheckedInBooking(s4.Id, user3.Id, user1.Id, s4.StartTime)
             );
             s4.CompleteAttendance(user1.Id, s4.StartTime);
+            s4.UpdateStatus(SessionStatus.COMPLETED);
 
             // Session Fees
             dbContext.SessionFees.AddRange(
