@@ -10,7 +10,10 @@ using LegendsTeamVN.Core.Presentation.Extensions;
 using LegendsTeamVN.Core.Utilities.Options;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.AddCoreSerilog();
+// Hub browser transports carry a token in the query string. Never persist those request log events.
+builder.AddCoreSerilog(logger => logger.Filter.ByExcluding(e =>
+    e.Properties.TryGetValue("QueryString", out var query) && query is Serilog.Events.ScalarValue { Value: string value } &&
+    value.Contains("access_token=", StringComparison.OrdinalIgnoreCase)));
 
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
 var jwtOptions = new JwtOptions();
@@ -76,6 +79,9 @@ app.UseExceptionHandler();
 
 // Map all Minimal API endpoints automatically
 app.MapEndpoints();
+app.MapHub<LegendsTeamVN.BadmintonClub.Infrastructure.Realtime.SessionHub>("/hubs/sessions",
+    options => options.CloseOnAuthenticationExpiration = true)
+    .RequireAuthorization("SessionOperations");
 
 // Seed initial data & sync permissions in AppPermissions & AppRolePermissions on startup
 using (var scope = app.Services.CreateScope())

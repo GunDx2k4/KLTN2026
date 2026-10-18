@@ -4,7 +4,11 @@ Tài liệu BE và bàn giao giao diện, cập nhật theo code ngày 18/10/202
 
 Tài liệu này mô tả hợp đồng API hiện tại để triển khai màn hình UC12. Phạm vi là giao diện điểm danh cho một buổi chơi đã được tạo; không bao gồm tạo buổi, tự động đôn hàng chờ hay điều phối xoay tua UC13.
 
+**Kết nối UC13 đã bổ sung:** xem [UC13-BE.md](UC13-BE.md). Sau complete, người có MatchManage chủ động gọi initialize khi đã đến giờ và đủ bốn người/sân trống. `canStartRotation` chỉ còn là điều kiện khởi tạo lần đầu, false sau khi đã khởi tạo. LOCKED/PLAYING vẫn cho UC12 theo điều kiện hiện có; điểm danh/thêm nhanh tự thử lấp sân trống khi điều phối đã bật, giữ đề xuất khác còn hợp lệ. Các mô tả "UC13 chưa triển khai" trong báo cáo lịch sử bên dưới là trạng thái trước đợt bổ sung này, không phải trạng thái hiện tại.
+
 ## 1. Ai được dùng và khi nào
+
+**Cập nhật nghỉ UC13:** người vừa kết thúc trận phải nghỉ cố định 5 phút. ReadyCount/IsReady chỉ tính người chưa bị phân sân và đã đủ nghỉ; booking vẫn CHECKED_IN. Người mới chưa chơi không phải chờ. Nếu chưa đủ bốn người nghỉ xong, scheduler tự xét lại, không cần complete điểm danh lần nữa.
 
 - Người dùng phải đăng nhập bằng JWT.
 - Bốn endpoint attendance gắn `RequireGroupPermission(GroupPermissions.Operations.BookingManage)`. Application vẫn kiểm tra quyền hiện hành trên nhóm thực tế của buổi, kể cả khi policy bỏ qua kiểm tra cho Admin hoặc dùng claim quyền trong JWT.
@@ -39,7 +43,7 @@ Content-Type: application/json
 
 `sessionId` là ID buổi chơi; `userId` là ID người được điểm danh, lấy từ `players[].userId`. Không dùng `bookingId` thay `userId`. Người thao tác được lấy từ JWT.
 
-Các request thành công trả `200 OK` với toàn bộ snapshot mới, không có lớp bọc `data`. Sau mỗi mutation, thay dữ liệu màn hình bằng response đó; có thể gọi GET lại khi app kết nối lại hoặc cần làm mới. Hiện UC12 không phát sự kiện SignalR.
+Các request thành công trả `200 OK` với toàn bộ snapshot mới, không có lớp bọc `data`. Sau mỗi mutation, thay dữ liệu màn hình bằng response đó; có thể gọi GET lại khi app kết nối lại hoặc cần làm mới. UC12 chưa có sự kiện SignalR riêng cho danh sách điểm danh. Sau khi điều phối đã khởi tạo, thay đổi điểm danh được xử lý cùng điều phối và ghi sự kiện `RotationChanged` qua outbox; nhóm quản lý có quyền MatchManage nhận tín hiệu này để tải lại dữ liệu. Không coi đây là cơ chế đồng bộ danh sách điểm danh cho mọi người có quyền BookingManage; trước initialize cũng chưa có sự kiện điều phối này. Xem [UC13-BE.md](UC13-BE.md) về quyền hub và realtime.
 
 ### Ví dụ đánh dấu user có mặt
 
@@ -111,12 +115,12 @@ Các số tổng hợp:
 - `notArrivedCount`: số người `CONFIRMED` còn cần xử lý.
 - `noShowCount`: số người `NO_SHOW`.
 - `waitlistCount`: số người còn ở `WAITING`.
-- `readyCount`: số người có mặt chưa được đưa vào trận `WAITING`/`PLAYING`.
+- `readyCount`: số người có `isReady = true`: đã CHECKED_IN, đủ điều kiện tham gia, nghỉ đủ 5 phút sau trận gần nhất và chưa thuộc trận `WAITING`/`PLAYING`. Người chưa chơi trận nào không phải chờ nghỉ.
 - `maxPlayers`: giới hạn sức chứa; người `CONFIRMED` và `CHECKED_IN` chiếm chỗ, `NO_SHOW` không chiếm chỗ.
 - `canEdit`: bật/tắt thao tác điểm danh, thêm nhanh và hoàn tất.
-- `canStartRotation`: chỉ để báo trạng thái sẵn sàng chuyển sang UC13; true khi điểm danh đã hoàn tất, đang trong giờ buổi chơi và có ít nhất 4 người Ready. API UC13 cần được làm riêng.
+- `canStartRotation`: điều kiện khởi tạo điều phối lần đầu; true khi chưa initialize, đã complete điểm danh, buổi còn cho phép điểm danh, đã đến giờ chơi và có ít nhất 4 người Ready. Sau initialize luôn false; không dùng trường này để quyết định start trận tiếp theo. Gọi API initialize của [UC13](UC13-BE.md); BE vẫn kiểm tra sân trống và các điều kiện nghiệp vụ khi xử lý request.
 - `attendanceCompletedAt` / `attendanceCompletedBy`: thời điểm và người hoàn tất; null nếu chưa hoàn tất.
-- `isReady`: người đã `CHECKED_IN` và chưa nằm trong trận `WAITING`/`PLAYING`.
+- `isReady`: người đã `CHECKED_IN`, đủ điều kiện tham gia, đã nghỉ đủ 5 phút kể từ khi kết thúc trận gần nhất (hoặc chưa chơi trận nào) và chưa nằm trong trận `WAITING`/`PLAYING`. Người đang nghỉ vẫn giữ booking CHECKED_IN nhưng `isReady = false`.
 
 Hiển thị `startTime`, `endTime`, `checkinAt`, `attendanceMarkedAt` theo múi giờ địa phương của app; không tự parse chuỗi UTC rồi hiển thị nguyên giờ UTC.
 

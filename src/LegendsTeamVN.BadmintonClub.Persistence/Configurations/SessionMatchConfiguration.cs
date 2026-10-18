@@ -27,8 +27,11 @@ public class SessionMatchConfiguration : IEntityTypeConfiguration<SessionMatch>
             .IsRequired();
 
         builder.Property(m => m.TimeStart)
-            .HasColumnName("time_start")
-            .IsRequired();
+            .HasColumnName("time_start");
+
+        builder.HasIndex(m => new { m.SessionId, m.CourtNumber }).IsUnique()
+            .HasDatabaseName("ux_session_match_active_court")
+            .HasFilter("status IN ('WAITING', 'PLAYING') AND NOT \"IsDeleted\"");
 
         builder.Property(m => m.TimeEnd)
             .HasColumnName("time_end");

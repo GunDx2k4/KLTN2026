@@ -21,7 +21,7 @@ public sealed class GetMyBookingsQueryHandler(
         }
 
         var bookings = await bookingRepository
-            .FindAll(b => b.UserId == userId.Value && b.Status != BookingStatus.ABSENT)
+            .FindAll(b => !b.IsDeleted && !b.Session.IsDeleted && b.UserId == userId.Value && b.Status != BookingStatus.ABSENT)
             .Include(b => b.Session)
                 .ThenInclude(s => s.Group)
             .OrderByDescending(b => b.Session.StartTime)

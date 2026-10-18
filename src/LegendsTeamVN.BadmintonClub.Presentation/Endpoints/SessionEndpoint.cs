@@ -1,9 +1,15 @@
+using LegendsTeamVN.BadmintonClub.Application.DTOs.Rotation.Responses;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Sessions.Requests;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Sessions.Responses;
 using LegendsTeamVN.BadmintonClub.Application.Features.Attendance.AddWalkIn;
 using LegendsTeamVN.BadmintonClub.Application.Features.Attendance.Complete;
 using LegendsTeamVN.BadmintonClub.Application.Features.Attendance.GetList;
 using LegendsTeamVN.BadmintonClub.Application.Features.Attendance.Update;
+using LegendsTeamVN.BadmintonClub.Application.Features.Rotation.Get;
+using LegendsTeamVN.BadmintonClub.Application.Features.Rotation.Initialize;
+using LegendsTeamVN.BadmintonClub.Application.Features.Rotation.Generate;
+using LegendsTeamVN.BadmintonClub.Application.Features.Rotation.Start;
+using LegendsTeamVN.BadmintonClub.Application.Features.Rotation.Finish;
 using LegendsTeamVN.BadmintonClub.Application.Features.Bookings.Cancel;
 using LegendsTeamVN.BadmintonClub.Application.Features.Bookings.GetList;
 using LegendsTeamVN.BadmintonClub.Application.Features.Bookings.GetMyBooking;
@@ -46,6 +52,7 @@ public class SessionEndpoint : EndpointGroupBase
         var fr11Group = group.MapGroup("").WithTags("FR11 - Phát tín hiệu tìm khách giao lưu");
         var fr12Group = group.MapGroup("").WithTags("FR12 - Khách vãng lai đăng ký tham gia");
         var fr14Group = group.MapGroup("").WithTags("FR14 - Điểm danh tại sân");
+        var fr15Group = group.MapGroup("").WithTags("FR15 - Điều phối xoay tua sân");
 
         // ==========================================
         // --- FR13: KHỞI TẠO & CẤU HÌNH BUỔI CHƠI ---
@@ -171,6 +178,44 @@ public class SessionEndpoint : EndpointGroupBase
             .WithSummary("Hoàn tất điểm danh, cung cấp danh sách sẵn sàng cho điều phối (FR14)")
             .Produces<SessionAttendanceResponse>()
             .RequireGroupPermission(GroupPermissions.Operations.BookingManage);
+
+        // ======================================
+        // --- FR15: ĐIỀU PHỐI XOAY TUA SÂN ---
+        // ======================================
+        fr15Group.MapGet("{sessionId:guid}/rotation", GetRotation)
+            .WithName("GetRotation")
+            .WithSummary("Xem trạng thái sân và đề xuất điều phối (FR15)")
+            .Produces<RotationResponse>()
+            .RequireAuthorization("SessionOperations")
+            .RequireGroupPermission(GroupPermissions.Operations.MatchManage);
+
+        fr15Group.MapPost("{sessionId:guid}/rotation/initialize", InitializeRotation)
+            .WithName("InitializeRotation")
+            .WithSummary("Bắt đầu điều phối sau điểm danh (FR15)")
+            .Produces<RotationResponse>()
+            .RequireAuthorization("SessionOperations")
+            .RequireGroupPermission(GroupPermissions.Operations.MatchManage);
+
+        fr15Group.MapPost("{sessionId:guid}/rotation/proposals", GenerateRotationProposals)
+            .WithName("GenerateRotationProposals")
+            .WithSummary("Bổ sung đề xuất cho sân trống (FR15)")
+            .Produces<RotationResponse>()
+            .RequireAuthorization("SessionOperations")
+            .RequireGroupPermission(GroupPermissions.Operations.MatchManage);
+
+        fr15Group.MapPost("{sessionId:guid}/matches/{matchId:guid}/start", StartRotationMatch)
+            .WithName("StartRotationMatch")
+            .WithSummary("Xác nhận bắt đầu trận đã đề xuất (FR15)")
+            .Produces<RotationResponse>()
+            .RequireAuthorization("SessionOperations")
+            .RequireGroupPermission(GroupPermissions.Operations.MatchManage);
+
+        fr15Group.MapPost("{sessionId:guid}/matches/{matchId:guid}/finish", FinishRotationMatch)
+            .WithName("FinishRotationMatch")
+            .WithSummary("Kết thúc trận và đề xuất lượt tiếp theo (FR15)")
+            .Produces<RotationResponse>()
+            .RequireAuthorization("SessionOperations")
+            .RequireGroupPermission(GroupPermissions.Operations.MatchManage);
     }
 
     // --- FR13 Handlers ---
@@ -377,6 +422,59 @@ public class SessionEndpoint : EndpointGroupBase
         CancellationToken cancellationToken)
     {
         var command = new CompleteAttendanceCommand(sessionId);
+        var result = await sender.Send(command, cancellationToken);
+        return result.Match(Results.Ok);
+    }
+
+    // --- FR15 Handlers ---
+    private static async Task<IResult> GetRotation(
+        [FromRoute] Guid sessionId,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var query = new GetRotationQuery(sessionId);
+        var result = await sender.Send(query, cancellationToken);
+        return result.Match(Results.Ok);
+    }
+
+    private static async Task<IResult> InitializeRotation(
+        [FromRoute] Guid sessionId,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var command = new InitializeRotationCommand(sessionId);
+        var result = await sender.Send(command, cancellationToken);
+        return result.Match(Results.Ok);
+    }
+
+    private static async Task<IResult> GenerateRotationProposals(
+        [FromRoute] Guid sessionId,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var command = new GenerateRotationProposalsCommand(sessionId);
+        var result = await sender.Send(command, cancellationToken);
+        return result.Match(Results.Ok);
+    }
+
+    private static async Task<IResult> StartRotationMatch(
+        [FromRoute] Guid sessionId,
+        [FromRoute] Guid matchId,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var command = new StartRotationMatchCommand(sessionId, matchId);
+        var result = await sender.Send(command, cancellationToken);
+        return result.Match(Results.Ok);
+    }
+
+    private static async Task<IResult> FinishRotationMatch(
+        [FromRoute] Guid sessionId,
+        [FromRoute] Guid matchId,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var command = new FinishRotationMatchCommand(sessionId, matchId);
         var result = await sender.Send(command, cancellationToken);
         return result.Match(Results.Ok);
     }

@@ -324,6 +324,10 @@ Lưu thông tin các buổi chơi (kèo đấu) do câu lạc bộ tổ chức.
 | `deadline_booking`| TIMESTAMP | NOT NULL | - | Hạn chốt giữ chỗ (trước `start_time`) |
 | `attendance_completed_at` | TIMESTAMP WITH TIME ZONE | NULL | - | Thời điểm hoàn tất lượt điểm danh đầu tiên; không đồng nghĩa khóa buổi |
 | `attendance_completed_by` | UUID | NULL | - | ID người hoàn tất điểm danh; dấu vết thực hiện, không khai báo FK trong migration hiện tại |
+| `rotation_started_at` | TIMESTAMP WITH TIME ZONE | NULL | - | Thời điểm Host chủ động khởi tạo điều phối UC13 |
+| `rotation_started_by` | UUID | NULL | - | ID người khởi tạo điều phối |
+| `rotation_version` | BIGINT | NOT NULL | 0 | Phiên bản snapshot tăng khi điều phối thay đổi, dùng bỏ event cũ/trùng |
+| `next_proposal_check_at` | TIMESTAMP WITH TIME ZONE | NULL | - | Mốc scheduler xét lại sau nghỉ cố định 5 phút; partial index khi khác null và chưa xóa |
 | `shuttlecock_used`| INT | NOT NULL | 0 | Số quả cầu lông bóc mới thực tế |
 | `court_rental_cost`| DECIMAL(18,2)| NOT NULL | 0 | Chi phí thuê sân cố định |
 | `extra_expense` | DECIMAL(18,2)| NOT NULL | 0 | Phụ phí phát sinh (tiền nước, thảm) |
@@ -376,9 +380,11 @@ Lưu thông tin các trận đấu diễn ra trên từng sân của buổi chơ
 | `id_session` | UUID | FK, NOT NULL | - | Tham chiếu `badminton_session.id_session` |
 | `court_number` | INT | NOT NULL | - | Số thứ tự sân thi đấu (1..court_count) |
 | `round_number` | INT | NOT NULL | - | Lượt đấu thứ N trên sân đó |
-| `time_start` | TIMESTAMP | NOT NULL | - | Giờ bắt đầu trận |
-| `time_end` | TIMESTAMP | NULL | - | Giờ kết thúc trận (`> time_start`) |
+| `time_start` | TIMESTAMP WITH TIME ZONE | NULL | - | Giờ bắt đầu thực tế; đề xuất WAITING chưa có giá trị |
+| `time_end` | TIMESTAMP WITH TIME ZONE | NULL | - | Giờ kết thúc trận hoặc hủy đề xuất; trận FINISHED không kết thúc trước time_start |
 | `status` | VARCHAR(20) | NOT NULL | `'WAITING'` | Trạng thái: `WAITING`, `PLAYING`, `FINISHED`, `SKIPPED` |
+
+UC13 có unique index `ux_session_match_active_court` trên `(id_session, court_number)` với điều kiện trạng thái WAITING/PLAYING và chưa xóa. Phân trùng người giữa các trận được ngăn bởi khóa dòng session và kiểm tra Domain trong cùng transaction. Số lượt tăng theo từng sân; proposal luôn đúng bốn người, mỗi đội hai người.
 
 ---
 
@@ -391,10 +397,10 @@ Lưu danh sách 4 người chơi tham gia trong mỗi trận đấu đôi.
 | `id_match` | UUID | FK, NOT NULL | - | Tham chiếu `session_match.id_match` |
 | `id_user` | UUID | FK, NOT NULL | - | Người chơi (`app_user.id_user`) |
 | `side_team` | VARCHAR(10) | NOT NULL | - | Đội thi đấu: `TEAM_A`, `TEAM_B` (mỗi bên 2 người) |
-| `checkin_court_at`| TIMESTAMP | NOT NULL | `now()` | Thời điểm bước chân vào sân |
+| `checkin_court_at`| TIMESTAMP WITH TIME ZONE | NULL | - | Chỉ ghi khi trận thực sự bắt đầu; chưa ghi khi mới được đề xuất |
 | `is_manual_swapped`| BOOLEAN | NOT NULL | `false` | Cờ ghi nhận Host hoán đổi cặp đấu thủ công |
 
-*Ràng buộc*: Cặp `(id_match, id_user)` là duy nhất; mỗi trận tối đa 4 người chơi.
+*Ràng buộc*: Cặp `(id_match, id_user)` là duy nhất; trận đôi hợp lệ có đúng 4 người chơi khi bắt đầu. Ready/Resting/Proposed/Playing là trạng thái điều phối suy ra; booking vẫn CHECKED_IN khi chơi/nghỉ.
 
 ---
 
@@ -450,3 +456,25 @@ Lưu vết toàn bộ dòng tiền thu chi của câu lạc bộ.
 | `amount` | DECIMAL(18,2)| NOT NULL | - | Số tiền giao dịch (`> 0`) |
 | `description` | TEXT | NOT NULL | - | Nội dung ghi chú thu chi |
 | `created_at` | TIMESTAMP | NOT NULL | `now()` | Thời điểm ghi sổ quỹ |
+
+---
+
+### 3.23. Bảng kỹ thuật `rotation_outbox` (UC13)
+
+Entity tương ứng là `OutboxMessage`, truy cập qua `IOutboxRepository`/`OutboxRepository` dùng chung. Tên bảng vật lý giữ nguyên để tương thích migration. Mỗi worker claim theo tập `kind` được hỗ trợ; worker rotation không lấy message của UC khác. Thông báo người dùng được lưu qua `INotificationRepository` riêng, cùng transaction với outbox khi bắt đầu trận.
+
+Bổ sung ngoài 22 bảng nghiệp vụ ban đầu để giao nhận SignalR/FCM sau commit, không phải bảng thanh toán hoặc hàng đợi đăng ký.
+
+| Cột | Kiểu / nullable | Ý nghĩa |
+|---|---|---|
+| `id` | UUID, PK | ID công việc gửi |
+| `kind` | VARCHAR(40), NOT NULL | RotationChanged, InvitationRealtime hoặc InvitationPush |
+| `destination_id` | UUID, NOT NULL | ID session hoặc UserId người nhận theo kind |
+| `payload` | JSONB, NOT NULL | Event ID, session/version/giờ sự kiện, match/sân/người nhận; không chứa JWT hoặc device token |
+| `created_at`, `next_attempt_at` | TIMESTAMP WITH TIME ZONE, NOT NULL | Thời điểm tạo và lần gửi tiếp theo |
+| `delivered_at` | TIMESTAMP WITH TIME ZONE, NULL | Hoàn tất công việc, kể cả bỏ qua lời mời trận đã kết thúc |
+| `lease_id`, `lease_until` | UUID / TIMESTAMP WITH TIME ZONE, NULL | Quyền sở hữu và hạn xử lý của worker |
+| `attempts` | INT, NOT NULL | Số lần lỗi; từ 10 trở lên là dead-letter |
+| `last_error` | VARCHAR(2000), NULL | Loại lỗi gần nhất, không lưu token |
+
+Có thêm các cột audit/soft-delete theo AggregateRoot hiện tại. Index trên `(next_attempt_at, created_at)` cho bản ghi chưa delivered, attempts < 10. Worker claim bằng SKIP LOCKED; network chạy ngoài transaction claim. Xem hợp đồng và vận hành tại [UC13-BE.md](Detail%20Design/UC13-BE.md).

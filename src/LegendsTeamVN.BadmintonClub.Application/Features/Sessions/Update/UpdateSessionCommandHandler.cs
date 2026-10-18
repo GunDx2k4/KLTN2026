@@ -17,6 +17,8 @@ public sealed class UpdateSessionCommandHandler(ISessionRepository sessionReposi
         }
 
         var req = request.Request;
+        if (session.RotationStartedAt.HasValue)
+            return Result.Failure(Error.Conflict("Rotation.ParametersFrozen", "Không sửa thông số buổi sau khi bắt đầu điều phối."));
         if (session.Status is SessionStatus.CALCULATED or SessionStatus.COMPLETED)
             return Result.Failure(Error.Conflict("Session.Closed", "Buổi đã chốt chi phí hoặc kết thúc, không thể sửa thông số vận hành."));
         if (req.MaxPlayers < session.Bookings.Count(b => !b.IsDeleted && b.Status is BookingStatus.CONFIRMED or BookingStatus.CHECKED_IN))

@@ -13,7 +13,7 @@ public class MatchPlayer : Entity<Guid>
     /// </summary>
     public SideTeam SideTeam { get; private set; } = SideTeam.TEAM_A;
 
-    public DateTime CheckinCourtAt { get; private set; }
+    public DateTime? CheckinCourtAt { get; private set; }
     public bool IsManualSwapped { get; private set; }
 
     public virtual SessionMatch Match { get; private set; } = default!;
@@ -49,6 +49,15 @@ public class MatchPlayer : Entity<Guid>
         SideTeam = newSideTeam;
         IsManualSwapped = true;
     }
+
+    internal static MatchPlayer Proposed(Guid matchId, Guid userId, SideTeam team)
+    {
+        var player = new MatchPlayer(matchId, userId, team);
+        player.CheckinCourtAt = null;
+        return player;
+    }
+
+    internal void EnterCourt(DateTime now) => CheckinCourtAt = now;
 
     public void SwapTeam(string newSideTeam)
     {

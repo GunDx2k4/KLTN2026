@@ -12,7 +12,7 @@ public sealed class GetSessionBookingsQueryHandler(IBookingRepository bookingRep
 {
     public async Task<Result<List<SessionBookingResponse>>> Handle(GetSessionBookingsQuery request, CancellationToken cancellationToken)
     {
-        var bookings = await bookingRepository.FindAll(b => b.SessionId == request.SessionId && b.Status != BookingStatus.ABSENT)
+        var bookings = await bookingRepository.FindAll(b => !b.IsDeleted && !b.Session.IsDeleted && b.SessionId == request.SessionId && b.Status != BookingStatus.ABSENT)
             .Include(b => b.User)
             .OrderBy(b => b.Status == BookingStatus.CONFIRMED ? 0 : 1)
             .ThenBy(b => b.QueueOrder)

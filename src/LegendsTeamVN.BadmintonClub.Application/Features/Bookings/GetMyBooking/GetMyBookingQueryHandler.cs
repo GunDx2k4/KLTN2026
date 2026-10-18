@@ -20,7 +20,7 @@ public sealed class GetMyBookingQueryHandler(
             return Result.Failure<SessionBookingResponse?>(Error.Unauthorized("User.Unauthorized", "Vui lòng đăng nhập để kiểm tra vé."));
         }
 
-        var booking = await bookingRepository.FindAll(b => b.SessionId == request.SessionId && b.UserId == userId.Value && b.Status != BookingStatus.ABSENT)
+        var booking = await bookingRepository.FindAll(b => !b.IsDeleted && !b.Session.IsDeleted && b.SessionId == request.SessionId && b.UserId == userId.Value && b.Status != BookingStatus.ABSENT)
             .Include(b => b.User)
             .FirstOrDefaultAsync(cancellationToken);
 

@@ -29,7 +29,7 @@ public sealed class GetSessionByIdQueryHandler(
 
         var currentUserId = currentUserService.UserId;
         var myBooking = currentUserId.HasValue 
-            ? session.Bookings.FirstOrDefault(b => b.UserId == currentUserId.Value && b.Status != BookingStatus.ABSENT) 
+            ? session.Bookings.FirstOrDefault(b => !b.IsDeleted && b.UserId == currentUserId.Value && b.Status != BookingStatus.ABSENT)
             : null;
 
         var confirmedBookings = session.Bookings

@@ -1,15 +1,17 @@
+using LegendsTeamVN.BadmintonClub.Application.DependencyInjection.Options;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Sessions.Responses;
 using LegendsTeamVN.BadmintonClub.Domain.Entities;
 using LegendsTeamVN.BadmintonClub.Domain.Enums;
 using LegendsTeamVN.BadmintonClub.Domain.Repositories;
 using LegendsTeamVN.Core.Identity.Abstractions;
 using LegendsTeamVN.Core.Utilities.Results;
+using Microsoft.Extensions.Options;
 
 namespace LegendsTeamVN.BadmintonClub.Application.Features.Attendance;
 
 public sealed class AttendanceService(
     ISessionRepository sessions, IBookingRepository bookings, IUserRepository users,
-    ICurrentUserService currentUser, TimeProvider clock)
+    ICurrentUserService currentUser, TimeProvider clock, IOptionsMonitor<SessionRotationOptions>? rotationOptions = null)
 {
     private static Result<SessionAttendanceResponse> Fail(Error error) => Result.Failure<SessionAttendanceResponse>(error);
 
@@ -45,9 +47,11 @@ public sealed class AttendanceService(
         var loaded = await LoadAsync(sessionId, true, ct);
         if (loaded.IsFailure) return Fail(loaded.Error);
         var session = loaded.Value!;
+        var knownMatches = session.Matches.Select(m => m.Id).ToHashSet();
         var now = clock.GetUtcNow().UtcDateTime;
-        var changed = session.ChangeAttendance(userId, status, currentUser.UserId!.Value, now);
+        var changed = session.ChangeAttendance(userId, status, currentUser.UserId!.Value, now, rotationOptions?.CurrentValue.Enabled ?? false);
         if (changed.IsFailure) return Fail(changed.Error);
+        sessions.AddRotationMatches(session.Matches.Where(m => !knownMatches.Contains(m.Id)));
         return Result.Success(AttendanceResponseMapper.Map(session, now));
     }
 
@@ -60,10 +64,12 @@ public sealed class AttendanceService(
         var user = await users.FindSingleAsync(u => u.Id == userId && u.IsActive && !u.IsDeleted, ct);
         if (user is null) return Fail(Error.NotFound("User.NotFound", "Không tìm thấy tài khoản người chơi đang hoạt động."));
         var existing = session.Bookings.FirstOrDefault(b => b.UserId == userId);
+        var knownMatches = session.Matches.Select(m => m.Id).ToHashSet();
         var now = clock.GetUtcNow().UtcDateTime;
-        var admitted = session.AdmitWalkIn(userId, currentUser.UserId!.Value, now);
+        var admitted = session.AdmitWalkIn(userId, currentUser.UserId!.Value, now, rotationOptions?.CurrentValue.Enabled ?? false);
         if (admitted.IsFailure) return Fail(admitted.Error);
         if (existing is null) bookings.Add(admitted.Value!);
+        sessions.AddRotationMatches(session.Matches.Where(m => !knownMatches.Contains(m.Id)));
         return Result.Success(AttendanceResponseMapper.Map(session, now));
     }
 

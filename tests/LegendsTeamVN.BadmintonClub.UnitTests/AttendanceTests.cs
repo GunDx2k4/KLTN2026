@@ -225,14 +225,21 @@ public sealed class AttendanceTests
         var match = new SessionMatch(f.Session.Id, 1, 1, Now);
         match.Players.Add(new MatchPlayer(match.Id, booking.UserId));
         match.Players.Add(new MatchPlayer(match.Id, other.UserId));
+        match.Players.Add(new MatchPlayer(match.Id, f.Add(BookingStatus.CHECKED_IN).UserId, SideTeam.TEAM_B));
+        match.Players.Add(new MatchPlayer(match.Id, f.Add(BookingStatus.CHECKED_IN).UserId, SideTeam.TEAM_B));
         f.Session.Matches.Add(match);
         Assert.Equal(0, AttendanceResponseMapper.Map(f.Session, Now).ReadyCount);
-        match.StartMatch();
+        match.StartMatch(Now);
         Assert.Equal("Attendance.PlayerPlaying", (await f.Service.UpdateAsync(f.Session.Id, booking.UserId, BookingStatus.NO_SHOW, default)).Error.Code);
-        match.UpdateStatus(MatchStatus.WAITING);
+        match.EndMatch(Now);
+        var pendingMatch = new SessionMatch(f.Session.Id, 1, 2, Now);
+        foreach (var player in match.Players)
+            pendingMatch.Players.Add(new MatchPlayer(pendingMatch.Id, player.UserId, player.SideTeam));
+        f.Session.Matches.Add(pendingMatch);
         var result = await f.Service.UpdateAsync(f.Session.Id, booking.UserId, BookingStatus.NO_SHOW, default);
         Assert.True(result.IsSuccess);
-        Assert.Equal(MatchStatus.SKIPPED, match.Status);
-        Assert.Equal(1, result.Value.ReadyCount);
+        Assert.Equal(MatchStatus.SKIPPED, pendingMatch.Status);
+        Assert.Equal(0, result.Value.ReadyCount); // The three remaining players are still in their five-minute rest.
+        Assert.Equal(3, AttendanceResponseMapper.Map(f.Session, Now.AddMinutes(5)).ReadyCount);
     }
 }

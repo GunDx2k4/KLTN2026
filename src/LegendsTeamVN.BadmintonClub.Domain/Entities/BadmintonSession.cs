@@ -1,4 +1,6 @@
 using LegendsTeamVN.BadmintonClub.Domain.Enums;
+using LegendsTeamVN.BadmintonClub.Domain.Events;
+using LegendsTeamVN.BadmintonClub.Domain.Services;
 using LegendsTeamVN.Core.Domain.Aggregates;
 using LegendsTeamVN.Core.Utilities.Results;
 
@@ -17,6 +19,10 @@ public class BadmintonSession : AggregateRoot<Guid>
     public DateTime DeadlineBooking { get; private set; }
     public DateTime? AttendanceCompletedAt { get; private set; }
     public Guid? AttendanceCompletedBy { get; private set; }
+    public DateTime? RotationStartedAt { get; private set; }
+    public Guid? RotationStartedBy { get; private set; }
+    public long RotationVersion { get; private set; }
+    public DateTime? NextProposalCheckAt { get; private set; }
     public int ShuttlecockUsed { get; private set; }
     public decimal CourtRentalCost { get; private set; }
     public decimal ExtraExpense { get; private set; }
@@ -129,6 +135,9 @@ public class BadmintonSession : AggregateRoot<Guid>
         int maxPlayers,
         DateTime deadlineBooking)
     {
+        if (RotationStartedAt.HasValue && (StartTime != startTime || EndTime != endTime ||
+            CourtCount != courtCount || MaxPlayers != maxPlayers || DeadlineBooking != deadlineBooking))
+            throw new InvalidOperationException("Session operational parameters are frozen after rotation starts.");
         Title = title;
         StartTime = startTime;
         EndTime = endTime;
@@ -153,15 +162,18 @@ public class BadmintonSession : AggregateRoot<Guid>
         (booking is not null && booking.SessionId == Id && booking.OccupiesSlot()) ||
         Bookings.Count(b => b.OccupiesSlot()) < MaxPlayers;
 
-    public bool IsPlayerReady(Guid userId) =>
-        Bookings.Any(b => b.UserId == userId && !b.IsDeleted && b.Status == BookingStatus.CHECKED_IN) &&
+    public bool IsPlayerReady(Guid userId) => IsPlayerReady(userId, DateTime.UtcNow);
+
+    public bool IsPlayerReady(Guid userId, DateTime now) =>
+        Bookings.Any(b => b.UserId == userId && Services.MatchRotationEngine.IsEligible(b)) &&
+        MatchRotationEngine.HasRested(this, userId, now) &&
         !Matches.Any(m => !m.IsDeleted && m.Status is MatchStatus.WAITING or MatchStatus.PLAYING &&
             m.Players.Any(p => p.UserId == userId));
 
-    public bool CanStartRotation(DateTime now) => CanEditAttendance(now) && StartTime <= now &&
-        AttendanceCompletedAt.HasValue && Bookings.Count(b => IsPlayerReady(b.UserId)) >= 4;
+    public bool CanStartRotation(DateTime now) => !RotationStartedAt.HasValue && CanEditAttendance(now) && StartTime <= now &&
+        AttendanceCompletedAt.HasValue && Bookings.Count(b => IsPlayerReady(b.UserId, now)) >= 4;
 
-    public Result ChangeAttendance(Guid userId, BookingStatus status, Guid actorId, DateTime now)
+    public Result ChangeAttendance(Guid userId, BookingStatus status, Guid actorId, DateTime now, bool generateProposals = true)
     {
         if (userId == Guid.Empty || status is not (BookingStatus.CHECKED_IN or BookingStatus.NO_SHOW))
             return Result.Failure(Error.Validation("Attendance.InvalidRequest", "Chỉ chấp nhận CHECKED_IN hoặc NO_SHOW và UserId hợp lệ."));
@@ -172,6 +184,7 @@ public class BadmintonSession : AggregateRoot<Guid>
             return Result.Failure(Error.NotFound("Attendance.BookingNotFound", "Người chơi chưa có đăng ký. Hãy sử dụng Thêm nhanh."));
         if (booking.Status is BookingStatus.WAITING or BookingStatus.ABSENT)
             return Result.Failure(Error.Conflict("Attendance.NotOfficial", "Người chơi chưa thuộc danh sách chính thức. Hãy sử dụng Thêm nhanh để kiểm tra sức chứa."));
+        if (booking.Status == status) return Result.Success();
         if (status == BookingStatus.CHECKED_IN)
         {
             if (!HasAttendanceRoom(booking))
@@ -184,20 +197,22 @@ public class BadmintonSession : AggregateRoot<Guid>
                 return Result.Failure(Error.Conflict("Attendance.PlayerPlaying", "Không thể đánh dấu vắng người đang thi đấu. Hãy kết thúc trận trước."));
             // Invalidate a pending match rather than leave an invalid three-player match.
             foreach (var match in Matches.Where(m => !m.IsDeleted && m.Status == MatchStatus.WAITING && m.Players.Any(p => p.UserId == userId)))
-                match.SkipMatch();
+                match.SkipMatch(now);
             booking.MarkNoShow(actorId, now);
         }
         SynchronizeRecruitments(now);
+        AttendanceChanged(now, generateProposals);
         return Result.Success();
     }
 
-    public Result<SessionBooking> AdmitWalkIn(Guid userId, Guid actorId, DateTime now)
+    public Result<SessionBooking> AdmitWalkIn(Guid userId, Guid actorId, DateTime now, bool generateProposals = true)
     {
         if (userId == Guid.Empty)
             return Result.Failure<SessionBooking>(Error.Validation("Attendance.InvalidUser", "UserId không được để trống."));
         var allowed = ValidateAttendanceChange(actorId, now);
         if (allowed.IsFailure) return Result.Failure<SessionBooking>(allowed.Error);
         var booking = Bookings.FirstOrDefault(b => b.UserId == userId);
+        if (booking is { IsDeleted: false, Status: BookingStatus.CHECKED_IN }) return Result.Success(booking);
         if (!HasAttendanceRoom(booking))
             return Result.Failure<SessionBooking>(Error.Conflict("Attendance.CapacityReached", "Buổi chơi đã đủ sức chứa."));
         if (booking is null)
@@ -207,6 +222,7 @@ public class BadmintonSession : AggregateRoot<Guid>
         }
         booking.MarkPresent(actorId, now);
         SynchronizeRecruitments(now);
+        AttendanceChanged(now, generateProposals);
         return Result.Success(booking);
     }
 
@@ -260,6 +276,10 @@ public class BadmintonSession : AggregateRoot<Guid>
 
     public Result ChangeOperationalStatus(SessionStatus target, bool confirmRemainingNoShows, Guid actorId, DateTime now)
     {
+        if (RotationStartedAt.HasValue && target == SessionStatus.OPEN)
+            return Result.Failure(Error.Conflict("Rotation.RegistrationLocked", "Không thể mở lại đăng ký sau khi bắt đầu điều phối."));
+        if (RotationStartedAt.HasValue && target == SessionStatus.PLAYING && Status != SessionStatus.PLAYING)
+            return Result.Failure(Error.Conflict("Rotation.StartMatchRequired", "Hãy bắt đầu trận đầu tiên để chuyển buổi sang đang chơi."));
         if (!CanTransitionTo(target))
             return Result.Failure(Error.Conflict("Session.InvalidTransition", "Không thể chuyển trạng thái buổi chơi về bước trước sau khi đã bắt đầu hoặc chốt buổi."));
         if (target is SessionStatus.CALCULATED or SessionStatus.COMPLETED)
@@ -274,11 +294,18 @@ public class BadmintonSession : AggregateRoot<Guid>
                 booking.MarkNoShow(actorId, now);
         }
         UpdateStatus(target);
+        if (target is SessionStatus.CALCULATED or SessionStatus.COMPLETED) NextProposalCheckAt = null;
+        if (target is SessionStatus.CALCULATED or SessionStatus.COMPLETED)
+            foreach (var pending in Matches.Where(m => !m.IsDeleted && m.Status == MatchStatus.WAITING))
+                pending.SkipMatch(now);
         SynchronizeRecruitments(now);
+        if (RotationStartedAt.HasValue) RecordRotationChange(now);
         return Result.Success();
     }
 
     public bool CanTransitionTo(SessionStatus target) => Enum.IsDefined(target) &&
+        (!RotationStartedAt.HasValue || target != SessionStatus.OPEN) &&
+        (!RotationStartedAt.HasValue || target != SessionStatus.PLAYING || Status == SessionStatus.PLAYING) &&
         (Status == target || Status switch
         {
             SessionStatus.OPEN => target is SessionStatus.LOCKED or SessionStatus.PLAYING or SessionStatus.CALCULATED or SessionStatus.COMPLETED,
@@ -296,5 +323,143 @@ public class BadmintonSession : AggregateRoot<Guid>
     private static SessionStatus ParseStatus(string status)
     {
         return Enum.TryParse<SessionStatus>(status, true, out var result) ? result : SessionStatus.OPEN;
+    }
+    // --- UC13: Match rotation ---
+    public Result InitializeRotation(Guid actorId, DateTime now)
+    {
+        if (RotationStartedAt.HasValue) return Result.Success();
+        var allowed = ValidateRotation(now);
+        if (allowed.IsFailure) return allowed;
+        if (actorId == Guid.Empty || !AttendanceCompletedAt.HasValue)
+            return Result.Failure(Error.Conflict("Rotation.AttendanceIncomplete", "Cần hoàn tất điểm danh trước khi điều phối."));
+        if (MatchRotationEngine.Candidates(this, now).Count < 4 || !HasFreeCourt())
+            return Result.Failure(Error.Conflict("Rotation.NotEnoughPlayers", "Cần sân trống và ít nhất 4 người sẵn sàng."));
+        RotationStartedAt = now;
+        RotationStartedBy = actorId;
+        if (Status == SessionStatus.OPEN) Status = SessionStatus.LOCKED;
+        ReconcileRotation(now);
+        SynchronizeRecruitments(now);
+        RecordRotationChange(now);
+        return Result.Success();
+    }
+
+    public bool HasFreeCourt() => Enumerable.Range(1, Math.Max(0, CourtCount)).Any(c =>
+        !Matches.Any(m => !m.IsDeleted && m.CourtNumber == c && m.Status is MatchStatus.WAITING or MatchStatus.PLAYING));
+
+    public Result GenerateRotationProposals(DateTime now)
+    {
+        var allowed = ValidateRotation(now);
+        if (allowed.IsFailure) return allowed;
+        if (!RotationStartedAt.HasValue)
+            return Result.Failure(Error.Conflict("Rotation.NotInitialized", "Chưa bắt đầu điều phối."));
+        if (ReconcileRotation(now)) RecordRotationChange(now);
+        return Result.Success();
+    }
+
+    public Result StartRotationMatch(Guid matchId, DateTime now)
+    {
+        var match = Matches.FirstOrDefault(m => m.Id == matchId && !m.IsDeleted);
+        if (match is null) return Result.Failure(Error.NotFound("Match.NotFound", "Không tìm thấy trận đấu."));
+        if (match.Status == MatchStatus.PLAYING) return Result.Success();
+        var allowed = ValidateRotation(now);
+        if (allowed.IsFailure) return allowed;
+        if (!RotationStartedAt.HasValue || match.Status != MatchStatus.WAITING || !ValidProposal(match, now) ||
+            Matches.Any(m => !m.IsDeleted && m.Id != match.Id && m.Status is MatchStatus.WAITING or MatchStatus.PLAYING &&
+                (m.CourtNumber == match.CourtNumber || m.Players.Any(p => match.Players.Any(x => x.UserId == p.UserId)))))
+            return Result.Failure(Error.Conflict("Rotation.StaleProposal", "Đội hình hoặc sân không còn hợp lệ. Hãy tải lại."));
+        match.StartMatch(now);
+        Status = SessionStatus.PLAYING;
+        UpdateRotationSchedule(now, true);
+        RecordRotationChange(now, match);
+        return Result.Success();
+    }
+
+    public Result FinishRotationMatch(Guid matchId, DateTime now, bool generateProposals = true)
+    {
+        var match = Matches.FirstOrDefault(m => m.Id == matchId && !m.IsDeleted);
+        if (match is null) return Result.Failure(Error.NotFound("Match.NotFound", "Không tìm thấy trận đấu."));
+        if (match.Status == MatchStatus.FINISHED) return Result.Success();
+        if (IsDeleted || Status is SessionStatus.CALCULATED or SessionStatus.COMPLETED ||
+            match.Status != MatchStatus.PLAYING || !match.TimeStart.HasValue || now < match.TimeStart.Value)
+            return Result.Failure(Error.Conflict("Match.NotPlaying", "Chỉ được kết thúc trận đang thi đấu."));
+        match.EndMatch(now);
+        ReconcileRotation(now, generateProposals);
+        RecordRotationChange(now);
+        return Result.Success();
+    }
+
+    public Result PrepareRotationDeletion(DateTime now, string? deletedBy = null)
+    {
+        if (Matches.Any(m => !m.IsDeleted && m.Status == MatchStatus.PLAYING))
+            return Result.Failure(Error.Conflict("Session.ActiveMatches", "Hãy kết thúc các trận trước khi xóa buổi."));
+        foreach (var match in Matches.Where(m => !m.IsDeleted && m.Status == MatchStatus.WAITING)) match.SkipMatch(now);
+        // Mark only the session: DbSet.Remove would cascade-delete non-soft-deletable MatchPlayer history.
+        IsDeleted = true;
+        NextProposalCheckAt = null;
+        DeletedOnUtc = new DateTimeOffset(now);
+        DeletedBy = deletedBy;
+        if (RotationStartedAt.HasValue) RecordRotationChange(now);
+        return Result.Success();
+    }
+
+    private Result ValidateRotation(DateTime now) => !IsDeleted && StartTime <= now && now < EndTime &&
+        Status is SessionStatus.OPEN or SessionStatus.LOCKED or SessionStatus.PLAYING
+        ? Result.Success() : Result.Failure(Error.Conflict("Rotation.Closed", "Chỉ điều phối trong thời gian diễn ra buổi chưa đóng."));
+
+    private bool ValidProposal(SessionMatch match, DateTime now) => match.CourtNumber >= 1 && match.CourtNumber <= CourtCount &&
+        match.Players.Count == 4 && match.Players.Select(p => p.UserId).Distinct().Count() == 4 &&
+        match.Players.Count(p => p.SideTeam == SideTeam.TEAM_A) == 2 && match.Players.Count(p => p.SideTeam == SideTeam.TEAM_B) == 2 &&
+        match.Players.All(p => Bookings.Any(b => b.UserId == p.UserId && MatchRotationEngine.IsEligible(b)) &&
+            MatchRotationEngine.HasRested(this, p.UserId, now));
+
+    private bool ReconcileRotation(DateTime now, bool generateProposals = true)
+    {
+        var changed = false;
+        foreach (var match in Matches.Where(m => !m.IsDeleted && m.Status == MatchStatus.WAITING).ToList())
+            if (!ValidProposal(match, now)) { match.SkipMatch(now); changed = true; }
+        if (!generateProposals || !RotationStartedAt.HasValue || ValidateRotation(now).IsFailure)
+        {
+            NextProposalCheckAt = null;
+            return changed;
+        }
+        foreach (var court in Enumerable.Range(1, CourtCount))
+        {
+            if (Matches.Any(m => !m.IsDeleted && m.CourtNumber == court && m.Status is MatchStatus.WAITING or MatchStatus.PLAYING)) continue;
+            var selected = MatchRotationEngine.Candidates(this, now).Take(4).ToList();
+            if (selected.Count < 4) break;
+            var round = Matches.Where(m => m.CourtNumber == court).Select(m => m.RoundNumber).DefaultIfEmpty(0).Max() + 1;
+            Matches.Add(SessionMatch.Propose(Id, court, round, MatchRotationEngine.Balance(selected)));
+            changed = true;
+        }
+        UpdateRotationSchedule(now, generateProposals);
+        return changed;
+    }
+
+    private void UpdateRotationSchedule(DateTime now, bool enabled)
+    {
+        NextProposalCheckAt = enabled && RotationStartedAt.HasValue && ValidateRotation(now).IsSuccess && HasFreeCourt()
+            ? MatchRotationEngine.NextCandidateTime(this, now) : null;
+        if (NextProposalCheckAt >= EndTime) NextProposalCheckAt = null;
+    }
+
+    public void ProcessScheduledRotation(DateTime now, bool enabled, bool recover = false)
+    {
+        if (!recover && (NextProposalCheckAt is null || NextProposalCheckAt > now)) return;
+        if (!RotationStartedAt.HasValue) { NextProposalCheckAt = null; return; }
+        if (ReconcileRotation(now, enabled)) RecordRotationChange(now);
+    }
+
+    private void AttendanceChanged(DateTime now, bool generateProposals)
+    {
+        if (!RotationStartedAt.HasValue) return;
+        ReconcileRotation(now, generateProposals);
+        RecordRotationChange(now);
+    }
+
+    private void RecordRotationChange(DateTime now, SessionMatch? startedMatch = null)
+    {
+        RotationVersion++;
+        RaiseDomainEvent(new RotationChangedDomainEvent(Id, RotationVersion, now, startedMatch?.Id,
+            startedMatch?.CourtNumber, startedMatch?.Players.Select(p => p.UserId).ToList() ?? []));
     }
 }

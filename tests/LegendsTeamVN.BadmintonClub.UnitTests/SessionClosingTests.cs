@@ -105,7 +105,7 @@ public sealed class SessionClosingTests
     public async Task PlayingMatchBlocksClosingWithoutChangingAttendance()
     {
         var f = new Fixture(); var pending = f.Add(BookingStatus.CONFIRMED);
-        var match = new SessionMatch(f.Session.Id, 1, 1, Now.AddMinutes(-10)); match.StartMatch();
+        var match = new SessionMatch(f.Session.Id, 1, 1, Now.AddMinutes(-10), MatchStatus.PLAYING);
         f.Session.Matches.Add(match);
         var result = await f.Handler.Handle(new(f.Session.Id, SessionStatus.COMPLETED, true), default);
         Assert.Equal("Session.ActiveMatches", result.Error.Code);

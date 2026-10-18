@@ -13,7 +13,7 @@ public static class AttendanceResponseMapper
         var players = bookings.Select(b => new AttendancePlayerResponse(
             b.Id, b.UserId, b.User?.FullName ?? "", b.User?.AvatarUrl, b.User?.SkillLevel.ToString() ?? "NB",
             b.Status, b.CheckinAt, b.AttendanceMarkedAt, b.AttendanceMarkedBy,
-            session.IsPlayerReady(b.UserId))).ToList();
+            session.IsPlayerReady(b.UserId, now))).ToList();
         var ready = players.Count(p => p.IsReady);
         var canEdit = session.CanEditAttendance(now);
         return new SessionAttendanceResponse(session.Id, session.GroupId, session.StartTime, session.EndTime,
