@@ -36,6 +36,7 @@ public static class ServiceCollectionExtensions
         services.AddTransient<GroupPermissionSeeder>();
         services.AddTransient<BadmintonUserSeeder>();
         services.AddTransient<BadmintonDemoDataSeeder>();
+        services.AddTransient<AttendanceDemoDataSeeder>();
         Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddEnumerable(
             services,
             ServiceDescriptor.Transient<IDataSeeder, GroupPermissionSeeder>()
@@ -47,6 +48,10 @@ public static class ServiceCollectionExtensions
         Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddEnumerable(
             services,
             ServiceDescriptor.Transient<IDataSeeder, BadmintonDemoDataSeeder>()
+        );
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddEnumerable(
+            services,
+            ServiceDescriptor.Transient<IDataSeeder, AttendanceDemoDataSeeder>()
         );
         return services;
     }

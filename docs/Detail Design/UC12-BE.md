@@ -237,7 +237,27 @@ Bộ Postman cá nhân đặt tại `D:\KhoaLuan\postman`, ngoài repository BE.
 
 Collection tổng mặc định tạo thời gian buổi ngày mai nên không mặc định điểm danh được ngay. Muốn test ngay cần chuẩn bị buổi trong cửa sổ điểm danh, chưa kết thúc; nếu cho người chơi RSVP, giữ deadline còn hiệu lực. Điểm danh sớm không làm đóng RSVP. Không hardcode ID minh họa vào giao diện.
 
-Các ca bàn giao cần kiểm tra:
+### Dữ liệu mẫu UC12
+
+`AttendanceDemoDataSeeder` chạy sau demo seeder cơ bản (`Order = 5`), bổ sung các buổi sau vào nhóm `CLB-LEGENDS7` cho cả DB mới và DB đã có dữ liệu:
+
+| Tên buổi | Trạng thái / giờ bắt đầu khi tạo seed | Dữ liệu ban đầu |
+|---|---|---|
+| `[UC12-SEED-01] Điểm danh sớm` | OPEN, sau thời điểm seed 30 phút; deadline sau 15 phút | user1–3 CONFIRMED; user4 CHECKED_IN; user5–8 chưa có booking để thử thêm nhanh |
+| `[UC12-SEED-02] Đã khóa đăng ký` | LOCKED, trước thời điểm seed 15 phút | user1–6 CONFIRMED, đủ 6 suất; user7 WAITING vị trí 1; chưa complete |
+| `[UC12-SEED-03] Đã hoàn tất điểm danh ban đầu` | PLAYING, trước thời điểm seed 30 phút | user1–4 CHECKED_IN, user5 CONFIRMED vẫn giữ suất, user6 NO_SHOW, user7 WAITING vị trí 1, user8 ABSENT; đã complete bởi user1 |
+
+Mỗi buổi kéo dài 3 giờ, sức chứa 6 người. Các booking mẫu đã điểm danh có `CheckinAt` (khi có mặt), `AttendanceMarkedAt` và `AttendanceMarkedBy`; buổi thứ ba có `AttendanceCompletedAt/By`. Buổi thứ ba không tạo trận đấu: bốn người CHECKED_IN đều Ready, dùng để thử bổ sung người đến muộn sau complete. Một suất còn trống cùng người WAITING thể hiện quy tắc không tự đôn hàng sau NO_SHOW.
+
+Đăng nhập **user1 (Host)** hoặc **user3 (Thủ quỹ)** để thao tác nếu vai trò trong nhóm vẫn giữ như seed mặc định. ID được sinh khi tạo, xem log `Seeded UC12 demo session ...` hoặc API danh sách buổi của nhóm để lấy `sessionId`.
+
+Seeder chỉ thêm các tên buổi mẫu còn thiếu, kể cả khi demo seeder cơ bản báo đã có dữ liệu. Chạy lại không đặt lại booking, complete hoặc giờ chơi; buổi mẫu đã soft delete cũng không bị tạo lại. Vì vậy, thời gian mẫu sẽ hết hiệu lực theo thời gian thực; khi cần test vào ngày khác, tạo buổi mới hoặc sửa giờ qua API khi trạng thái còn cho phép. Không đổi tên buổi mẫu nếu muốn seeder nhận diện được bản đã tạo.
+
+Seed cơ bản cũng đã sửa cách tạo booking CHECKED_IN ở buổi đang chơi/buổi hoàn thành để có dấu vết điểm danh khi khởi tạo DB mới. Với dữ liệu lịch sử đã tồn tại, không tự gán người điểm danh hoặc suy đoán thời điểm complete. Seed quyền Thủ quỹ vẫn bổ sung `OPERATIONS.BOOKING.MANAGE` cho vai trò có sẵn.
+
+Khởi động lại BE để chạy seed sau khi DB đã áp dụng migration attendance. Thay đổi seed này không thêm cột và không cần migration mới.
+
+### Các ca bàn giao cần kiểm tra
 
 - Host/Thủ quỹ có quyền; thành viên thường hoặc Admin không có quyền nhóm bị từ chối.
 - Trước mốc StartTime - 1 giờ thì không sửa; đúng mốc đó cả hai status đều sửa được; đúng EndTime thì đóng.

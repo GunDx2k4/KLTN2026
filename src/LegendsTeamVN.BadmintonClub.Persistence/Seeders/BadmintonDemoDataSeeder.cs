@@ -165,10 +165,9 @@ public class BadmintonDemoDataSeeder(
             await dbContext.BadmintonSessions.AddAsync(s3, cancellationToken);
             await dbContext.SaveChangesAsync(cancellationToken);
 
-            var b1 = new SessionBooking(s3.Id, user1.Id, null, BookingStatus.CHECKED_IN, 0);
-            b1.CheckIn();
-            var b2 = new SessionBooking(s3.Id, user2.Id, null, BookingStatus.CHECKED_IN, 0);
-            b2.CheckIn();
+            var b1 = CreateCheckedInBooking(s3.Id, user1.Id, user1.Id, s3.StartTime);
+            var b2 = CreateCheckedInBooking(s3.Id, user2.Id, user1.Id, s3.StartTime);
+            s3.CompleteAttendance(user1.Id, s3.StartTime);
             dbContext.SessionBookings.AddRange(b1, b2, new SessionBooking(s3.Id, user3.Id, null, BookingStatus.CONFIRMED, 0));
 
             // Session 4: Hoàn thành tuần trước (COMPLETED)
@@ -187,10 +186,11 @@ public class BadmintonDemoDataSeeder(
             await dbContext.SaveChangesAsync(cancellationToken);
 
             dbContext.SessionBookings.AddRange(
-                new SessionBooking(s4.Id, user1.Id, null, BookingStatus.CHECKED_IN, 0),
-                new SessionBooking(s4.Id, user2.Id, null, BookingStatus.CHECKED_IN, 0),
-                new SessionBooking(s4.Id, user3.Id, null, BookingStatus.CHECKED_IN, 0)
+                CreateCheckedInBooking(s4.Id, user1.Id, user1.Id, s4.StartTime),
+                CreateCheckedInBooking(s4.Id, user2.Id, user1.Id, s4.StartTime),
+                CreateCheckedInBooking(s4.Id, user3.Id, user1.Id, s4.StartTime)
             );
+            s4.CompleteAttendance(user1.Id, s4.StartTime);
 
             // Session Fees
             dbContext.SessionFees.AddRange(
@@ -441,6 +441,13 @@ public class BadmintonDemoDataSeeder(
         {
             logger.LogInformation("Demo data already exists. Skipping.");
         }
+    }
+
+    private static SessionBooking CreateCheckedInBooking(Guid sessionId, Guid userId, Guid actorId, DateTime markedAt)
+    {
+        var booking = new SessionBooking(sessionId, userId);
+        booking.MarkPresent(actorId, markedAt);
+        return booking;
     }
 
     private async Task<(GroupRole hostRole, GroupRole deputyRole, GroupRole treasurerRole, GroupRole memberRole, GroupRole guestRole)> CreateClubRolesAsync(
