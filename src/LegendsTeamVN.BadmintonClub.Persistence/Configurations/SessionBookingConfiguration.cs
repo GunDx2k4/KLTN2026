@@ -45,6 +45,9 @@ public class SessionBookingConfiguration : IEntityTypeConfiguration<SessionBooki
         builder.Property(b => b.CheckinAt)
             .HasColumnName("checkin_at");
 
+        builder.Property(b => b.AttendanceMarkedAt).HasColumnName("attendance_marked_at");
+        builder.Property(b => b.AttendanceMarkedBy).HasColumnName("attendance_marked_by");
+
         builder.HasIndex(b => new { b.SessionId, b.UserId })
             .IsUnique();
 

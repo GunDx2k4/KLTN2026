@@ -8,7 +8,7 @@ public class SessionMatch : AggregateRoot<Guid>
     public Guid SessionId { get; private set; }
     public int CourtNumber { get; private set; }
     public int RoundNumber { get; private set; }
-    public DateTime TimeStart { get; private set; }
+    public DateTime? TimeStart { get; private set; }
     public DateTime? TimeEnd { get; private set; }
 
     /// <summary>
@@ -46,32 +46,72 @@ public class SessionMatch : AggregateRoot<Guid>
     {
     }
 
-    public void StartMatch()
+    internal static SessionMatch Propose(Guid sessionId, int courtNumber, int roundNumber,
+        IReadOnlyList<SessionBooking> players)
     {
+        if (players.Count != 4 || players.Select(p => p.UserId).Distinct().Count() != 4)
+            throw new InvalidOperationException("A doubles proposal requires four distinct players.");
+        var match = new SessionMatch(sessionId, courtNumber, roundNumber, DateTime.UtcNow);
+        match.TimeStart = null;
+        for (var i = 0; i < 4; i++)
+            match.Players.Add(MatchPlayer.Proposed(match.Id, players[i].UserId,
+                i < 2 ? SideTeam.TEAM_A : SideTeam.TEAM_B));
+        return match;
+    }
+
+    public void StartMatch() => StartMatch(DateTime.UtcNow);
+
+    public void StartMatch(DateTime now)
+    {
+        if (Status == MatchStatus.PLAYING) return;
+        if (Status != MatchStatus.WAITING || Players.Count != 4 ||
+            Players.Select(p => p.UserId).Distinct().Count() != 4 ||
+            Players.Count(p => p.SideTeam == SideTeam.TEAM_A) != 2 ||
+            Players.Count(p => p.SideTeam == SideTeam.TEAM_B) != 2)
+            throw new InvalidOperationException("Only a valid waiting doubles match can start.");
         Status = MatchStatus.PLAYING;
-        TimeStart = DateTime.UtcNow;
+        TimeStart = now;
+        foreach (var player in Players) player.EnterCourt(now);
     }
 
-    public void EndMatch()
+    public void EndMatch() => EndMatch(DateTime.UtcNow);
+
+    public void EndMatch(DateTime now)
     {
+        if (Status == MatchStatus.FINISHED) return;
+        if (Status != MatchStatus.PLAYING || !TimeStart.HasValue || now < TimeStart.Value)
+            throw new InvalidOperationException("Only a playing match can finish.");
         Status = MatchStatus.FINISHED;
-        TimeEnd = DateTime.UtcNow;
+        TimeEnd = now;
     }
 
-    public void SkipMatch()
+    public void SkipMatch() => SkipMatch(DateTime.UtcNow);
+
+    public void SkipMatch(DateTime now)
     {
+        if (Status == MatchStatus.SKIPPED) return;
+        if (Status != MatchStatus.WAITING) throw new InvalidOperationException("Only a waiting proposal can be skipped.");
         Status = MatchStatus.SKIPPED;
-        TimeEnd = DateTime.UtcNow;
+        TimeEnd = now;
     }
 
     public void UpdateStatus(MatchStatus status)
     {
-        Status = status;
+        if (status == Status) return;
+        switch (status)
+        {
+            case MatchStatus.PLAYING: StartMatch(); break;
+            case MatchStatus.FINISHED: EndMatch(); break;
+            case MatchStatus.SKIPPED: SkipMatch(); break;
+            default: throw new InvalidOperationException("A match cannot return to waiting or use an unknown status.");
+        }
     }
 
     public void UpdateStatus(string status)
     {
-        UpdateStatus(ParseStatus(status));
+        if (!Enum.TryParse<MatchStatus>(status, true, out var parsed) || !Enum.IsDefined(parsed))
+            throw new ArgumentException("Unknown match status.", nameof(status));
+        UpdateStatus(parsed);
     }
 
     private static MatchStatus ParseStatus(string status)

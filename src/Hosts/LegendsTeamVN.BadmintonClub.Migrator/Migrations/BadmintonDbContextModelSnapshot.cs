@@ -143,6 +143,14 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id_session");
 
+                    b.Property<DateTime?>("AttendanceCompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("attendance_completed_at");
+
+                    b.Property<Guid?>("AttendanceCompletedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("attendance_completed_by");
+
                     b.Property<int>("CourtCount")
                         .HasColumnType("integer")
                         .HasColumnName("court_count");
@@ -204,6 +212,24 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                     b.Property<DateTimeOffset?>("ModifiedOnUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTime?>("NextProposalCheckAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_proposal_check_at");
+
+                    b.Property<DateTime?>("RotationStartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("rotation_started_at");
+
+                    b.Property<Guid?>("RotationStartedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("rotation_started_by");
+
+                    b.Property<long>("RotationVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L)
+                        .HasColumnName("rotation_version");
+
                     b.Property<int>("ShuttlecockUsed")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
@@ -238,6 +264,9 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("GroupId");
+
+                    b.HasIndex("NextProposalCheckAt")
+                        .HasFilter("next_proposal_check_at IS NOT NULL AND NOT \"IsDeleted\"");
 
                     b.ToTable("badminton_session", (string)null);
                 });
@@ -1067,11 +1096,9 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id_match_player");
 
-                    b.Property<DateTime>("CheckinCourtAt")
-                        .ValueGeneratedOnAdd()
+                    b.Property<DateTime?>("CheckinCourtAt")
                         .HasColumnType("timestamp with time zone")
-                        .HasColumnName("checkin_court_at")
-                        .HasDefaultValueSql("now()");
+                        .HasColumnName("checkin_court_at");
 
                     b.Property<bool>("IsManualSwapped")
                         .ValueGeneratedOnAdd()
@@ -1248,6 +1275,86 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                     b.ToTable("notification", (string)null);
                 });
 
+            modelBuilder.Entity("LegendsTeamVN.BadmintonClub.Domain.Entities.OutboxMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempts");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedOnUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("DeletedOnUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DeliveredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("delivered_at");
+
+                    b.Property<Guid>("DestinationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("destination_id");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("last_error");
+
+                    b.Property<Guid?>("LeaseId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("lease_id");
+
+                    b.Property<DateTime?>("LeaseUntil")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("lease_until");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("ModifiedOnUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_at");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("payload");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NextAttemptAt", "CreatedAt")
+                        .HasFilter("delivered_at IS NULL AND attempts < 10");
+
+                    b.ToTable("rotation_outbox", (string)null);
+                });
+
             modelBuilder.Entity("LegendsTeamVN.BadmintonClub.Domain.Entities.RolePermission", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1279,6 +1386,14 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id_booking");
+
+                    b.Property<DateTime?>("AttendanceMarkedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("attendance_marked_at");
+
+                    b.Property<Guid?>("AttendanceMarkedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("attendance_marked_by");
 
                     b.Property<DateTime>("BookedAt")
                         .ValueGeneratedOnAdd()
@@ -1507,13 +1622,16 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("time_end");
 
-                    b.Property<DateTime>("TimeStart")
+                    b.Property<DateTime?>("TimeStart")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("time_start");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("SessionId");
+                    b.HasIndex("SessionId", "CourtNumber")
+                        .IsUnique()
+                        .HasDatabaseName("ux_session_match_active_court")
+                        .HasFilter("status IN ('WAITING', 'PLAYING') AND NOT \"IsDeleted\"");
 
                     b.ToTable("session_match", (string)null);
                 });

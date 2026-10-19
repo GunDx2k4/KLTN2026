@@ -9,6 +9,7 @@ namespace LegendsTeamVN.BadmintonClub.Application.Features.Recruitments.Cancel;
 
 public sealed class CancelRecruitmentBookingCommandHandler(
     IRecruitmentRepository recruitmentRepository,
+    ISessionRepository sessionRepository,
     IBookingRepository bookingRepository,
     ICurrentUserService currentUserService) : ICommandHandler<CancelRecruitmentBookingCommand>
 {
@@ -20,14 +21,19 @@ public sealed class CancelRecruitmentBookingCommandHandler(
             return Result.Failure(Error.Unauthorized("User.Unauthorized", "Vui lòng đăng nhập để hủy suất giao lưu."));
         }
 
-        var recruitment = await recruitmentRepository.FindByIdAsync(request.RecruitmentId, cancellationToken);
+        var recruitment = await recruitmentRepository.FindAll(r => r.Id == request.RecruitmentId && !r.IsDeleted)
+            .FirstOrDefaultAsync(cancellationToken);
         if (recruitment is null)
         {
             return Result.Failure(Error.NotFound("Recruitment.NotFound", "Không tìm thấy bài đăng tìm khách giao lưu."));
         }
 
-        var booking = await bookingRepository.FindAll(b => b.RecruitmentId == request.RecruitmentId && b.UserId == userId.Value && b.Status == BookingStatus.CONFIRMED)
-            .FirstOrDefaultAsync(cancellationToken);
+        var session = await sessionRepository.GetAttendanceAsync(recruitment.SessionId, true, cancellationToken);
+        if (session is null)
+            return Result.Failure(Error.NotFound("Session.NotFound", "Không tìm thấy buổi chơi."));
+        if (session.Status != SessionStatus.OPEN || DateTime.UtcNow >= session.StartTime)
+            return Result.Failure(Error.Conflict("Attendance.ManagedByHost", "Buổi chơi đã bắt đầu. Hãy liên hệ Host hoặc Thủ quỹ để thay đổi điểm danh."));
+        var booking = session.Bookings.FirstOrDefault(b => b.RecruitmentId == request.RecruitmentId && b.UserId == userId.Value && b.Status == BookingStatus.CONFIRMED);
 
         if (booking is null)
         {
@@ -37,12 +43,7 @@ public sealed class CancelRecruitmentBookingCommandHandler(
         booking.UpdateStatus(BookingStatus.ABSENT);
         bookingRepository.Update(booking);
 
-        // Mở lại trạng thái ACTIVE nếu trước đó đã bị FILLED
-        if (recruitment.Status == RecruitmentStatus.FILLED)
-        {
-            recruitment.UpdateStatus(RecruitmentStatus.ACTIVE);
-            recruitmentRepository.Update(recruitment);
-        }
+        RecruitmentRules.Synchronize(session, DateTime.UtcNow);
 
         return Result.Success();
     }

@@ -4,13 +4,15 @@ using LegendsTeamVN.Core.Application.Messaging.CQRS;
 using LegendsTeamVN.Core.Identity.Abstractions;
 using LegendsTeamVN.Core.Utilities.Results;
 using Microsoft.EntityFrameworkCore;
+using LegendsTeamVN.BadmintonClub.Application.Features.Recruitments;
 
 namespace LegendsTeamVN.BadmintonClub.Application.Features.Bookings.Cancel;
 
 public sealed class CancelBookingCommandHandler(
     ISessionRepository sessionRepository,
     IBookingRepository bookingRepository,
-    ICurrentUserService currentUserService) : ICommandHandler<CancelBookingCommand>
+    ICurrentUserService currentUserService,
+    TimeProvider clock) : ICommandHandler<CancelBookingCommand>
 {
     public async Task<Result> Handle(CancelBookingCommand request, CancellationToken cancellationToken)
     {
@@ -20,18 +22,21 @@ public sealed class CancelBookingCommandHandler(
             return Result.Failure(Error.Unauthorized("User.Unauthorized", "Vui lòng đăng nhập để hủy giữ chỗ."));
         }
 
-        var session = await sessionRepository.FindAll(s => s.Id == request.SessionId)
-            .Include(s => s.Bookings)
-            .FirstOrDefaultAsync(cancellationToken);
+        var session = await sessionRepository.GetAttendanceAsync(request.SessionId, true, cancellationToken);
 
         if (session is null)
         {
             return Result.Failure(Error.NotFound("Session.NotFound", "Không tìm thấy buổi chơi."));
         }
 
-        if (DateTime.UtcNow > session.DeadlineBooking)
+        if (session.Status != SessionStatus.OPEN)
         {
-            return Result.Failure(Error.Validation("Session.DeadlinePassed", "Đã quá hạn chốt giữ chỗ, không thể báo vắng trực tiếp."));
+            return Result.Failure(Error.Conflict("Session.RegistrationClosed", "Buổi chơi đã khóa đăng ký. Hãy liên hệ Host hoặc Thủ quỹ để thay đổi."));
+        }
+
+        if (clock.GetUtcNow().UtcDateTime >= session.DeadlineBooking)
+        {
+            return Result.Failure(Error.Conflict("Session.DeadlinePassed", "Đã hết hạn thay đổi đăng ký. Hãy liên hệ Host hoặc Thủ quỹ."));
         }
 
         var myBooking = session.Bookings.FirstOrDefault(b => b.UserId == userId.Value && b.Status != BookingStatus.ABSENT);
@@ -39,6 +44,9 @@ public sealed class CancelBookingCommandHandler(
         {
             return Result.Failure(Error.NotFound("Booking.NotFound", "Bạn không có biểu quyết giữ chỗ cho buổi chơi này."));
         }
+
+        if (myBooking.Status is BookingStatus.CHECKED_IN or BookingStatus.NO_SHOW)
+            return Result.Failure(Error.Conflict("Attendance.ManagedByHost", "Trạng thái điểm danh phải được Host hoặc Thủ quỹ điều chỉnh."));
 
         var wasConfirmed = myBooking.Status == BookingStatus.CONFIRMED;
         var cancelledQueueOrder = myBooking.QueueOrder;
@@ -87,6 +95,7 @@ public sealed class CancelBookingCommandHandler(
             }
         }
 
+        RecruitmentRules.Synchronize(session, clock.GetUtcNow().UtcDateTime);
         return Result.Success();
     }
 }

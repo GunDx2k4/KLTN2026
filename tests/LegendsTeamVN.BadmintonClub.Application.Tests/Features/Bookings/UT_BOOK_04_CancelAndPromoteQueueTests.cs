@@ -1,4 +1,4 @@
-﻿using FluentAssertions;
+using FluentAssertions;
 using LegendsTeamVN.BadmintonClub.Application.Features.Bookings.Cancel;
 using LegendsTeamVN.BadmintonClub.Application.Tests.Common;
 using LegendsTeamVN.BadmintonClub.Domain.Entities;
@@ -17,14 +17,15 @@ public class UT_BOOK_04_CancelAndPromoteQueueTests
     {
         // Arrange
         using var dbContext = TestDbContextFactory.Create();
-        var sessionRepo = new SessionRepository(dbContext);
+        var sessionRepo = TestDbContextFactory.CreateAttendanceSessionRepository(dbContext);
         var bookingRepo = new BookingRepository(dbContext);
         var currentUserService = Substitute.For<ICurrentUserService>();
 
         var handler = new CancelBookingCommandHandler(
             sessionRepo,
             bookingRepo,
-            currentUserService);
+            currentUserService,
+            TimeProvider.System);
 
         var user5Id = Guid.NewGuid();
         var user13Id = Guid.NewGuid();

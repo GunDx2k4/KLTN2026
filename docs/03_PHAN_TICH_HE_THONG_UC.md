@@ -156,22 +156,33 @@ graph TD
 
 ### UC12: Điểm danh thành viên tại sân
 - **FR đáp ứng**: FR14 (F3.2) | **Tác nhân**: Trưởng nhóm (Host), Thủ quỹ.
-- **Tiền điều kiện**: Buổi sinh hoạt bước vào khung giờ diễn ra.
+- **Tiền điều kiện**: Người gọi có quyền điểm danh tại nhóm sở hữu buổi. Cho phép thao tác từ 1 giờ trước giờ bắt đầu đến trước giờ kết thúc; buổi ở trạng thái OPEN, LOCKED hoặc PLAYING.
 - **Luồng chính**: Host mở danh sách những người đã đăng ký ➔ Bấm "Điểm danh" cho những người thực tế đã có mặt tại sân ➔ Chuyển trạng thái booking sang `CHECKED_IN` ➔ Chỉ những người này mới được nạp vào hàng đợi xoay tua.
 - **Hậu điều kiện**: Xác lập danh sách người sẵn sàng thi đấu thực tế.
+- **Luồng bổ sung**: Host/Thủ quỹ thêm nhanh tài khoản chưa đăng ký nếu còn sức chứa; đánh dấu NO_SHOW thủ công để giải phóng suất. Không tự đánh dấu NO_SHOW sau 15 phút và không tự đôn hàng chờ khi điểm danh vắng.
+- **Hoàn tất điểm danh**: Ghi nhận người/thời điểm hoàn tất lượt đầu; không tự khóa buổi hay bắt đầu trận. Người chưa đến giữ CONFIRMED và giữ suất; vẫn được điểm danh bổ sung. Khi đóng cả buổi, cần xác nhận trước khi đổi những người còn CONFIRMED thành NO_SHOW. Hợp đồng API và các giới hạn xem [UC12-BE.md](Detail%20Design/UC12-BE.md).
 
 ---
 
 ### UC13: Điều phối xoay tua sân tự động (Match Rotation Engine)
 - **FR đáp ứng**: FR15 (F3.3) | **Tác nhân**: Hệ thống tự động, Host.
-- **Tiền điều kiện**: Có ít nhất một sân đang trống và có tối thiểu 4 người chơi ở trạng thái sẵn sàng hoặc đang nghỉ ngơi.
-- **Luồng giải thuật**:
-  1. Hệ thống tính thời gian nghỉ của toàn bộ người chơi đang ở ngoài sân: `Thời_gian_nghỉ = Giờ_hiện_tại - Giờ_rời_sân_gần_nhất`.
-  2. Lọc ra danh sách ứng viên có thời gian nghỉ lâu nhất (chống ngồi ngoài liên tiếp 2 trận).
-  3. Áp dụng ma trận cân bằng trình độ giữa hai bên: Ghép cặp sao cho tổng điểm trình độ Cặp A xấp xỉ Cặp B (`|Skill(A1)+Skill(A2) - (Skill(B1)+Skill(B2))|` nhỏ nhất).
-  4. Đề xuất 4 người chơi vào sân trống.
-  5. Host xác nhận "Bắt đầu trận" ➔ Tạo bản ghi `session_match` (`PLAYING`) và 4 bản ghi `match_player` (Team A, Team B). Đồng hồ bấm giờ trận đấu chạy thời gian thực qua SignalR.
-- **Hậu điều kiện**: Trận đấu mới bắt đầu, 4 người chơi nhận thông báo vào sân.
+- **Quyền thao tác**: `OPERATIONS.MATCH.MANAGE` trong nhóm sở hữu buổi; mặc định Host/Phó nhóm, không tự cấp cho Thủ quỹ. JWT UC13 phải còn hạn.
+- **Tiền điều kiện khởi tạo**: Đã complete UC12, buổi đã đến giờ và chưa kết thúc, có sân trống và ít nhất 4 người đã CHECKED_IN khả dụng.
+- **Luồng phụ 1a — Khởi tạo lượt đầu sau UC12**:
+  1. Host mở Bàn điều khiển, xem sân trống và người Ready; bấm **Bắt đầu điều phối**.
+  2. Hệ thống ghi nhận khởi tạo, OPEN chuyển LOCKED; đề xuất tối đa `min(sân trống, floor(người khả dụng / 4))` trận theo số sân. Mỗi trận đúng bốn người, hai người mỗi đội; một người không được phân trùng sân.
+  3. Lưu đề xuất dưới dạng `session_match.WAITING`. Host xem/xác nhận hoặc chuyển sang UC14 khi có chức năng đó.
+  4. Host bấm **Bắt đầu trận** trên từng sân. BE kiểm tra lại, ghi giờ bắt đầu, chuyển trận PLAYING; trận đầu chuyển buổi PLAYING. Complete UC12 không tự bắt đầu điều phối/trận.
+- **Luồng chính — Các lượt tiếp theo**:
+  1. Host bấm **Kết thúc trận**. BE khóa buổi, ghi FINISHED/TimeEnd, giải phóng sân và bốn người.
+  2. Lấy ứng viên CHECKED_IN không thuộc WAITING/PLAYING và đã nghỉ ít nhất 5 phút sau FINISHED gần nhất cùng buổi; chưa chơi thì xét ngay. Ưu tiên chưa chơi theo check-in, sau đó nghỉ lâu nhất; hòa dùng check-in và UserId. SKIPPED không tạo nghỉ bắt buộc.
+  3. Chọn bốn người ưu tiên rồi xét ba cách chia cặp, lấy chênh lệch tổng SkillLevel nhỏ nhất. Đây là ưu tiên công bằng, không bảo đảm tuyệt đối không ngồi ngoài hai trận với mọi sĩ số/số sân.
+  4. Tạo đề xuất WAITING cho các sân trống đủ người; giữ đề xuất hợp lệ hiện có. Host xác nhận bắt đầu từng trận.
+     Nếu chưa đủ người nghỉ xong, lưu mốc đủ bốn người và để sân trống; scheduler nhịp 5 giây tự thử xếp khi tới hạn. Nghỉ cố định chung, Host không cấu hình; scheduler không tự start trận.
+  5. Start lưu trận, bốn thông báo MATCH và outbox trong cùng transaction; worker phát SignalR/FCM sau commit, có retry/dead-letter. Đồng hồ FE tính từ timeStart.
+- **Ngoại lệ**: Dưới bốn người thì giữ sân trống, finish vẫn thành công. Người đến muộn được điểm danh bổ sung ở LOCKED/PLAYING theo UC12 và tự xét lấp sân trống. NO_SHOW hủy đề xuất mất người rồi thử xếp lại trong cùng transaction; người đang chơi không được đánh vắng. Người mới không thay đội hình hợp lệ đã đề xuất. Sau EndTime không tạo/start trận mới, vẫn kết thúc được trận đang chơi.
+- **Hậu điều kiện**: Không trùng sân/người trong các trận hoạt động; finish và đề xuất tiếp theo lưu nguyên tử; gửi lặp start/finish không tạo thêm trận/lời mời hoặc đổi lại timestamp. Booking vẫn CHECKED_IN khi chơi/nghỉ.
+- **Bàn giao BE**: [UC13-BE.md](Detail%20Design/UC13-BE.md). UC14 chỉnh đội hình và màn hình cá nhân UC15 chưa triển khai trong đợt UC13.
 
 ### UC14: Can thiệp điều phối trận đấu thủ công
 - **FR đáp ứng**: FR16 (F3.4) | **Tác nhân**: Trưởng nhóm (Host).

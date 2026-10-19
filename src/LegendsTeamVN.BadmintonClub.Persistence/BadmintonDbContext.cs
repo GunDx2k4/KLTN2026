@@ -11,6 +11,7 @@ public class BadmintonDbContext(DbContextOptions<BadmintonDbContext> options, IP
     public DbSet<AppUser> AppUsers => Set<AppUser>();
     public DbSet<UserDevice> UserDevices => Set<UserDevice>();
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
     public DbSet<MemberReview> MemberReviews => Set<MemberReview>();
     public DbSet<GroupReview> GroupReviews => Set<GroupReview>();
     public DbSet<ClubGroup> ClubGroups => Set<ClubGroup>();

@@ -6,6 +6,8 @@ using LegendsTeamVN.Core.Identity.DependencyInjection.Extensions;
 using LegendsTeamVN.Core.Identity.Entities;
 using LegendsTeamVN.Core.Infrastructure.DependencyInjection.Extensions;
 using LegendsTeamVN.Core.Utilities.Options;
+using LegendsTeamVN.BadmintonClub.Application.Abstractions;
+using LegendsTeamVN.BadmintonClub.Infrastructure.Services;
 
 var builder = Host.CreateApplicationBuilder(args);
 builder.AddCoreSerilog();
@@ -17,6 +19,7 @@ var connectionStrings = new ConnectionStringsOptions();
 builder.Configuration.GetSection(ConnectionStringsOptions.SectionName).Bind(connectionStrings);
 
 builder.Services.AddApplication();
+builder.Services.AddScoped<IExternalAuthService, ExternalAuthService>();
 
 builder.Services.AddIdentity<AppUser, AppRole>(options =>
         {

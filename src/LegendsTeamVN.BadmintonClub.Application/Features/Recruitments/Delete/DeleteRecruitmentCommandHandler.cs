@@ -6,12 +6,15 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LegendsTeamVN.BadmintonClub.Application.Features.Recruitments.Delete;
 
-public sealed class DeleteRecruitmentCommandHandler(IRecruitmentRepository recruitmentRepository) : ICommandHandler<DeleteRecruitmentCommand>
+public sealed class DeleteRecruitmentCommandHandler(IRecruitmentRepository recruitmentRepository, ISessionRepository sessions) : ICommandHandler<DeleteRecruitmentCommand>
 {
     public async Task<Result> Handle(DeleteRecruitmentCommand request, CancellationToken cancellationToken)
     {
-        var recruitments = await recruitmentRepository.FindAll(r => r.SessionId == request.SessionId && r.Status == RecruitmentStatus.ACTIVE)
-            .ToListAsync(cancellationToken);
+        var session = await sessions.GetAttendanceAsync(request.SessionId, true, cancellationToken);
+        if (session is null)
+            return Result.Failure(Error.NotFound("Session.NotFound", "Không tìm thấy buổi chơi."));
+        var recruitments = session.Recruitments.Where(r => !r.IsDeleted &&
+            r.Status is RecruitmentStatus.ACTIVE or RecruitmentStatus.FILLED).ToList();
 
         if (recruitments.Count == 0)
         {

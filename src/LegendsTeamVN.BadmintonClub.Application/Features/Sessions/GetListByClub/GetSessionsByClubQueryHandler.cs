@@ -16,7 +16,7 @@ public sealed class GetSessionsByClubQueryHandler(
     {
         var currentUserId = currentUserService.UserId;
 
-        var sessions = await sessionRepository.FindAll(s => s.GroupId == request.ClubId)
+        var sessions = await sessionRepository.FindAll(s => !s.IsDeleted && s.GroupId == request.ClubId)
             .Include(s => s.Group)
             .Include(s => s.Bookings)
             .OrderByDescending(s => s.StartTime)
@@ -24,10 +24,10 @@ public sealed class GetSessionsByClubQueryHandler(
 
         var result = sessions.Select(s =>
         {
-            var confirmedCount = s.Bookings.Count(b => b.Status == BookingStatus.CONFIRMED || b.Status == BookingStatus.CHECKED_IN);
-            var waitingCount = s.Bookings.Count(b => b.Status == BookingStatus.WAITING);
+            var confirmedCount = s.Bookings.Count(b => !b.IsDeleted && b.Status is BookingStatus.CONFIRMED or BookingStatus.CHECKED_IN);
+            var waitingCount = s.Bookings.Count(b => !b.IsDeleted && b.Status == BookingStatus.WAITING);
             var myBooking = currentUserId.HasValue 
-                ? s.Bookings.FirstOrDefault(b => b.UserId == currentUserId.Value && b.Status != BookingStatus.ABSENT) 
+                ? s.Bookings.FirstOrDefault(b => !b.IsDeleted && b.UserId == currentUserId.Value && b.Status != BookingStatus.ABSENT)
                 : null;
 
             return new SessionResponse(

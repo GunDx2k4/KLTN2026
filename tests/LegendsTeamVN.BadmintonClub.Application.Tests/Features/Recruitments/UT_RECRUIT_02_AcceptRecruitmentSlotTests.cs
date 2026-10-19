@@ -24,6 +24,7 @@ public class UT_RECRUIT_02_AcceptRecruitmentSlotTests
 
         var handler = new JoinRecruitmentCommandHandler(
             recruitmentRepo,
+            TestDbContextFactory.CreateAttendanceSessionRepository(dbContext),
             bookingRepo,
             userRepo,
             currentUserService);

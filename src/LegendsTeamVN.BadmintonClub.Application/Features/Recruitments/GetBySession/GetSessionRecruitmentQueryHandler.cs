@@ -8,14 +8,16 @@ using Microsoft.EntityFrameworkCore;
 namespace LegendsTeamVN.BadmintonClub.Application.Features.Recruitments.GetBySession;
 
 public sealed class GetSessionRecruitmentQueryHandler(
-    IRecruitmentRepository recruitmentRepository,
-    IBookingRepository bookingRepository) : IQueryHandler<GetSessionRecruitmentQuery, GuestRecruitmentResponse?>
+    IRecruitmentRepository recruitmentRepository) : IQueryHandler<GetSessionRecruitmentQuery, GuestRecruitmentResponse?>
 {
     public async Task<Result<GuestRecruitmentResponse?>> Handle(GetSessionRecruitmentQuery request, CancellationToken cancellationToken)
     {
-        var recruitment = await recruitmentRepository.FindAll(r => r.SessionId == request.SessionId && r.Status == RecruitmentStatus.ACTIVE)
+        var now = DateTime.UtcNow;
+        var recruitment = await recruitmentRepository.FindAll(r => !r.IsDeleted && r.SessionId == request.SessionId && r.Status == RecruitmentStatus.ACTIVE)
             .Include(r => r.Session)
                 .ThenInclude(s => s.Group)
+            .Include(r => r.Session.Bookings)
+            .Where(r => !r.Session.IsDeleted && r.Session.Status == SessionStatus.OPEN && r.Session.EndTime > now)
             .OrderByDescending(r => r.BroadcastAt)
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -24,10 +26,7 @@ public sealed class GetSessionRecruitmentQueryHandler(
             return Result.Success<GuestRecruitmentResponse?>(null);
         }
 
-        var confirmedCount = await bookingRepository.FindAll(b => b.RecruitmentId == recruitment.Id && b.Status == BookingStatus.CONFIRMED)
-            .CountAsync(cancellationToken);
-
-        var slotsRemaining = Math.Max(0, recruitment.SlotsNeeded - confirmedCount);
+        var slotsRemaining = RecruitmentRules.RemainingSlots(recruitment.Session, recruitment);
 
         var response = new GuestRecruitmentResponse(
             recruitment.Id,

@@ -5,6 +5,7 @@ using LegendsTeamVN.Core.Application.Messaging.CQRS;
 using LegendsTeamVN.Core.Identity.Abstractions;
 using LegendsTeamVN.Core.Utilities.Results;
 using Microsoft.EntityFrameworkCore;
+using LegendsTeamVN.BadmintonClub.Application.Features.Recruitments;
 
 namespace LegendsTeamVN.BadmintonClub.Application.Features.Sessions.GetById;
 
@@ -14,7 +15,7 @@ public sealed class GetSessionByIdQueryHandler(
 {
     public async Task<Result<SessionDetailResponse>> Handle(GetSessionByIdQuery request, CancellationToken cancellationToken)
     {
-        var session = await sessionRepository.FindAll(s => s.Id == request.SessionId)
+        var session = await sessionRepository.FindAll(s => !s.IsDeleted && s.Id == request.SessionId)
             .Include(s => s.Group)
             .Include(s => s.Bookings)
                 .ThenInclude(b => b.User)
@@ -28,11 +29,11 @@ public sealed class GetSessionByIdQueryHandler(
 
         var currentUserId = currentUserService.UserId;
         var myBooking = currentUserId.HasValue 
-            ? session.Bookings.FirstOrDefault(b => b.UserId == currentUserId.Value && b.Status != BookingStatus.ABSENT) 
+            ? session.Bookings.FirstOrDefault(b => !b.IsDeleted && b.UserId == currentUserId.Value && b.Status != BookingStatus.ABSENT)
             : null;
 
         var confirmedBookings = session.Bookings
-            .Where(b => b.Status == BookingStatus.CONFIRMED || b.Status == BookingStatus.CHECKED_IN)
+            .Where(RecruitmentRules.OccupiesSlot)
             .OrderBy(b => b.BookedAt)
             .Select(b => new SessionBookingResponse(
                 b.Id,
@@ -51,7 +52,7 @@ public sealed class GetSessionByIdQueryHandler(
             .ToList();
 
         var waitingBookings = session.Bookings
-            .Where(b => b.Status == BookingStatus.WAITING)
+            .Where(b => !b.IsDeleted && b.Status == BookingStatus.WAITING)
             .OrderBy(b => b.QueueOrder)
             .Select(b => new SessionBookingResponse(
                 b.Id,
@@ -70,7 +71,7 @@ public sealed class GetSessionByIdQueryHandler(
             .ToList();
 
         var activeRecruitment = session.Recruitments
-            .Where(r => r.Status == RecruitmentStatus.ACTIVE)
+            .Where(r => !r.IsDeleted && r.Status == RecruitmentStatus.ACTIVE && session.Status == SessionStatus.OPEN && session.EndTime > DateTime.UtcNow)
             .OrderByDescending(r => r.BroadcastAt)
             .Select(r => new GuestRecruitmentResponse(
                 r.Id,
@@ -80,7 +81,7 @@ public sealed class GetSessionByIdQueryHandler(
                 session.StartTime,
                 session.EndTime,
                 r.SlotsNeeded,
-                Math.Max(0, r.SlotsNeeded - session.Bookings.Count(b => b.RecruitmentId == r.Id && b.Status == BookingStatus.CONFIRMED)),
+                RecruitmentRules.RemainingSlots(session, r),
                 r.MinSkillLevel,
                 r.SharedCost,
                 r.ScanRadiusKm,

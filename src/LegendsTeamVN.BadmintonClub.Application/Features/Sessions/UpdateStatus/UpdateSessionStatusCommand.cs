@@ -3,4 +3,4 @@ using LegendsTeamVN.Core.Application.Messaging.CQRS;
 
 namespace LegendsTeamVN.BadmintonClub.Application.Features.Sessions.UpdateStatus;
 
-public sealed record UpdateSessionStatusCommand(Guid SessionId, SessionStatus Status) : ICommand;
+public sealed record UpdateSessionStatusCommand(Guid SessionId, SessionStatus Status, bool ConfirmRemainingNoShows = false) : ICommand;

@@ -1,4 +1,4 @@
-﻿using FluentAssertions;
+using FluentAssertions;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Sessions.Requests;
 using LegendsTeamVN.BadmintonClub.Application.Features.Recruitments.Create;
 using LegendsTeamVN.BadmintonClub.Application.Tests.Common;
@@ -16,7 +16,7 @@ public class UT_RECRUIT_01_CreateRecruitmentTests
     {
         // Arrange
         using var dbContext = TestDbContextFactory.Create();
-        var sessionRepo = new SessionRepository(dbContext);
+        var sessionRepo = TestDbContextFactory.CreateAttendanceSessionRepository(dbContext);
         var recruitmentRepo = new RecruitmentRepository(dbContext);
 
         var handler = new CreateRecruitmentCommandHandler(sessionRepo, recruitmentRepo);

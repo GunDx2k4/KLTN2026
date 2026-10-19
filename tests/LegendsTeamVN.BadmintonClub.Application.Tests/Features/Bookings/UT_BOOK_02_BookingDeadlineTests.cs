@@ -18,7 +18,7 @@ public class UT_BOOK_02_BookingDeadlineTests
     {
         // Arrange
         using var dbContext = TestDbContextFactory.Create();
-        var sessionRepo = new SessionRepository(dbContext);
+        var sessionRepo = TestDbContextFactory.CreateAttendanceSessionRepository(dbContext);
         var bookingRepo = new BookingRepository(dbContext);
         var userRepo = new UserRepository(dbContext);
         var currentUserService = Substitute.For<ICurrentUserService>();
@@ -67,14 +67,15 @@ public class UT_BOOK_02_BookingDeadlineTests
     {
         // Arrange
         using var dbContext = TestDbContextFactory.Create();
-        var sessionRepo = new SessionRepository(dbContext);
+        var sessionRepo = TestDbContextFactory.CreateAttendanceSessionRepository(dbContext);
         var bookingRepo = new BookingRepository(dbContext);
         var currentUserService = Substitute.For<ICurrentUserService>();
 
         var handler = new CancelBookingCommandHandler(
             sessionRepo,
             bookingRepo,
-            currentUserService);
+            currentUserService,
+            TimeProvider.System);
 
         var userId = Guid.NewGuid();
         currentUserService.UserId.Returns(userId);
@@ -106,6 +107,7 @@ public class UT_BOOK_02_BookingDeadlineTests
         // Assert: Chặn báo vắng khi quá hạn chốt giữ chỗ
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("Session.DeadlinePassed");
-        result.Error.Message.Should().Contain("Đã quá hạn chốt giữ chỗ, không thể báo vắng trực tiếp");
+        result.Error.Message.Should().Contain("Đã hết hạn thay đổi đăng ký");
+        booking.Status.Should().Be(BookingStatus.CONFIRMED);
     }
 }

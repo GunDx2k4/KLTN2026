@@ -33,8 +33,7 @@ public class MatchPlayerConfiguration : IEntityTypeConfiguration<MatchPlayer>
             .HasComment("Bên thi đấu của người chơi trận đấu. Miền giá trị: TEAM_A, TEAM_B.");
 
         builder.Property(p => p.CheckinCourtAt)
-            .HasColumnName("checkin_court_at")
-            .HasDefaultValueSql("now()");
+            .HasColumnName("checkin_court_at");
 
         builder.Property(p => p.IsManualSwapped)
             .HasColumnName("is_manual_swapped")

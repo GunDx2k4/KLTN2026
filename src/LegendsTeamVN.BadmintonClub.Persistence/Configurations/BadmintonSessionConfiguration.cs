@@ -8,6 +8,8 @@ public class BadmintonSessionConfiguration : IEntityTypeConfiguration<BadmintonS
 {
     public void Configure(EntityTypeBuilder<BadmintonSession> builder)
     {
+        builder.Property(s => s.NextProposalCheckAt).HasColumnName("next_proposal_check_at");
+        builder.HasIndex(s => s.NextProposalCheckAt).HasFilter("next_proposal_check_at IS NOT NULL AND NOT \"IsDeleted\"");
         builder.ToTable("badminton_session");
 
         builder.HasKey(s => s.Id);
@@ -51,6 +53,12 @@ public class BadmintonSessionConfiguration : IEntityTypeConfiguration<BadmintonS
         builder.Property(s => s.DeadlineBooking)
             .HasColumnName("deadline_booking")
             .IsRequired();
+
+        builder.Property(s => s.AttendanceCompletedAt).HasColumnName("attendance_completed_at");
+        builder.Property(s => s.AttendanceCompletedBy).HasColumnName("attendance_completed_by");
+        builder.Property(s => s.RotationStartedAt).HasColumnName("rotation_started_at");
+        builder.Property(s => s.RotationStartedBy).HasColumnName("rotation_started_by");
+        builder.Property(s => s.RotationVersion).HasColumnName("rotation_version").HasDefaultValue(0L);
 
         builder.Property(s => s.ShuttlecockUsed)
             .HasColumnName("shuttlecock_used")
