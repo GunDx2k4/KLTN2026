@@ -55,15 +55,35 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<RotationOutboxWorker>();
         services.AddHostedService<RotationSchedulingWorker>();
 
-         // Khởi tạo Firebase Admin SDK
+        // Khởi tạo Firebase Admin SDK
+        var credentialsJson = configuration["Firebase:CredentialsJson"];
         var credentialsPath = configuration["Firebase:CredentialsPath"] ?? "sports-venue-cb204-firebase-adminsdk-fbsvc-7f5ec12fb1.json";
-        var fullPath = Path.Combine(AppContext.BaseDirectory, credentialsPath);
-        if (File.Exists(fullPath) && FirebaseApp.DefaultInstance == null)
+
+        if (FirebaseApp.DefaultInstance == null)
         {
-            FirebaseApp.Create(new AppOptions
+#pragma warning disable CS0618
+            if (!string.IsNullOrWhiteSpace(credentialsJson))
             {
-                Credential = GoogleCredential.FromFile(fullPath)
-            });
+                FirebaseApp.Create(new AppOptions
+                {
+                    Credential = GoogleCredential.FromJson(credentialsJson)
+                });
+            }
+            else
+            {
+                var fullPath = Path.IsPathRooted(credentialsPath)
+                    ? credentialsPath
+                    : Path.Combine(AppContext.BaseDirectory, credentialsPath);
+
+                if (File.Exists(fullPath))
+                {
+                    FirebaseApp.Create(new AppOptions
+                    {
+                        Credential = GoogleCredential.FromFile(fullPath)
+                    });
+                }
+            }
+#pragma warning restore CS0618
         }
         // Đăng ký Service Notification
         services.AddScoped<INotificationService, FirebaseNotificationService>();

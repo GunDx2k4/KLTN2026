@@ -18,6 +18,8 @@ services:
       - MasstransitConfiguration__Port=${RABBITMQ_PORT}
       - MasstransitConfiguration__UserName=${RABBITMQ_USER}
       - MasstransitConfiguration__Password=${RABBITMQ_PASS} 
+    volumes:
+      - ./sports-venue-cb204-firebase-adminsdk-fbsvc-7f5ec12fb1.json:/app/sports-venue-cb204-firebase-adminsdk-fbsvc-7f5ec12fb1.json:ro
     networks:
       - khoaluan
 

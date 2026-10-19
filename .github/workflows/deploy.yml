@@ -16,6 +16,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      - name: Setup Firebase Credentials
+        env:
+          FIREBASE_CREDENTIALS_JSON: ${{ secrets.FIREBASE_CREDENTIALS_JSON }}
+        run: |
+          if [ -n "$FIREBASE_CREDENTIALS_JSON" ]; then
+            if echo "$FIREBASE_CREDENTIALS_JSON" | grep -qv '^{' && echo "$FIREBASE_CREDENTIALS_JSON" | base64 -d > /dev/null 2>&1; then
+              echo "$FIREBASE_CREDENTIALS_JSON" | base64 -d > src/Hosts/LegendsTeamVN.BadmintonClub.API/sports-venue-cb204-firebase-adminsdk-fbsvc-7f5ec12fb1.json
+            else
+              echo "$FIREBASE_CREDENTIALS_JSON" > src/Hosts/LegendsTeamVN.BadmintonClub.API/sports-venue-cb204-firebase-adminsdk-fbsvc-7f5ec12fb1.json
+            fi
+          fi
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -42,6 +54,18 @@ jobs:
       
       - name: Convert Image Name to Lowercase
         run: echo "IMAGE_NAME_LC=$(echo ${{ env.IMAGE_NAME }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
+      - name: Setup Firebase Credentials
+        env:
+          FIREBASE_CREDENTIALS_JSON: ${{ secrets.FIREBASE_CREDENTIALS_JSON }}
+        run: |
+          if [ -n "$FIREBASE_CREDENTIALS_JSON" ]; then
+            if echo "$FIREBASE_CREDENTIALS_JSON" | grep -qv '^{' && echo "$FIREBASE_CREDENTIALS_JSON" | base64 -d > /dev/null 2>&1; then
+              echo "$FIREBASE_CREDENTIALS_JSON" | base64 -d > src/Hosts/LegendsTeamVN.BadmintonClub.API/sports-venue-cb204-firebase-adminsdk-fbsvc-7f5ec12fb1.json
+            else
+              echo "$FIREBASE_CREDENTIALS_JSON" > src/Hosts/LegendsTeamVN.BadmintonClub.API/sports-venue-cb204-firebase-adminsdk-fbsvc-7f5ec12fb1.json
+            fi
+          fi
         
       - name: Log in to the Container registry
         uses: docker/login-action@v3
@@ -92,15 +116,29 @@ jobs:
         with:
           files: |
             src/Hosts/LegendsTeamVN.BadmintonClub.Migrator/Migrations/**
+
+      - name: Prepare Firebase Credentials for Server
+        env:
+          FIREBASE_CREDENTIALS_JSON: ${{ secrets.FIREBASE_CREDENTIALS_JSON }}
+        run: |
+          if [ -n "$FIREBASE_CREDENTIALS_JSON" ]; then
+            if echo "$FIREBASE_CREDENTIALS_JSON" | grep -qv '^{' && echo "$FIREBASE_CREDENTIALS_JSON" | base64 -d > /dev/null 2>&1; then
+              echo "$FIREBASE_CREDENTIALS_JSON" | base64 -d > sports-venue-cb204-firebase-adminsdk-fbsvc-7f5ec12fb1.json
+            else
+              echo "$FIREBASE_CREDENTIALS_JSON" > sports-venue-cb204-firebase-adminsdk-fbsvc-7f5ec12fb1.json
+            fi
+          else
+            touch sports-venue-cb204-firebase-adminsdk-fbsvc-7f5ec12fb1.json
+          fi
       
-      - name: Copy docker-compose.yml to server
+      - name: Copy deployment files to server
         uses: appleboy/scp-action@master
         with:
           host: ${{ secrets.SERVER_HOST }}
           port: ${{ secrets.SERVER_PORT }}
           username: ${{ secrets.SERVER_USERNAME }}
           key: ${{ secrets.SERVER_SSH_KEY }}
-          source: "docker-compose.yml"
+          source: "docker-compose.yml,sports-venue-cb204-firebase-adminsdk-fbsvc-7f5ec12fb1.json"
           target: "~/badmintonclub/"
 
       - name: Deploy to self-hosted server via SSH
@@ -116,6 +154,7 @@ jobs:
           script: |
             mkdir -p ~/badmintonclub
             cd ~/badmintonclub
+            chmod 600 sports-venue-cb204-firebase-adminsdk-fbsvc-7f5ec12fb1.json 2>/dev/null || true
             
             # Convert image name to lowercase as required by GHCR
             export IMAGE_NAME=$(echo "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')

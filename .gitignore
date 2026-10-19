@@ -480,3 +480,7 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Firebase Admin SDK Credentials
+*firebase-adminsdk*.json
+sports-venue-cb204-firebase-adminsdk-*.json
