@@ -1,15 +1,17 @@
 ---
-trigger: always_on
-description: "Kiểm soát phân quyền đa nhóm động (Dynamic Contextual Multi-Group RBAC), GroupPermissions, Redis cache quyền hạn, và ngăn chặn Global Tenant Filter."
+trigger: glob
+globs: "src/LegendsTeamVN.BadmintonClub.Presentation/**, src/LegendsTeamVN.BadmintonClub.Application/**"
+description: "Kiem soat phan quyen da nhom dong (Dynamic Contextual Multi-Group RBAC), GroupPermissions, Redis cache quyen han, va endpoint route guards."
 ---
 
-# 🛡️ Quy Tắc Phân Quyền Đa Nhóm Động (Dynamic Contextual Multi-Group RBAC)
+# Quy Tac Phan Quyen Da Nhom Dong (Dynamic Contextual Multi-Group RBAC)
 
-> **MỤC TIÊU BẮT BUỘC**: Hệ thống cầu lông phong trào hoạt động theo mô hình **Đa Nhóm Linh Hoạt (Multi-Club Ecosystem)**: 1 User có thể tham gia $N$ Câu lạc bộ với $N$ vai trò và quyền hạn hoàn toàn khác nhau. AI Agent tuyệt đối không áp dụng mô hình Single-Tenant hoặc hard-code quyền hạn.
+> [!IMPORTANT]
+> He thong cau long phong trao hoat dong theo mo hinh **Da Nhom Linh Hoat (Multi-Club Ecosystem)**: 1 User co the tham gia N Cau lac bo voi N vai tro va quyen han hoan toan khac nhau. AI Agent tuyet doi khong ap dung mo hinh Single-Tenant hoac hard-code quyen han.
 
 ---
 
-## 1. Bản Chất Nghiệp Vụ Cốt Lõi: 1 User — Nhiều Nhóm — Nhiều Vai Trò
+## 1. Ban Chat Nghiep Vu Cot Loi: 1 User — Nhieu Nhom — Nhieu Vai Tro
 
 ```
                           ┌────────────────────────┐
@@ -19,27 +21,27 @@ description: "Kiểm soát phân quyền đa nhóm động (Dynamic Contextual M
                                       │
             ┌─────────────────────────┼─────────────────────────┐
             ▼                         ▼                         ▼
-   [CLB Cầu Lông Hà Đông]     [CLB Cầu Lông Ba Đình]    [CLB Cầu Lông Đống Đa]
-   - Vai trò: HOST            - Vai trò: THÀNH VIÊN     - Vai trò: THỦ QUỸ
-   - Quyền: 100% quyền hạn    - Quyền: Đăng ký, xem lịch- Quyền: Quản lý sổ quỹ
+   [CLB Cau Long Ha Dong]     [CLB Cau Long Ba Dinh]    [CLB Cau Long Dong Da]
+   - Vai tro: HOST            - Vai tro: THANH VIEN     - Vai tro: THU QUY
+   - Quyen: 100% quyen han    - Quyen: Dang ky, xem lich- Quyen: Quan ly so quy
 ```
 
-### 1.1. Các Nguyên Tắc Bất Biến:
-1. **Tài khoản toàn cục (Global Identity)**: Người dùng đăng nhập chỉ tạo 1 tài khoản duy nhất `app_user` và nhận JWT định danh toàn cục (`sub` / `userId`).
-2. **Quan hệ N-N độc lập (`group_member`)**:
-   - Một người dùng có thể tham gia $N$ câu lạc bộ khác nhau.
-   - Trong mỗi câu lạc bộ, người dùng có một bản ghi thành viên riêng với `RoleId` (`GroupRole`) và trạng thái (`ClubMemberStatus`) độc lập.
-   - Trạng thái `BLOCKED` ở CLB A không làm ảnh hưởng đến quyền của người dùng ở CLB B.
-3. **Quyền hạn gắn liền với ngữ cảnh nhóm (Contextual Permissions)**:
-   - Cùng một người dùng thực hiện một hành động (ví dụ: tạo buổi chơi `SessionCreate`):
-     * Nếu thực hiện trên **CLB Hà Đông** (nơi họ là Host) ➔ **Được phép (200 OK)**.
-     * Nếu thực hiện trên **CLB Ba Đình** (nơi họ chỉ là Thành viên) ➔ **Bị từ chối (403 Forbidden)**.
+### 1.1. Cac Nguyen Tac Bat Bien:
+1. **Tai khoan toan cuc (Global Identity):** Nguoi dung dang nhap chi tao 1 tai khoan duy nhat `app_user` va nhan JWT dinh danh toan cuc (`sub` / `userId`).
+2. **Quan he N-N doc lap (`group_member`):**
+   - Mot nguoi dung co the tham gia N cau lac bo khac nhau.
+   - Trong moi cau lac bo, nguoi dung co mot ban ghi thanh vien rieng voi `RoleId` (`GroupRole`) va trang thai (`ClubMemberStatus`) doc lap.
+   - Trang thai `BLOCKED` o CLB A khong lam anh huong den quyen cua nguoi dung o CLB B.
+3. **Quyen han gan lien voi ngu canh nhom (Contextual Permissions):**
+   - Cung mot nguoi dung thuc hien mot hanh dong (vi du: tao buoi choi `SessionCreate`):
+     - Neu thuc hien tren **CLB Ha Dong** (noi ho la Host) -> **Duoc phep (200 OK)**.
+     - Neu thuc hien tren **CLB Ba Dinh** (noi ho chi la Thanh vien) -> **Bi tu choi (403 Forbidden)**.
 
 ---
 
-## 2. Cơ Chế Thẩm Tra Quyền Động (Dynamic Permission Evaluation)
+## 2. Co Che Tham Tra Quyen Dong (Dynamic Permission Evaluation)
 
-Tầng Presentation sử dụng `GroupPermissionHandler` để thẩm tra quyền dựa trên **cặp định danh (UserId, GroupId)** của từng Request cụ thể:
+Tang Presentation su dung `GroupPermissionHandler` de tham tra quyen dua tren **cap dinh danh (UserId, GroupId)** cua tung Request cu the:
 
 ```
 Client Request ──► [Endpoint .RequireGroupPermission(code)]
@@ -49,21 +51,21 @@ Client Request ──► [Endpoint .RequireGroupPermission(code)]
                           │
      ┌────────────────────┴────────────────────┐
      ▼                                         ▼
-1. Lấy UserId từ JWT Claims          2. Lấy GroupId từ RouteValues
-   (sub / NameIdentifier)               ({id}, {groupId}, {clubId}) hoặc X-Group-Id
+1. Lay UserId tu JWT Claims          2. Lay GroupId tu RouteValues
+   (sub / NameIdentifier)               ({id}, {groupId}, {clubId}) hoac X-Group-Id
      │                                         │
      └────────────────────┬────────────────────┘
                           ▼
-        [3. Kiểm tra IGroupAuthorizationService]
+        [3. Kiem tra IGroupAuthorizationService]
                           │
            ┌──────────────┴──────────────┐
            ▼                             ▼
-   [Đã có trong Redis Cache?]      [Chưa có trong Cache]
+   [Da co trong Redis Cache?]      [Chua co trong Cache]
    Key: group:perm:{userId}:{groupId}      Query BadmintonDbContext.GroupMembers
            │                                 Include(RoleEntity.RolePermissions)
-           │                                 Lưu Redis Cache (TTL: 10 phút)
+           │                                 Luu Redis Cache (TTL: 10 phut)
            ▼                                     │
-   [Kiểm tra chứa permission code?] ◄────────────┘
+   [Kiem tra chua permission code?] ◄────────────┘
            │
      ┌─────┴─────┐
      ▼           ▼
@@ -71,37 +73,37 @@ Client Request ──► [Endpoint .RequireGroupPermission(code)]
 Succeed(req) 403 Forbidden
 ```
 
-### 2.1. Cú pháp bảo vệ Endpoint bắt buộc:
+### 2.1. Cu phap bao ve Endpoint bat buoc:
 ```csharp
 group.MapPost("{id:guid}/sessions", CreateSession)
     .WithName("CreateSession")
-    .WithSummary("Tạo buổi sinh hoạt mới cho câu lạc bộ")
+    .WithSummary("Tao buoi sinh hoat moi cho cau lac bo")
     .RequireGroupPermission(GroupPermissions.Operations.SessionCreate);
 ```
 
-* **CẤM hard-code chuỗi quyền** (ví dụ: cấm dùng `"SessionCreate"` hay `"session.create"`). Bắt buộc phải sử dụng hằng số từ `LegendsTeamVN.BadmintonClub.Domain.Constants.GroupPermissions`.
+- **CAM hard-code chuoi quyen** (vi du: cam dung `"SessionCreate"` hay `"session.create"`). Bat buoc phai su dung hang so tu `LegendsTeamVN.BadmintonClub.Domain.Constants.GroupPermissions`.
 
 ---
 
-## 3. Quy Chuẩn Truy Vấn & Lọc Dữ Liệu Tầng Persistence
+## 3. Quy Chuan Truy Van & Loc Du Lieu Tang Persistence
 
 > [!IMPORTANT]
-> **CẤM cài đặt Global Query Filter ép cứng `tenant_id` trên toàn DbContext**:
-> Vì người dùng cần:
-> 1. Xem danh sách tất cả các CLB mình đang tham gia (`GET /api/v1/users/me/clubs`).
-> 2. Tìm kiếm và xem thông tin các CLB công khai để xin gia nhập (`GET /api/v1/clubs`).
-> 3. Xem lịch sử thi đấu và thống kê cá nhân xuyên suốt mọi CLB.
+> **CAM cai dat Global Query Filter ep cung `tenant_id` tren toan DbContext**:
+> Vi nguoi dung can:
+> 1. Xem danh sach tat ca cac CLB minh dang tham gia (`GET /api/v1/users/me/clubs`).
+> 2. Tim kiem va xem thong tin cac CLB cong khai de xin gia nhap (`GET /api/v1/clubs`).
+> 3. Xem lich su thi dau va thong ke ca nhan xuyen suot moi CLB.
 
-### 3.1. Quy tắc lọc dữ liệu theo ngữ cảnh:
-- **Tài nguyên thuộc phạm vi 1 CLB cụ thể** (Buổi chơi `BadmintonSession`, Sổ quỹ `GroupLedgerEntry`, Lịch sinh hoạt `GroupSchedule`, Danh sách thành viên `GroupMember`):
-  * Handler hoặc Repository **bắt buộc** phải có điều kiện lọc tường minh theo `GroupId`:
+### 3.1. Quy tac loc du lieu theo ngu canh:
+- **Tai nguyen thuoc pham vi 1 CLB cu the** (Buoi choi `BadmintonSession`, So quy `GroupLedgerEntry`, Lich sinh hoat `GroupSchedule`, Danh sach thanh vien `GroupMember`):
+  - Handler hoac Repository **bat buoc** phai co dieu kien loc tuong minh theo `GroupId`:
     ```csharp
     var sessions = await sessionRepository.FindListAsync(
         s => s.GroupId == request.GroupId && s.Status == SessionStatus.OPEN,
         cancellationToken);
     ```
-- **Tài nguyên cá nhân của người dùng** (Lịch sử đặt slot `SessionBooking`, Thông báo `Notification`, Điểm Elo):
-  * Truy vấn theo `userId`:
+- **Tai nguyen ca nhan cua nguoi dung** (Lich su dat slot `SessionBooking`, Thong bao `Notification`, Diem Elo):
+  - Truy van theo `userId`:
     ```csharp
     var bookings = await bookingRepository.FindListAsync(
         b => b.UserId == currentUserId,
@@ -110,40 +112,40 @@ group.MapPost("{id:guid}/sessions", CreateSession)
 
 ---
 
-## 4. Danh Mục 18 Quyền Hạn Chuẩn (`GroupPermissions`)
+## 4. Danh Muc 18 Quyen Han Chuan (`GroupPermissions`)
 
-Tất cả quyền hạn nhóm phải sử dụng hằng số từ `LegendsTeamVN.BadmintonClub.Domain.Constants.GroupPermissions`:
+Tat ca quyen han nhom phai su dung hang so tu `LegendsTeamVN.BadmintonClub.Domain.Constants.GroupPermissions`:
 
-### 4.1. Phân hệ Vận hành sân (Operations - 8 quyền):
-- `GroupPermissions.Operations.ScheduleManage`: Quản lý khung giờ sinh hoạt cố định.
-- `GroupPermissions.Operations.SessionView`: Xem danh sách các buổi sinh hoạt.
-- `GroupPermissions.Operations.SessionCreate`: Tạo mới buổi sinh hoạt cầu lông.
-- `GroupPermissions.Operations.SessionUpdate`: Cập nhật thông tin buổi sinh hoạt.
-- `GroupPermissions.Operations.SessionDelete`: Hủy hoặc xóa buổi sinh hoạt.
-- `GroupPermissions.Operations.BookingManage`: Quản lý danh sách đăng ký tham gia.
-- `GroupPermissions.Operations.MatchManage`: Quản lý trận đấu, điểm danh, xoay tua sân.
-- `GroupPermissions.Operations.RecruitManage`: Quản lý đăng tin tuyển thêm khách vãng lai.
+### 4.1. Phan he Van hanh san (Operations - 8 quyen):
+- `GroupPermissions.Operations.ScheduleManage`: Quan ly khung gio sinh hoat co dinh.
+- `GroupPermissions.Operations.SessionView`: Xem danh sach cac buoi sinh hoat.
+- `GroupPermissions.Operations.SessionCreate`: Tao moi buoi sinh hoat cau long.
+- `GroupPermissions.Operations.SessionUpdate`: Cap nhat thong tin buoi sinh hoat.
+- `GroupPermissions.Operations.SessionDelete`: Huy hoac xoa buoi sinh hoat.
+- `GroupPermissions.Operations.BookingManage`: Quan ly danh sach dang ky tham gia.
+- `GroupPermissions.Operations.MatchManage`: Quan ly tran dau, diem danh, xoay tua san.
+- `GroupPermissions.Operations.RecruitManage`: Quan ly dang tin tuyen them khach vang lai.
 
-### 4.2. Phân hệ Tài chính & Sổ quỹ (Finance - 5 quyền):
-- `GroupPermissions.Finance.LedgerView`: Xem sổ quỹ thu - chi của nhóm.
-- `GroupPermissions.Finance.LedgerManage`: Ghi nhận khoản thu/chi thủ công vào sổ quỹ.
-- `GroupPermissions.Finance.FeeView`: Xem cấu hình quy tắc thu phí.
-- `GroupPermissions.Finance.FeeManage`: Điều chỉnh biểu phí hội viên, vãng lai, tiền cầu.
-- `GroupPermissions.Finance.BankManage`: Cấu hình tài khoản ngân hàng nhận chuyển khoản VietQR.
+### 4.2. Phan he Tai chinh & So quy (Finance - 5 quyen):
+- `GroupPermissions.Finance.LedgerView`: Xem so quy thu - chi cua nhom.
+- `GroupPermissions.Finance.LedgerManage`: Ghi nhan khoan thu/chi thu cong vao so quy.
+- `GroupPermissions.Finance.FeeView`: Xem cau hinh quy tac thu phi.
+- `GroupPermissions.Finance.FeeManage`: Dieu chinh bieu phi hoi vien, vang lai, tien cau.
+- `GroupPermissions.Finance.BankManage`: Cau hinh tai khoan ngan hang nhan chuyen khoan VietQR.
 
-### 4.3. Phân hệ Quản trị thành viên (Member - 5 quyền):
-- `GroupPermissions.Member.View`: Xem danh sách thành viên trong nhóm.
-- `GroupPermissions.Member.JoinRequestManage`: Duyệt hoặc từ chối yêu cầu xin gia nhập.
-- `GroupPermissions.Member.RoleManage`: Phân quyền, tạo vai trò tùy chỉnh và gán vai trò.
-- `GroupPermissions.Member.Remove`: Mời thành viên rời khỏi nhóm.
-- `GroupPermissions.Member.InfoUpdate`: Cập nhật thông tin, biệt danh thành viên trong nhóm.
+### 4.3. Phan he Quan tri thanh vien (Member - 5 quyen):
+- `GroupPermissions.Member.View`: Xem danh sach thanh vien trong nhom.
+- `GroupPermissions.Member.JoinRequestManage`: Duyet hoac tu choi yeu cau xin gia nhap.
+- `GroupPermissions.Member.RoleManage`: Phan quyen, tao vai tro tuy chinh va gan vai tro.
+- `GroupPermissions.Member.Remove`: Moi thanh vien roi khoi nhom.
+- `GroupPermissions.Member.InfoUpdate`: Cap nhat thong tin, biet danh thanh vien trong nhom.
 
 ---
 
-## 5. Danh Mục Kiểm Tra An Toàn (Security Checklist)
+## 5. Danh Muc Kiem Tra An Toan (Security Checklist)
 
-- [ ] Endpoint thao tác trên tài nguyên nhóm luôn có route parameter `{id:guid}` hoặc `{groupId:guid}` hoặc `{clubId:guid}`.
-- [ ] Endpoint được gắn `.RequireGroupPermission(GroupPermissions.<Module>.<Permission>)`.
-- [ ] Handler nạp dữ liệu luôn kiểm tra sự tồn tại của tài nguyên thuộc đúng `GroupId`.
-- [ ] Khi thay đổi vai trò hoặc quyền của thành viên trong nhóm, bắt buộc gọi:
+- [ ] Endpoint thao tac tren tai nguyen nhom luon co route parameter `{id:guid}` hoac `{groupId:guid}` hoac `{clubId:guid}`.
+- [ ] Endpoint duoc gan `.RequireGroupPermission(GroupPermissions.<Module>.<Permission>)`.
+- [ ] Handler nap du lieu luon kiem tra su ton tai cua tai nguyen thuoc dung `GroupId`.
+- [ ] Khi thay doi vai tro hoac quyen cua thanh vien trong nhom, bat buoc goi:
   `groupAuthService.InvalidateUserPermissionsCacheAsync(userId, groupId)`.

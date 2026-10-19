@@ -1,76 +1,78 @@
 ---
-trigger: always_on
-description: "Bắt buộc tuân thủ ranh giới Clean Architecture 4 tầng, Rich Domain Model (CẤM Anemic Model, private set, parameterless ctor), CQRS Pure Orchestration (sealed handlers, sealed validators), và Minimal API Endpoints."
+trigger: glob
+globs: "src/**, tests/**"
+description: "Clean Architecture 4-tier boundaries, Rich Domain Model vs Pure Orchestration, Entity encapsulation, and NetArchTest compliance."
 ---
 
-# 🏛️ Phân Định Trách Nhiệm Tầng Clean Architecture (Domain vs Application vs Presentation)
+# Phan Dinh Trach Nhiem Tang Clean Architecture (Domain vs Application vs Presentation)
 
-> **MỤC TIÊU**: Ngăn chặn triệt để tình trạng **"Đặt nhầm logic nghiệp vụ"** và **"Phá vỡ ranh giới phân tầng"** (Boundary Leakage). Toàn bộ AI Agent và kỹ sư phần mềm khi viết code trong dự án **LegendsTeamVN.BadmintonClub** bắt buộc phải tuân thủ nghiêm ngặt ma trận và các quy tắc dưới đây.
+> [!IMPORTANT]
+> Ngan chan triet de tinh trang "Dat nham logic nghiep vu" va "Pha vo ranh gioi phan tang" (Boundary Leakage). Toan bo AI Agent va ky su phan mem khi viet code trong du an LegendsTeamVN.BadmintonClub bat buoc phai tuan thu nghiem ngat ma tran va cac quy tac duoi day.
 
 ---
 
-## 1. Bản Đồ Trách Nhiệm Cốt Lõi (Core Responsibility Map)
+## 1. Ban Do Trach Nhiem Cot Loi (Core Responsibility Map)
 
 ```
 [Presentation] ───► [Application (Use Cases)] ───► [Domain (Business Core)]
-  - Nhận HTTP Request   - Điều phối luồng (Orchestrate)   - Nghiệp vụ thuần khiết
-  - Format Response      - Nạp/Lưu Repository              - Bảo vệ tính toàn vẹn (Invariants)
-  - RBAC Route Guard    - Gửi Event/Notification          - Chuyển đổi trạng thái (State Transition)
-  - Gọi MediatR Send     - Kiểm tra quyền & Idempotency    - Tính toán tiền bạc/điểm số nội bộ
+  - Nhan HTTP Request   - Dieu phoi luong (Orchestrate)   - Nghiep vu thuan khiet
+  - Format Response      - Nap/Luu Repository              - Bao ve tinh toan ven (Invariants)
+  - RBAC Route Guard    - Gui Event/Notification          - Chuyen doi trang thai (State Transition)
+  - Goi MediatR Send     - Kiem tra quyen & Idempotency    - Tinh toan tien bac/diem so noi bo
 ```
 
 ---
 
-## 2. Bảng Ma Trận: "Logic này phải đặt ở đâu?"
+## 2. Bang Ma Tran: "Logic nay phai dat o dau?"
 
-| Loại Logic | Thuộc Tầng | Giải thích chi tiết & Trách nhiệm | Ví dụ cụ thể trong dự án |
+| Loai Logic | Thuoc Tang | Giai thich chi tiet & Trach nhiem | Vi du cu the trong du an |
 | :--- | :---: | :--- | :--- |
-| **Quy tắc chuyển đổi trạng thái (State Transition)** | **Domain** | Entity tự quyết định khi nào được đổi trạng thái, cập nhật timestamp, và ai đổi. | `joinRequest.Approve(approverId)`<br>`session.Cancel(reason)`<br>`booking.CheckIn()` |
-| **Bảo vệ tính toàn vẹn (Business Invariants)** | **Domain** | Không cho phép entity rơi vào trạng thái sai nghiệp vụ. Kiểm tra logic ngay trong method. | Kiểm tra: Buổi đã kết thúc thì không được hủy; số người không vượt quá MaxPlayers. |
-| **Tính toán nghiệp vụ (Business Calculations)** | **Domain** | Công thức tính tiền, chia tiền sân, tính điểm Elo, tính hội phí, chiết khấu. | `feeRule.CalculateMemberFee(...)`<br>`session.CalculateTotalCost(...)` |
-| **Validation định dạng dữ liệu (Input Format)** | **Application** | Kiểm tra chuỗi rỗng, email hợp lệ, regex, độ dài tối đa bằng FluentValidation. | `RuleFor(x => x.Name).NotEmpty()` trong `CreateClubCommandValidator` |
-| **Điều phối luồng công việc (Orchestration)** | **Application** | Nạp Entity -> Gọi method Entity -> Lưu Repository -> Bắn Event/SignalR. | `ApproveJoinRequestCommandHandler` |
-| **Kiểm tra quyền & Ngữ cảnh (Security/Context)** | **Presentation & Application** | Kiểm tra JWT Claims, route parameter `groupId`, thẩm tra quyền hạn `GroupPermissions`. | `.RequireGroupPermission(...)`<br>`currentUserService.UserId` |
-| **Giao tiếp dịch vụ ngoại vi (I/O & Third-party)**| **Application / Infra**| Gửi FCM Push Notification, gửi Email, gọi Cổng thanh toán, Redis cache. | `notificationService.SendAsync(...)` |
-| **Truy vấn & Lưu trữ dữ liệu (SQL / EF Core)** | **Persistence** | Cấu hình EntityTypeConfiguration, LINQ, Include bảng phụ, SaveChangesAsync. | `clubRepository.FindSingleAsync(...)` |
+| **Quy tac chuyen doi trang thai (State Transition)** | **Domain** | Entity tu quyet dinh khi nao duoc doi trang thai, cap nhat timestamp, va ai doi. | `joinRequest.Approve(approverId)`<br>`session.Cancel(reason)`<br>`booking.CheckIn()` |
+| **Bao ve tinh toan ven (Business Invariants)** | **Domain** | Khong cho phep entity roi vao trang thai sai nghiep vu. Kiem tra logic ngay trong method. | Kiem tra: Buoi da ket thuc thi khong duoc huy; so nguoi khong vuot qua MaxPlayers. |
+| **Tinh toan nghiep vu (Business Calculations)** | **Domain** | Cong thuc tinh tien, chia tien san, tinh diem Elo, tinh hoi phi, chiet khau. | `feeRule.CalculateMemberFee(...)`<br>`session.CalculateTotalCost(...)` |
+| **Validation dinh dang du lieu (Input Format)** | **Application** | Kiem tra chuoi rong, email hop le, regex, do dai toi da bang FluentValidation. | `RuleFor(x => x.Name).NotEmpty()` trong `CreateClubCommandValidator` |
+| **Dieu phoi luong cong viec (Orchestration)** | **Application** | Nap Entity -> Goi method Entity -> Luu Repository -> Ban Event/SignalR. | `ApproveJoinRequestCommandHandler` |
+| **Kiem tra quyen & Ngu canh (Security/Context)** | **Presentation & Application** | Kiem tra JWT Claims, route parameter `groupId`, tham tra quyen han `GroupPermissions`. | `.RequireGroupPermission(...)`<br>`currentUserService.UserId` |
+| **Giao tiep dich vu ngoai vi (I/O & Third-party)**| **Application / Infra**| Gui FCM Push Notification, gui Email, goi Cong thanh toan, Redis cache. | `notificationService.SendAsync(...)` |
+| **Truy van & Luu tru du lieu (SQL / EF Core)** | **Persistence** | Cau hinh EntityTypeConfiguration, LINQ, Include bang phu, SaveChangesAsync. | `clubRepository.FindSingleAsync(...)` |
 
 ---
 
-## 3. Quy Tắc Bất Biến & Chống Lỗi Kiến Trúc (Anti-Patterns)
+## 3. Quy Tac Bat Bien & Chong Loi Kien Truc (Anti-Patterns)
 
-### 3.1. Tầng Domain: Rich Domain Model (CẤM Anemic Domain Model)
-* **CẤM**: Entity chỉ có `{ get; set; }` để Handler tự ý gán thuộc tính bên ngoài.
-* **CẤM**: Domain phụ thuộc vào `DbContext`, Repository, hay bất kỳ I/O bên ngoài nào.
-* **CẤM**: Public setters trên các thuộc tính của Entity.
-* **BẮT BUỘC**:
-  * Các thuộc tính của Entity phải có `private set;` hoặc `protected set;`.
-  * Bắt buộc có **parameterless constructor** (`private` hoặc `protected`) để ORM reflection hoạt động.
-  * Mọi hành vi thay đổi dữ liệu phải thông qua **phương thức nghiệp vụ** của chính Entity.
-  * Domain Events bắt buộc là `sealed class` và có hậu tố `DomainEvent`.
+### 3.1. Tang Domain: Rich Domain Model (CAM Anemic Domain Model)
+- **CAM:** Entity chi co `{ get; set; }` de Handler tu y gan thuoc tinh ben ngoai.
+- **CAM:** Domain phu thuoc vao `DbContext`, Repository, hay bat ky I/O ben ngoai nao.
+- **CAM:** Public setters tren cac thuoc tinh cua Entity.
+- **BAT BUOC:**
+  - Cac thuoc tinh cua Entity phai co `private set;` hoac `protected set;`.
+  - Bat buoc co **parameterless constructor** (`private` hoac `protected`) de ORM reflection hoat dong.
+  - Moi hanh vi thay doi du lieu phai thong qua **phuong thuc nghiep vu** cua chinh Entity.
+  - Domain Events bat buoc la `sealed class` va co hau to `DomainEvent`.
 
 ```csharp
-// ❌ SAI HOÀN TOÀN (Anemic Domain - vi phạm NetArchTest và Clean Architecture):
+// [FAIL] SAI HOAN TOAN (Anemic Domain - vi pham NetArchTest va Clean Architecture):
 public class SessionBooking : Entity<Guid>
 {
     public BookingStatus Status { get; set; }
     public DateTime? CheckinAt { get; set; }
 }
-// Ngoài Handler tự ý gán:
+// Ngoai Handler tu y gan:
 booking.Status = BookingStatus.CHECKED_IN;
 booking.CheckinAt = DateTime.UtcNow;
 
-// ✅ ĐÚNG KIẾN TRÚC (Rich Domain Model - Đóng gói hoàn hảo):
+// [OK] DUNG KIEN TRUC (Rich Domain Model - Dong goi hoan hao):
 public class SessionBooking : Entity<Guid>
 {
     public BookingStatus Status { get; private set; }
     public DateTime? CheckinAt { get; private set; }
 
-    protected SessionBooking() { } // Bắt buộc cho ORM Reflection
+    protected SessionBooking() { } // Bat buoc cho ORM Reflection
 
     public void CheckIn()
     {
         if (Status != BookingStatus.CONFIRMED)
-            throw new DomainException("Chỉ người chơi có vé CONFIRMED mới được điểm danh.");
+            throw new DomainException("Chi nguoi choi co ve CONFIRMED moi duoc diem danh.");
 
         Status = BookingStatus.CHECKED_IN;
         CheckinAt = DateTime.UtcNow;
@@ -78,20 +80,20 @@ public class SessionBooking : Entity<Guid>
 }
 ```
 
-### 3.2. Tầng Application: Bộ Điều Phối Thuần Túy (Pure Orchestrator)
-* **CẤM**: Viết logic tính toán nghiệp vụ lõi, if/else kiểm tra quy tắc sinh hoạt CLB trong Handler.
-* **CẤM**: Gọi trực tiếp SQL hay `BadmintonDbContext`. Mọi truy cập phải qua Repository Interface.
-* **CẤM**: Quên từ khóa `sealed` trên Handler hoặc Validator.
-* **BẮT BUỘC (Quy trình 6 bước trong Handler)**:
-  1. *Ngữ cảnh*: Kiểm tra `currentUserService.UserId` hoặc xác thực đầu vào.
-  2. *Lấy dữ liệu*: Gọi Repository để nạp Aggregate Root/Entity lên bộ nhớ.
-  3. *Kiểm tra tồn tại*: Trả về `Result.Failure(Error.NotFound(...))` nếu không tìm thấy.
-  4. *Ủy quyền nghiệp vụ*: Gọi phương thức nghiệp vụ trên chính Entity (ví dụ: `club.UpdateInfo(...)`).
-  5. *Lưu trữ*: Gọi `repository.SaveChangesAsync()`.
-  6. *Phản hồi*: Trả về `Result.Success(...)`.
+### 3.2. Tang Application: Bo Dieu Phoi Thuan Tuy (Pure Orchestrator)
+- **CAM:** Viet logic tinh toan nghiep vu loi, if/else kiem tra quy tac sinh hoat CLB trong Handler.
+- **CAM:** Goi truc tiep SQL hay `BadmintonDbContext`. Moi truy cap phai qua Repository Interface.
+- **CAM:** Quen tu khoa `sealed` tren Handler hoac Validator.
+- **BAT BUOC (Quy trinh 6 buoc trong Handler):**
+  1. *Ngu canh*: Kiem tra `currentUserService.UserId` hoac xac thuc dau vao.
+  2. *Lay du lieu*: Goi Repository de nap Aggregate Root/Entity len bo nho.
+  3. *Kiem tra ton tai*: Tra ve `Result.Failure(Error.NotFound(...))` neu khong tim thay.
+  4. *Uy quyen nghiep vu*: Goi phuong thuc nghiep vu tren chinh Entity (vi du: `club.UpdateInfo(...)`).
+  5. *Luu tru*: Goi `repository.SaveChangesAsync()`.
+  6. *Phan hoi*: Tra ve `Result.Success(...)`.
 
 ```csharp
-// ✅ KHUNG MẪU HANDLER CHUẨN (Class sealed, Primary Constructor, Pure Orchestration):
+// [OK] KHUNG MAU HANDLER CHUAN (Class sealed, Primary Constructor, Pure Orchestration):
 public sealed class ApproveJoinRequestCommandHandler(
     IJoinRequestRepository joinRequestRepository,
     ICurrentUserService currentUserService) : ICommandHandler<ApproveJoinRequestCommand, Guid>
@@ -100,13 +102,13 @@ public sealed class ApproveJoinRequestCommandHandler(
     {
         var approverId = currentUserService.UserId;
         if (!approverId.HasValue)
-            return Result.Failure<Guid>(Error.Unauthorized("Auth.Unauthorized", "Yêu cầu đăng nhập."));
+            return Result.Failure<Guid>(Error.Unauthorized("Auth.Unauthorized", "Yeu cau dang nhap."));
 
         var joinRequest = await joinRequestRepository.FindByIdAsync(request.RequestId, cancellationToken);
         if (joinRequest is null)
-            return Result.Failure<Guid>(Error.NotFound("JoinRequest.NotFound", "Không tìm thấy yêu cầu gia nhập."));
+            return Result.Failure<Guid>(Error.NotFound("JoinRequest.NotFound", "Khong tim thay yeu cau gia nhap."));
 
-        // Gọi phương thức nghiệp vụ thuần trên Domain Entity
+        // Goi phuong thuc nghiep vu thuan tren Domain Entity
         joinRequest.Approve(approverId.Value);
 
         await joinRequestRepository.SaveChangesAsync(cancellationToken);
@@ -115,26 +117,26 @@ public sealed class ApproveJoinRequestCommandHandler(
 }
 ```
 
-### 3.3. Tầng Presentation: Cổng Giao Tiếp (HTTP Gateway)
-* **CẤM**: Viết logic kiểm tra điều kiện nghiệp vụ hoặc tính toán số tiền bên trong Endpoint.
-* **CẤM**: Inject Repository hoặc DbContext vào Endpoint.
-* **CẤM**: Quên hậu tố `Endpoint` hoặc quên kế thừa `EndpointGroupBase`.
-* **CẤM**: Quên gắn `.RequireGroupPermission(...)` cho các endpoint câu lạc bộ.
-* **BẮT BUỘC**:
-  * Endpoint chỉ nhận Request -> Map sang Command/Query -> Gửi qua `ISender.Send(...)` -> Ánh xạ `Result` sang HTTP Status Code bằng `result.Match(...)`.
+### 3.3. Tang Presentation: Cong Giao Tiep (HTTP Gateway)
+- **CAM:** Viet logic kiem tra dieu kien nghiep vu hoac tinh toan so tien ben trong Endpoint.
+- **CAM:** Inject Repository hoac DbContext vao Endpoint.
+- **CAM:** Quen hau to `Endpoint` hoac quen ke thua `EndpointGroupBase`.
+- **CAM:** Quen gan `.RequireGroupPermission(...)` cho cac endpoint cau lac bo.
+- **BAT BUOC:**
+  - Endpoint chi nhan Request -> Map sang Command/Query -> Gui qua `ISender.Send(...)` -> Anh xa `Result` sang HTTP Status Code bang `result.Match(...)`.
 
 ---
 
-## 4. Ma Trận Đối Soát NetArchTest (Automatic Guardrails)
+## 4. Ma Tran Doi Soat NetArchTest (Automatic Guardrails)
 
-| Kiểm Tra Kiến Trúc | Bài Test NetArchTest | Nếu Vi Phạm Sẽ Xảy Ra |
+| Kiem Tra Kien Truc | Bai Test NetArchTest | Neu Vi Pham Se Xay Ra |
 | :--- | :--- | :--- |
-| **Domain không phụ thuộc tầng khác** | `DomainLayer_ShouldNotHaveDependencyOn_*` | Test FAIL: Có `using Application/Persistence...` trong Domain |
-| **Entity có parameterless constructor** | `Entities_ShouldHave_ParameterlessConstructor` | Test FAIL: Entity thiếu `protected EntityName() { }` |
-| **Entity không có public setter** | `Entities_ShouldHave_PrivateSetters` | Test FAIL: Có thuộc tính dùng `public set;` |
-| **Domain Event phải sealed và có hậu tố**| `DomainEvents_Should_BeSealed` & `Postfix` | Test FAIL: Domain event thiếu `sealed` hoặc thiếu chữ `DomainEvent` |
-| **Application không phụ thuộc tầng ngoài** | `ApplicationLayer_ShouldNotHaveDependencyOn_*` | Test FAIL: Có `using Persistence/Infrastructure...` trong Application |
-| **Handler phải sealed và có hậu tố** | `CommandHandlers_ShouldBe_Sealed` & `Postfix` | Test FAIL: Handler thiếu `sealed` hoặc tên sai quy ước |
-| **Validator phải sealed và có hậu tố** | `Validators_ShouldBe_Sealed` & `Postfix` | Test FAIL: Validator thiếu `sealed` hoặc thiếu chữ `Validator` |
-| **Presentation không phụ thuộc Persistence**| `PresentationLayer_ShouldNotHaveDependencyOn_*`| Test FAIL: Endpoint inject DbContext hoặc Repository |
-| **Endpoint phải kế thừa và có hậu tố** | `Endpoints_ShouldHave_EndpointPostfix` | Test FAIL: Class thiếu hậu tố `Endpoint` |
+| **Domain khong phu thuoc tang khac** | `DomainLayer_ShouldNotHaveDependencyOn_*` | Test FAIL: Co `using Application/Persistence...` trong Domain |
+| **Entity co parameterless constructor** | `Entities_ShouldHave_ParameterlessConstructor` | Test FAIL: Entity thieu `protected EntityName() { }` |
+| **Entity khong co public setter** | `Entities_ShouldHave_PrivateSetters` | Test FAIL: Co thuoc tinh dung `public set;` |
+| **Domain Event phai sealed va co hau to**| `DomainEvents_Should_BeSealed` & `Postfix` | Test FAIL: Domain event thieu `sealed` hoac thieu chu `DomainEvent` |
+| **Application khong phu thuoc tang ngoai** | `ApplicationLayer_ShouldNotHaveDependencyOn_*` | Test FAIL: Co `using Persistence/Infrastructure...` trong Application |
+| **Handler phai sealed va co hau to** | `CommandHandlers_ShouldBe_Sealed` & `Postfix` | Test FAIL: Handler thieu `sealed` hoac ten sai quy uoc |
+| **Validator phai sealed va co hau to** | `Validators_ShouldBe_Sealed` & `Postfix` | Test FAIL: Validator thieu `sealed` hoac thieu chu `Validator` |
+| **Presentation khong phu thuoc Persistence**| `PresentationLayer_ShouldNotHaveDependencyOn_*`| Test FAIL: Endpoint inject DbContext hoac Repository |
+| **Endpoint phai ke thua va co hau to** | `Endpoints_ShouldHave_EndpointPostfix` | Test FAIL: Class thieu hau to `Endpoint` |

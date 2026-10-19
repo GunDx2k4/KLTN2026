@@ -4,197 +4,71 @@ description: >-
   Add or modify backend features, CQRS slices (Commands, Queries, Validators, Handlers, Endpoints), Domain Entities, and Repository operations in LegendsTeamVN.BadmintonClub. Use whenever creating new API endpoints, use cases, or modifying business logic to guarantee 100% Clean Architecture, MediatR, FluentValidation, and RBAC compliance.
 ---
 
-# 🚀 Quy Trình Thêm Tính Năng CQRS Chuẩn Kiến Trúc
+# CQRS Feature Builder & Architecture Scaffolder
 
-Skill này hướng dẫn chi tiết từng bước để tạo một tính năng backend mới (hoặc CQRS slice) đảm bảo 100% tuân thủ kiến trúc **Clean Architecture**, **Rich Domain Model**, **CQRS (MediatR)**, **FluentValidation** và **Multi-Group RBAC**.
-
----
-
-## Bước 0: Tra Cứu & Đối Soát Đặc Tả Kỹ Thuật (SSOT trong `docs/`)
-
-Trước khi viết bất kỳ dòng mã nào, Agent **BẮT BUỘC** đối soát với tài liệu thiết kế trong thư mục `docs/`:
-
-1. **Xác định Ca Sử Dụng (Use Case) & Yêu Cầu Chức Năng**:
-   - Tra cứu trong [`docs/03_PHAN_TICH_HE_THONG_UC.md`](docs/03_PHAN_TICH_HE_THONG_UC.md) và [`docs/02_KHAO_SAT_VA_YEU_CAU.md`](docs/02_KHAO_SAT_VA_YEU_CAU.md).
-   - Xác định rõ: Mã UC (UC01-UC20), Mã FR (FR01-FR23), Tác nhân kích hoạt, Tiền điều kiện (Preconditions), Luồng xử lý chính (Main Flow), Luồng ngoại lệ (Alternative/Exception Flows), và Hậu điều kiện (Postconditions).
-2. **Đối soát Cấu trúc Bảng CSDL 3NF**:
-   - Tra cứu trong [`docs/04_THIET_KE_CO_SO_DU_LIEU_3NF.md`](docs/04_THIET_KE_CO_SO_DU_LIEU_3NF.md).
-   - Xác định: Tên bảng, tên cột, khóa chính, khóa ngoại, các thuộc tính bắt buộc, kiểu dữ liệu PostgreSQL (`numeric(12,2)`, `timestamp with time zone`, `varchar`, ...), ràng buộc Unique/Check.
-   - **CẤM**: Tự tiện thêm cột, bỏ cột hoặc đổi tên cột khác với tài liệu thiết kế 3NF.
-3. **Đối soát Chuẩn Endpoint & Quyền Hạn**:
-   - Tra cứu đường dẫn RESTful trong [`docs/DANH_SACH_VA_TIEN_DO_CAC_FR.md`](docs/DANH_SACH_VA_TIEN_DO_CAC_FR.md).
-   - Tra cứu quyền hạn bắt buộc trong `LegendsTeamVN.BadmintonClub.Domain.Constants.GroupPermissions`.
+## Goal (Single Responsibility)
+Scaffold, implement, and validate new CQRS feature slices (Commands, Queries, Handlers, Validators, Endpoints) adhering strictly to Clean Architecture, Rich Domain Model, and NetArchTest conventions.
 
 ---
 
-## Bước 1: Thiết Kế Domain Entity & Bảo Vệ Bất Biến (Domain Layer)
+## Decision Tree: CQRS Slice Construction
 
-Thư mục: `src/LegendsTeamVN.BadmintonClub.Domain/Entities/`
-
-1. **Kế thừa**: Bắt buộc kế thừa từ `Entity<TKey>` hoặc `AggregateRoot<TKey>` (từ `LegendsTeamVN.Core.Domain.Entities`).
-2. **Encapsulation (Chống Anemic Model)**:
-   * Toàn bộ thuộc tính **bắt buộc dùng `private set;` hoặc `protected set;`**.
-   * CẤM public setter. Mọi thay đổi dữ liệu phải qua **phương thức nghiệp vụ** của chính Entity.
-3. **Parameterless Constructor**: Bắt buộc có `protected EntityName() { }` để hỗ trợ ORM reflection.
-4. **Domain Events**: Nếu phát sinh sự kiện miền, class sự kiện bắt buộc là `public sealed class ...DomainEvent : IDomainEvent`.
-5. **Zero External Dependencies**: Tuyệt đối không thêm `using` từ `Application`, `Persistence`, `Infrastructure`, `Presentation`, hay EF Core.
-
-```csharp
-namespace LegendsTeamVN.BadmintonClub.Domain.Entities;
-
-public class ExampleEntity : AggregateRoot<Guid>
-{
-    public string Name { get; private set; } = string.Empty;
-    public int Value { get; private set; }
-
-    // 1. Parameterless constructor bắt buộc cho ORM
-    protected ExampleEntity() { }
-
-    // 2. Factory method hoặc Constructor khởi tạo có validation
-    public ExampleEntity(string name, int value)
-    {
-        Id = Guid.NewGuid();
-        UpdateInfo(name, value);
-    }
-
-    // 3. Phương thức nghiệp vụ (Rich Domain Model)
-    public void UpdateInfo(string name, int value)
-    {
-        if (string.IsNullOrWhiteSpace(name))
-            throw new DomainException("Tên không được để trống.");
-        if (value < 0)
-            throw new DomainException("Giá trị không được âm.");
-
-        Name = name;
-        Value = value;
-    }
-}
+```text
+User asks to create a new API endpoint or backend feature
+  │
+  ├── 1. Tra cứu đặc tả SSOT trong docs/:
+  │      ├── Xác định Use Case (UC01 - UC20) & Yêu cầu chức năng (FR01 - FR23).
+  │      ├── Xác định Bảng CSDL 3NF (docs/04_THIET_KE_CO_SO_DU_LIEU_3NF.md).
+  │      └── Xác định Endpoint path và GroupPermissions.
+  │
+  ├── 2. Quyết định loại CQRS Slice:
+  │      ├── Thay đổi trạng thái dữ liệu (Create/Update/Delete)?
+  │      │     └── Tạo Command + CommandValidator + CommandHandler (CLI: `--type command`).
+  │      └── Chỉ đọc dữ liệu (Read-only / Search)?
+  │            └── Tạo Query + QueryValidator + QueryHandler (CLI: `--type query`).
+  │
+  ├── 3. Triển khai Domain Business Logic:
+  │      ├── Bắt buộc viết method nghiệp vụ bên trong Entity (Rich Domain Model).
+  │      └── Kiểm tra: private set;, parameterless ctor, sealed DomainEvent.
+  │
+  └── 4. Xác thực Tuân thủ Kiến trúc:
+         ├── Chạy scaffold_cqrs_slice.py --validate "<file_path>".
+         └── Chạy verify_architecture.py đảm bảo 37/37 NetArchTest Passed.
 ```
 
 ---
 
-## Bước 2: Thiết Kế CQRS Contracts trong Application
+## Black-Box Script Invocations
 
-Thư mục: `src/LegendsTeamVN.BadmintonClub.Application/Features/<Module>/<Action>/`
+> [!IMPORTANT]
+> **Use Scripts as Black Boxes:** Do NOT read or load the Python script source code into context. Run the CLI directly.
 
-### 2.1. Tạo Command / Query (Sealed Record)
-* **Command** (thay đổi dữ liệu):
-  ```csharp
-  using LegendsTeamVN.Core.Application.Messaging.CQRS;
+1. **Scaffold Bộ Khung CQRS Slice Mới:**
+   ```powershell
+   python .agents/skills/add-cqrs-feature/scripts/scaffold_cqrs_slice.py --type {command|query} --name "<FeatureName>" --module "<Module>"
+   ```
+   *(Ví dụ: `--type command --name LockSession --module Sessions`).*
 
-  namespace LegendsTeamVN.BadmintonClub.Application.Features.Clubs.ExampleAction;
-
-  public sealed record ExampleActionCommand(Guid ClubId, string Name, int Value) : ICommand<Guid>;
-  // Hoặc : ICommand nếu không cần trả về ID
-  ```
-* **Query** (đọc dữ liệu):
-  ```csharp
-  using LegendsTeamVN.Core.Application.Messaging.CQRS;
-
-  namespace LegendsTeamVN.BadmintonClub.Application.Features.Clubs.GetExample;
-
-  public sealed record GetExampleQuery(Guid ClubId) : IQuery<ExampleResponse>;
-  ```
-
-### 2.2. Tạo Validator (Bắt buộc cho Command có input từ Client)
-* Class **bắt buộc là `sealed`**, kế thừa `AbstractValidator<TCommand>`, kết thúc bằng hậu tố `Validator`.
-  ```csharp
-  using FluentValidation;
-
-  namespace LegendsTeamVN.BadmintonClub.Application.Features.Clubs.ExampleAction;
-
-  public sealed class ExampleActionCommandValidator : AbstractValidator<ExampleActionCommand>
-  {
-      public ExampleActionCommandValidator()
-      {
-          RuleFor(x => x.ClubId).NotEmpty().WithMessage("ClubId không được để trống.");
-          RuleFor(x => x.Name)
-              .NotEmpty().WithMessage("Tên không được để trống.")
-              .MaximumLength(100).WithMessage("Tên không vượt quá 100 ký tự.");
-          RuleFor(x => x.Value).GreaterThanOrEqualTo(0).WithMessage("Giá trị không được âm.");
-      }
-  }
-  ```
+2. **Kiểm Tra Tính Hợp Lệ Của File C# Vừa Tạo:**
+   ```powershell
+   python .agents/skills/add-cqrs-feature/scripts/scaffold_cqrs_slice.py --validate "<path_to_csharp_file>"
+   ```
 
 ---
 
-## Bước 3: Triển Khai Handler (Bộ Điều Phối Thuần Túy)
+## Step-by-Step Procedure
 
-* Class **bắt buộc là `sealed`**, implement `ICommandHandler<...>` hoặc `IQueryHandler<...>`, kết thúc bằng hậu tố `CommandHandler` hoặc `QueryHandler`.
-* **Handler CHỈ ĐIỀU PHỐI (Pure Orchestrator)**: Nạp Entity -> Gọi method Entity -> Lưu Repository -> Trả `Result<T>`.
-* CẤM viết logic tính toán nghiệp vụ hoặc SQL thô trong Handler.
-
-```csharp
-using LegendsTeamVN.BadmintonClub.Domain.Repositories;
-using LegendsTeamVN.Core.Application.Messaging.CQRS;
-using LegendsTeamVN.Core.Utilities.Results;
-
-namespace LegendsTeamVN.BadmintonClub.Application.Features.Clubs.ExampleAction;
-
-public sealed class ExampleActionCommandHandler(
-    IClubRepository clubRepository) : ICommandHandler<ExampleActionCommand, Guid>
-{
-    public async Task<Result<Guid>> Handle(ExampleActionCommand request, CancellationToken cancellationToken)
-    {
-        // 1. Nạp Aggregate Root
-        var club = await clubRepository.GetByIdAsync(request.ClubId, cancellationToken);
-        if (club is null)
-        {
-            return Result.Failure<Guid>(Error.NotFound("Club.NotFound", "Không tìm thấy câu lạc bộ."));
-        }
-
-        // 2. Ủy quyền xử lý cho chính Entity (Rich Domain Model)
-        club.UpdateInformation(request.Name, request.Value);
-
-        // 3. Lưu qua Repository
-        await clubRepository.SaveChangesAsync(cancellationToken);
-        return Result.Success(club.Id);
-    }
-}
-```
+1. **Đối Soát SSOT:** Tra cứu [`docs/`](docs/) để đối chiếu chính xác tên trường, bảng CSDL và mã quyền `GroupPermissions`.
+2. **Scaffold Mã Nguồn:** Chạy lệnh `scaffold_cqrs_slice.py` để sinh boilerplate chuẩn.
+3. **Thêm Phương Thức Domain (Nếu là Command):** Viết logic bảo vệ bất biến bên trong Domain Entity; phát Domain Event nếu cần.
+4. **Viết Orchestration Trong Handler:** Triển khai luồng 6 bước: Kiểm tra context -> Nạp entity -> Check null -> Gọi method entity -> Lưu DB -> Trả về `Result<T>`.
+5. **Tạo Endpoint:** Kế thừa `EndpointGroupBase`, hậu tố `Endpoint`, gắn `.RequireGroupPermission(...)` và ánh xạ qua `result.Match(...)`.
+6. **Kiểm Thử Kiến Trúc:** Chạy `verify_architecture.py` đảm bảo 100% đạt chuẩn NetArchTest.
 
 ---
 
-## Bước 4: Định Nghĩa Endpoint trong Tầng Presentation
-
-Thư mục: `src/LegendsTeamVN.BadmintonClub.Presentation/Endpoints/<Module>Endpoint.cs`
-
-1. Class kế thừa `EndpointGroupBase`, tên kết thúc bằng `Endpoint`.
-2. Gắn metadata Swagger: `.WithName(...)`, `.WithSummary(...)`.
-3. Gắn phân quyền:
-   * Nếu thao tác trên CLB: `.RequireGroupPermission(GroupPermissions.<Module>.<Permission>)`.
-4. Chỉ inject `ISender` (CẤM inject DbContext/Repository).
-5. Trả kết quả bằng `result.Match(...)`:
-
-```csharp
-group.MapPost("{id:guid}/example", HandleExampleAction)
-    .WithName("ExampleAction")
-    .WithSummary("Thực hiện hành động ví dụ trên câu lạc bộ")
-    .RequireGroupPermission(GroupPermissions.Operations.SessionUpdate);
-
-private static async Task<IResult> HandleExampleAction(
-    [FromRoute] Guid id,
-    [FromBody] ExampleActionRequest request,
-    ISender sender,
-    CancellationToken cancellationToken)
-{
-    var command = new ExampleActionCommand(id, request.Name, request.Value);
-    var result = await sender.Send(command, cancellationToken);
-
-    return result.Match(
-        onSuccess: data => Results.Ok(data)
-    );
-}
-```
-
----
-
-## Bước 5: Kiểm Thử Kiến Trúc Bắt Buộc (Verification)
-
-Sau khi hoàn thành, **chạy kiểm thử kiến trúc để đảm bảo 100% tests Passed**:
-
-```powershell
-dotnet test "tests/LegendsTeamVN.BadmintonClub.Architecture.Tests/LegendsTeamVN.BadmintonClub.Architecture.Tests.csproj" --verbosity minimal
-```
-
-* Nếu test fail, đối chiếu bảng sửa nhanh trong skill `verify-architecture`.
+## Constraints & Guardrails
+- **Handlers & Validators Must Be Sealed:** Mọi class Handler và Validator bắt buộc có từ khóa `sealed`.
+- **Pure Orchestration:** Nghiêm cấm viết logic tính toán chi phí, quy tắc CLB hoặc raw SQL trong Handler.
+- **Endpoints Inject ISender Only:** Cấm inject DbContext hay Repository vào Endpoint.
+- **Zero Emoji Policy:** Không sử dụng emoji trong mã nguồn hoặc log.

@@ -4,60 +4,60 @@ description: >-
   Audit, verify, and validate that the codebase adheres to Clean Architecture 4-tier dependencies, Rich Domain Model, CQRS MediatR conventions, and NetArchTest rules. Use when checking architectural compliance, running NetArchTest, or before completing any coding task.
 ---
 
-# 🛡️ Kiểm Tra & Đánh Giá Tuân Thủ Kiến Trúc (Architecture Verification)
+# Architecture Verification & NetArchTest Runner
 
-Skill này cung cấp quy trình và lệnh thực thi để rà soát chất lượng kiến trúc của dự án **LegendsTeamVN.BadmintonClub**, phát hiện sớm các vi phạm phân tầng hoặc sai lệch quy ước.
+## Goal (Single Responsibility)
+Execute the automated NetArchTest suite (37/37 tests), verify Clean Architecture dependency boundaries, validate Rich Domain Model invariants, and provide immediate remediation instructions for any violations.
 
 ---
 
-## 1. Lệnh Kiểm Tra Bắt Buộc (NetArchTest Runner)
+## Decision Tree: Architecture Verification
 
-Chạy bộ kiểm thử kiến trúc bằng lệnh sau trong thư mục gốc:
-
-```powershell
-dotnet test "tests/LegendsTeamVN.BadmintonClub.Architecture.Tests/LegendsTeamVN.BadmintonClub.Architecture.Tests.csproj" --verbosity minimal
+```text
+User requests architecture check or task concludes
+  │
+  ├── 1. Thực thi script kiểm thử tự động:
+  │      └── Chạy verify_architecture.py
+  │
+  ├── 2. Đánh giá kết quả:
+  │      ├── Nếu [OK] Architecture Tests Passed: 37/37 (100%):
+  │      │     └── Xác nhận hoàn tất kiểm tra kiến trúc.
+  │      └── Nếu [ERROR] xuất hiện bài test thất bại:
+  │            └── Chuyển sang Bước 3.
+  │
+  └── 3. Chẩn đoán & Khắc phục:
+         ├── Đối chiếu tên test bị lỗi với ma trận tại ./references/netarchtest_rules.md.
+         ├── Áp dụng mẫu sửa nhanh tương ứng tại ./examples/troubleshooting_fixes.md.
+         └── Chạy lại script cho đến khi 37/37 test PASSED.
 ```
 
-*(Trên môi trường Windows PowerShell nếu đường dẫn chứa ký tự đặc biệt, chạy lệnh với đường dẫn tuyệt đối có nháy kép)*:
-```powershell
-dotnet test "d:\[l7TeamVN]\LegendsTeamVN.BadmintonClub\tests\LegendsTeamVN.BadmintonClub.Architecture.Tests\LegendsTeamVN.BadmintonClub.Architecture.Tests.csproj" --verbosity minimal
-```
-
-* **Yêu cầu nghiệm thu**: Toàn bộ **37/37 bài test** phải báo **Passed (100%)**. Không chấp nhận bất kỳ bài test nào bị Failed.
-
 ---
 
-## 2. Danh Mục 37 Bài Test Kiến Trúc Trọng Yếu
+## Black-Box Script Invocations
 
-| Nhóm Kiểm Tra | Tệp Test | Ràng Buộc Kiến Trúc Bắt Buộc |
-| :--- | :--- | :--- |
-| **Domain** | `DomainTests.cs` | - Không tham chiếu bất kỳ tầng nào (`Application`, `Persistence`, `Infrastructure`, `Presentation`).<br>- Mọi Entity bắt buộc có parameterless constructor (`protected Entity() { }`).<br>- Mọi thuộc tính của Entity bắt buộc có `private set;` hoặc `protected set;`. Không có public setter.<br>- Domain Events bắt buộc là `sealed class` và có hậu tố `DomainEvent`. |
-| **Application** | `ApplicationTests.cs` | - Không tham chiếu `Infrastructure`, `Persistence`, `Presentation`.<br>- Toàn bộ `*CommandHandler` và `*QueryHandler` bắt buộc là class `sealed`.<br>- Toàn bộ `*Validator` bắt buộc là class `sealed` và có hậu tố `Validator`. |
-| **Presentation**| `PresentationTests.cs` | - Không tham chiếu `Infrastructure`, `Persistence`.<br>- Mọi Endpoint class phải kế thừa `EndpointGroupBase` và có hậu tố `Endpoint`.<br>- CẤM inject DbContext hay Repository vào Endpoint. |
-| **Persistence** | `PersistenceTests.cs` | - Chỉ phụ thuộc vào `Domain`, `Application`, `BuildingBlocks`.<br>- CẤM phụ thuộc vào `Presentation` hoặc `Infrastructure`. |
-| **Infrastructure** | `InfrastructureTests.cs` | - CẤM phụ thuộc vào `Presentation` hay `Persistence`. |
-| **Core BuildingBlocks** | `CoreTests.cs` | - Các tầng Core (`Core.Domain`, `Core.Application`, `Core.Infrastructure`, `Core.Persistence`, `Core.Presentation`) tuân thủ nghiêm ngặt ranh giới tương tự. |
-
----
-
-## 3. Bảng Hướng Dẫn Sửa Nhanh Khi Test Thất Bại (Troubleshooting)
-
-| Mã Lỗi / Bài Test Thất Bại | Nguyên Nhân Phổ Biến | Cách Khắc Phục Ngay Lập Tức |
-| :--- | :--- | :--- |
-| `Entities_ShouldHave_PrivateSetters` | Có property dùng `{ get; set; }` công khai | Đổi thành `{ get; private set; }` hoặc `{ get; protected set; }`. Viết method nghiệp vụ để thay đổi giá trị. |
-| `Entities_ShouldHave_ParameterlessConstructor` | Entity chỉ có constructor có tham số | Thêm constructor không tham số: `protected EntityName() { }`. |
-| `CommandHandlers_ShouldBe_Sealed` | Quên từ khóa `sealed` ở Handler | Thêm `sealed` trước khai báo class: `public sealed class ...CommandHandler`. |
-| `Validators_ShouldHave_ValidatorPostfix` | Tên class validator không kết thúc bằng `Validator` | Đổi tên class thành `<CommandName>Validator`. |
-| `Validators_ShouldBe_Sealed` | Quên từ khóa `sealed` ở Validator | Thêm `sealed` trước `class ...Validator`. |
-| `DomainEvents_Should_BeSealed` | Domain event không có từ khóa `sealed` | Khai báo `public sealed class ...DomainEvent : IDomainEvent`. |
-| `DomainEvents_ShouldHave_DomainEventPostfix` | Domain event thiếu hậu tố `DomainEvent` | Đổi tên class kết thúc bằng chữ `DomainEvent`. |
-| `ApplicationLayer_ShouldNotHaveDependencyOn_PersistenceLayer` | Application có `using Persistence...` hoặc gọi `DbContext` | Xóa using. Chuyển sang dùng Repository Interface từ Domain/Application. |
-| `PresentationLayer_ShouldNotHaveDependencyOn_PersistenceLayer` | Endpoint inject `DbContext` hoặc Repository | Xóa injection. Endpoint chỉ inject `ISender` và gửi Command/Query. |
-
----
-
-## 4. Kiểm Tra Biên Dịch Toàn Giải Pháp (Full Build Check)
+> [!IMPORTANT]
+> **Use Scripts as Black Boxes:** Do NOT read or load the Python script source code into context. Run the CLI directly.
 
 ```powershell
-dotnet build "LegendsTeamVN.BadmintonClub.slnx" --configuration Debug
+python .agents/skills/verify-architecture/scripts/verify_architecture.py
 ```
+
+*(Exit code `0` biểu thị 37/37 bài test passed. Exit code `1` kèm hướng dẫn chẩn đoán và khắc phục chi tiết).*
+
+---
+
+## Step-by-Step Procedure
+
+1. **Khởi chạy Kiểm tra:** Gọi script `verify_architecture.py` sau khi hoàn thành bất kỳ thay đổi code nào.
+2. **Phân tích Vi phạm:**
+   - Nếu test `Entities_ShouldHave_PrivateSetters` fail: Đổi các thuộc tính trong Entity từ `{ get; set; }` thành `{ get; private set; }`.
+   - Nếu test `Entities_ShouldHave_ParameterlessConstructor` fail: Thêm `protected EntityName() { }`.
+   - Nếu test `CommandHandlers_ShouldBe_Sealed` hoặc `Validators_ShouldBe_Sealed` fail: Thêm từ khóa `sealed` vào class.
+   - Nếu test `PresentationLayer_ShouldNotHaveDependencyOn_PersistenceLayer` fail: Xóa injection DbContext hoặc Repository khỏi Endpoint; chỉ inject `ISender`.
+3. **Kiểm tra Lặp lại:** Chạy lại script cho tới khi toàn bộ 37/37 bài test đạt trạng thái Passed.
+
+---
+
+## Constraints & Guardrails
+- **100% Pass Rate:** Tuyệt đối không bàn giao mã nguồn hoặc kết thúc tác vụ khi còn bất kỳ bài test nào trong 37 test bị Failed.
+- **Zero Emoji Policy:** Không sử dụng emoji trong log hoặc output của script.
