@@ -1,16 +1,18 @@
 ---
 name: implement-session-engine
 description: >-
-  Use this skill when implementing or modifying features related to Badminton Session operations, Check-in, Match Rotation Engine, and Live Court Tracking (FR14, FR15, FR16, FR17) in LegendsTeamVN.BadmintonClub.
+  Implement or modify features for Badminton Session operations, Check-in, Fair Match Rotation Engine, and Live Court Tracking via SignalR (FR14, FR15, FR16, FR17). Use when building or adjusting session scheduling, on-court player rotation, manual swapping, or realtime match scoreboards in LegendsTeamVN.BadmintonClub.
 ---
 
 # 🏸 Kỹ Năng Triển Khai Phân Hệ Vận Hành Buổi Chơi & Xoay Tua Sân (FR14 - FR17)
 
 Skill này hướng dẫn Agent triển khai logic nghiệp vụ tại sân cho các ca sử dụng từ **UC12 đến UC15**:
-- **FR14**: Điểm danh nhanh tại sân (`UC12`)
-- **FR15**: Giải thuật tự động đề xuất 4 người vào sân ưu tiên thời gian nghỉ lâu nhất (`UC13`)
-- **FR16**: Host can thiệp hoán đổi người chơi thủ công (`UC14`)
-- **FR17**: Người chơi theo dõi lượt thi đấu realtime (`UC15`)
+- **FR14**: Điểm danh nhanh tại sân ([`UC12`](docs/03_PHAN_TICH_HE_THONG_UC.md))
+- **FR15**: Giải thuật tự động đề xuất 4 người vào sân ưu tiên thời gian nghỉ lâu nhất ([`UC13`](docs/03_PHAN_TICH_HE_THONG_UC.md))
+- **FR16**: Host can thiệp hoán đổi người chơi thủ công ([`UC14`](docs/03_PHAN_TICH_HE_THONG_UC.md))
+- **FR17**: Người chơi theo dõi lượt thi đấu realtime ([`UC15`](docs/03_PHAN_TICH_HE_THONG_UC.md))
+
+> **Đối soát SSOT**: Bảng CSDL `badminton_session`, `session_booking`, `session_match`, `match_player` trong [`docs/04_THIET_KE_CO_SO_DU_LIEU_3NF.md`](docs/04_THIET_KE_CO_SO_DU_LIEU_3NF.md).
 
 ---
 
@@ -19,8 +21,10 @@ Skill này hướng dẫn Agent triển khai logic nghiệp vụ tại sân cho 
 1. **`BadmintonSession`**:
    - Quản lý trạng thái buổi chơi: `OPEN` ➔ `LOCKED` ➔ `PLAYING` ➔ `CALCULATED` ➔ `COMPLETED`.
    - Thuộc tính: `CourtCount`, `MaxPlayers`, `ShuttlecockUsed`, `CourtRentalCost`.
+   - Parameterless constructor: `protected BadmintonSession() { }`.
+   - Thuộc tính: `private set;` hoặc `protected set;`.
 2. **`SessionBooking`**:
-   - Phương thức Domain: `CheckIn(DateTime checkinTime)` ➔ Cập nhật `Status = CHECKED_IN`, gán `CheckinAt = checkinTime`.
+   - Phương thức Domain: `CheckIn()` ➔ Cập nhật `Status = CHECKED_IN`, gán `CheckinAt = DateTime.UtcNow`.
 3. **`SessionMatch`**:
    - Trạng thái: `WAITING` ➔ `PLAYING` ➔ `FINISHED` (hoặc `SKIPPED`).
    - Thuộc tính: `CourtNumber`, `RoundNumber`, `TimeStart`, `TimeEnd`.
@@ -66,3 +70,12 @@ Khi Host bấm bắt đầu trận đấu hoặc hoán đổi người chơi:
        .SendAsync("MatchStarted", new MatchLiveDto(...));
    ```
 3. Toàn bộ điện thoại của người chơi tại sân tự động cập nhật bảng đấu mà không cần tải lại trang.
+
+---
+
+## 4. Kiểm Thử Kiến Trúc Bắt Buộc
+
+Trước khi hoàn tất, chạy kiểm thử kiến trúc để đảm bảo không vi phạm phân tầng:
+```powershell
+dotnet test "tests/LegendsTeamVN.BadmintonClub.Architecture.Tests/LegendsTeamVN.BadmintonClub.Architecture.Tests.csproj" --verbosity minimal
+```

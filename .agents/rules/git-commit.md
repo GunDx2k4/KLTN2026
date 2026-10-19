@@ -1,6 +1,6 @@
 ---
-trigger: auto
-description: "Quy ước commit code chuẩn Conventional Commits với mô tả Tiếng Việt có dấu đầy đủ, chuẩn UTF-8."
+trigger: model_decision
+description: "Quy ước tạo git commit message chuẩn Conventional Commits với mô tả Tiếng Việt có dấu đầy đủ, chuẩn UTF-8."
 ---
 
 # 📝 Quy Ước Commit Code Chuẩn Hiện Đại (Conventional Commits)

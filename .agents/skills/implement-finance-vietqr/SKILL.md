@@ -1,17 +1,19 @@
 ---
 name: implement-finance-vietqr
 description: >-
-  Use this skill when implementing or modifying features related to Club Financial Management, Multi-Factor Fee Settlement, Shuttlecock Consumption, VietQR Generation, SePay Webhook Reconciliation, and Club Ledger Accounting (FR18, FR19, FR20, FR21, FR22) in LegendsTeamVN.BadmintonClub.
+  Implement or modify features for Club Financial Management, Multi-Factor Fee Settlement, Shuttlecock Consumption, VietQR Generation, SePay Webhook Reconciliation, and Club Ledger Accounting (FR18, FR19, FR20, FR21, FR22). Use when developing fee calculation formulas, payment QR generation, bank webhook processing, or club fund accounting in LegendsTeamVN.BadmintonClub.
 ---
 
 # 💰 Kỹ Năng Triển Khai Phân Hệ Tài Chính, Quyết Toán & VietQR (FR18 - FR22)
 
 Skill này hướng dẫn Agent triển khai logic nghiệp vụ tài chính, quyết toán chi phí buổi chơi và thanh toán tự động cho các ca sử dụng từ **UC16 đến UC19**:
-- **FR18**: Cấu hình quy tắc thu phí linh hoạt theo hội viên / vãng lai / giới tính (`UC16`)
-- **FR19**: Tự động tính tiền sân, tiền cầu tiêu thụ thực tế và phân bổ chi phí buổi chơi (`UC17`)
-- **FR20**: Sinh mã VietQR động NAPAS 247 kèm cú pháp thanh toán tự động (`UC18`)
-- **FR21**: Tiếp nhận Webhook ngân hàng / SePay để tự động gạch nợ thời gian thực (`UC18`)
-- **FR22**: Ghi sổ quỹ thu chi minh bạch và trích xuất báo cáo tài chính (`UC19`)
+- **FR18**: Cấu hình quy tắc thu phí linh hoạt theo hội viên / vãng lai / giới tính ([`UC16`](docs/03_PHAN_TICH_HE_THONG_UC.md))
+- **FR19**: Tự động tính tiền sân, tiền cầu tiêu thụ thực tế và phân bổ chi phí buổi chơi ([`UC17`](docs/03_PHAN_TICH_HE_THONG_UC.md))
+- **FR20**: Sinh mã VietQR động NAPAS 247 kèm cú pháp thanh toán tự động ([`UC18`](docs/03_PHAN_TICH_HE_THONG_UC.md))
+- **FR21**: Tiếp nhận Webhook ngân hàng / SePay để tự động gạch nợ thời gian thực ([`UC18`](docs/03_PHAN_TICH_HE_THONG_UC.md))
+- **FR22**: Ghi sổ quỹ thu chi minh bạch và trích xuất báo cáo tài chính ([`UC19`](docs/03_PHAN_TICH_HE_THONG_UC.md))
+
+> **Đối soát SSOT**: Bảng CSDL `group_fee_rule`, `badminton_session`, `session_booking`, `session_fee`, `bank_transaction`, `group_ledger` trong [`docs/04_THIET_KE_CO_SO_DU_LIEU_3NF.md`](docs/04_THIET_KE_CO_SO_DU_LIEU_3NF.md).
 
 ---
 
@@ -20,6 +22,7 @@ Skill này hướng dẫn Agent triển khai logic nghiệp vụ tài chính, qu
 1. **`GroupFeeRule`**:
    - Chứa chính sách giá của câu lạc bộ: `MemberFeePerSession`, `GuestFeePerSession`, `FemaleDiscountPercentage`, `StudentDiscountPercentage`, `FixedMonthlyFee`.
    - Bất biến: Tỷ lệ chiết khấu phải nằm trong khoảng $[0, 100]\%$. Mức phí không được âm.
+   - Bắt buộc dùng kiểu dữ liệu `decimal`. CẤM `double` hay `float`.
 2. **`BadmintonSession` & Quyết toán**:
    - `ShuttlecockUsed`: Số lượng quả cầu thực tế sử dụng trong buổi sinh hoạt.
    - `ShuttlecockPrice`: Đơn giá mỗi quả cầu tại thời điểm quyết toán.
@@ -95,7 +98,7 @@ Khi nhận request Webhook từ SePay (`POST /api/webhooks/sepay`):
 
 ### 4.1. Quy tắc bảo vệ Idempotency (Tránh thanh toán 2 lần):
 ```csharp
-var lockKey = $"sepay:transaction:{request.TransactionId}";
+var lockKey = $"lock:sepay:transaction:{request.TransactionId}";
 var acquired = await distributedLock.AcquireLockAsync(lockKey, expiry: TimeSpan.FromMinutes(5));
 if (!acquired)
 {
@@ -130,3 +133,7 @@ if (!acquired)
 - [ ] Tất cả các phép tính số học liên quan đến tiền bạc phải dùng kiểu `decimal`, tuyệt đối không dùng `double` hoặc `float` để tránh sai số thập phân.
 - [ ] Webhook SePay bắt buộc kiểm tra `Authorization` token trong Header trước khi parse payload.
 - [ ] Mọi thay đổi trạng thái thanh toán phải diễn ra trong Transaction (Unit of Work).
+- [ ] Chạy kiểm thử kiến trúc trước khi hoàn tất:
+  ```powershell
+  dotnet test "tests/LegendsTeamVN.BadmintonClub.Architecture.Tests/LegendsTeamVN.BadmintonClub.Architecture.Tests.csproj" --verbosity minimal
+  ```

@@ -1,12 +1,15 @@
+---
+trigger: always_on
+description: "Kiểm soát phân quyền đa nhóm động (Dynamic Contextual Multi-Group RBAC), GroupPermissions, Redis cache quyền hạn, và ngăn chặn Global Tenant Filter."
+---
+
 # 🛡️ Quy Tắc Phân Quyền Đa Nhóm Động (Dynamic Contextual Multi-Group RBAC)
 
-Tài liệu này định nghĩa các quy tắc kiểm soát quyền hạn và ngữ cảnh đa nhóm bắt buộc AI Agent phải tuân thủ trong toàn bộ dự án **LegendsTeamVN.BadmintonClub**.
+> **MỤC TIÊU BẮT BUỘC**: Hệ thống cầu lông phong trào hoạt động theo mô hình **Đa Nhóm Linh Hoạt (Multi-Club Ecosystem)**: 1 User có thể tham gia $N$ Câu lạc bộ với $N$ vai trò và quyền hạn hoàn toàn khác nhau. AI Agent tuyệt đối không áp dụng mô hình Single-Tenant hoặc hard-code quyền hạn.
 
 ---
 
 ## 1. Bản Chất Nghiệp Vụ Cốt Lõi: 1 User — Nhiều Nhóm — Nhiều Vai Trò
-
-Khác với mô hình Multi-Tenancy truyền thống của SaaS doanh nghiệp (gán cứng người dùng vào một Tenant duy nhất), hệ thống cầu lông phong trào hoạt động theo mô hình **Đa Nhóm Linh Hoạt (Multi-Club Ecosystem)**:
 
 ```
                           ┌────────────────────────┐
@@ -68,10 +71,15 @@ Client Request ──► [Endpoint .RequireGroupPermission(code)]
 Succeed(req) 403 Forbidden
 ```
 
-### 2.1. Fast-Path Context Switching (Tùy chọn):
-- Khi ứng dụng Mobile chuyển không gian làm việc chuyên sâu vào một CLB, Client có thể gọi `POST /api/v1/clubs/{id}/switch-context`.
-- Endpoint này cấp JWT Token tạm thời chứa claim `tenant_id = {groupId}` và danh sách `permissions` của nhóm đó.
-- `GroupPermissionHandler` hỗ trợ kiểm tra Fast-path: Nếu Token có `tenant_id == request.groupId` thì duyệt quyền ngay lập tức mà không cần truy vấn cache/DB.
+### 2.1. Cú pháp bảo vệ Endpoint bắt buộc:
+```csharp
+group.MapPost("{id:guid}/sessions", CreateSession)
+    .WithName("CreateSession")
+    .WithSummary("Tạo buổi sinh hoạt mới cho câu lạc bộ")
+    .RequireGroupPermission(GroupPermissions.Operations.SessionCreate);
+```
+
+* **CẤM hard-code chuỗi quyền** (ví dụ: cấm dùng `"SessionCreate"` hay `"session.create"`). Bắt buộc phải sử dụng hằng số từ `LegendsTeamVN.BadmintonClub.Domain.Constants.GroupPermissions`.
 
 ---
 
@@ -85,7 +93,7 @@ Succeed(req) 403 Forbidden
 > 3. Xem lịch sử thi đấu và thống kê cá nhân xuyên suốt mọi CLB.
 
 ### 3.1. Quy tắc lọc dữ liệu theo ngữ cảnh:
-- **Tài nguyên thuộc phạm vi 1 CLB cụ thể** (Buổi chơi `BadmintonSession`, Sổ quỹ `GroupLedger`, Lịch sinh hoạt `GroupSchedule`, Danh sách thành viên `GroupMember`):
+- **Tài nguyên thuộc phạm vi 1 CLB cụ thể** (Buổi chơi `BadmintonSession`, Sổ quỹ `GroupLedgerEntry`, Lịch sinh hoạt `GroupSchedule`, Danh sách thành viên `GroupMember`):
   * Handler hoặc Repository **bắt buộc** phải có điều kiện lọc tường minh theo `GroupId`:
     ```csharp
     var sessions = await sessionRepository.FindListAsync(
@@ -132,10 +140,10 @@ Tất cả quyền hạn nhóm phải sử dụng hằng số từ `LegendsTeamV
 
 ---
 
-## 5. Danh Mục Kiểm Tra An Toàn (Checklist)
+## 5. Danh Mục Kiểm Tra An Toàn (Security Checklist)
 
 - [ ] Endpoint thao tác trên tài nguyên nhóm luôn có route parameter `{id:guid}` hoặc `{groupId:guid}` hoặc `{clubId:guid}`.
-- [ ] Endpoint được gắn `.RequireGroupPermission(GroupPermissions.X)`.
+- [ ] Endpoint được gắn `.RequireGroupPermission(GroupPermissions.<Module>.<Permission>)`.
 - [ ] Handler nạp dữ liệu luôn kiểm tra sự tồn tại của tài nguyên thuộc đúng `GroupId`.
 - [ ] Khi thay đổi vai trò hoặc quyền của thành viên trong nhóm, bắt buộc gọi:
   `groupAuthService.InvalidateUserPermissionsCacheAsync(userId, groupId)`.

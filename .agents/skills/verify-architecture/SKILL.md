@@ -1,7 +1,7 @@
 ---
 name: verify-architecture
 description: >-
-  Use this skill to audit, verify, and validate that the codebase adheres to Clean Architecture, CQRS, naming conventions, and layer boundaries. Runs NetArchTest automated architecture test suites and reports violations.
+  Audit, verify, and validate that the codebase adheres to Clean Architecture 4-tier dependencies, Rich Domain Model, CQRS MediatR conventions, and NetArchTest rules. Use when checking architectural compliance, running NetArchTest, or before completing any coding task.
 ---
 
 # 🛡️ Kiểm Tra & Đánh Giá Tuân Thủ Kiến Trúc (Architecture Verification)
@@ -10,49 +10,54 @@ Skill này cung cấp quy trình và lệnh thực thi để rà soát chất l�
 
 ---
 
-## 1. Lệnh Kiểm Tra Chính (ArchTest Runner)
+## 1. Lệnh Kiểm Tra Bắt Buộc (NetArchTest Runner)
 
 Chạy bộ kiểm thử kiến trúc bằng lệnh sau trong thư mục gốc:
 
-```bash
-dotnet test tests/LegendsTeamVN.BadmintonClub.Architecture.Tests/LegendsTeamVN.BadmintonClub.Architecture.Tests.csproj --logger "console;verbosity=normal"
+```powershell
+dotnet test "tests/LegendsTeamVN.BadmintonClub.Architecture.Tests/LegendsTeamVN.BadmintonClub.Architecture.Tests.csproj" --verbosity minimal
 ```
 
-## 2. Các Bài Test Kiến Trúc Trọng Yếu Đang Được Kiểm Soát
+*(Trên môi trường Windows PowerShell nếu đường dẫn chứa ký tự đặc biệt, chạy lệnh với đường dẫn tuyệt đối có nháy kép)*:
+```powershell
+dotnet test "d:\[l7TeamVN]\LegendsTeamVN.BadmintonClub\tests\LegendsTeamVN.BadmintonClub.Architecture.Tests\LegendsTeamVN.BadmintonClub.Architecture.Tests.csproj" --verbosity minimal
+```
 
-| Nhóm Kiểm Tra | Tệp Test | Ràng Buộc Kiểm Tra |
+* **Yêu cầu nghiệm thu**: Toàn bộ **37/37 bài test** phải báo **Passed (100%)**. Không chấp nhận bất kỳ bài test nào bị Failed.
+
+---
+
+## 2. Danh Mục 37 Bài Test Kiến Trúc Trọng Yếu
+
+| Nhóm Kiểm Tra | Tệp Test | Ràng Buộc Kiến Trúc Bắt Buộc |
 | :--- | :--- | :--- |
-| **Domain** | `DomainTests.cs` | Không tham chiếu bất kỳ tầng nào (`Application`, `Persistence`, `Infrastructure`, `Presentation`). Mọi Entity phải có parameterless constructor. |
-| **Application** | `ApplicationTests.cs` | Không tham chiếu `Infrastructure`, `Persistence`, `Presentation`. Toàn bộ `*CommandHandler` và `*QueryHandler` phải là `sealed`. Toàn bộ `*Validator` phải là `sealed`. |
-| **Presentation**| `PresentationTests.cs` | Không tham chiếu `Infrastructure`, `Persistence`. Mọi Endpoint phải kế thừa `EndpointGroupBase` và có hậu tố `Endpoint`. |
-| **Persistence** | `PersistenceTests.cs` | Chỉ phụ thuộc vào `Domain`, `Application`, `BuildingBlocks`. Không phụ thuộc vào `Presentation`. |
-| **Infrastructure** | `InfrastructureTests.cs` | Không phụ thuộc vào `Presentation` hay `Persistence`. |
+| **Domain** | `DomainTests.cs` | - Không tham chiếu bất kỳ tầng nào (`Application`, `Persistence`, `Infrastructure`, `Presentation`).<br>- Mọi Entity bắt buộc có parameterless constructor (`protected Entity() { }`).<br>- Mọi thuộc tính của Entity bắt buộc có `private set;` hoặc `protected set;`. Không có public setter.<br>- Domain Events bắt buộc là `sealed class` và có hậu tố `DomainEvent`. |
+| **Application** | `ApplicationTests.cs` | - Không tham chiếu `Infrastructure`, `Persistence`, `Presentation`.<br>- Toàn bộ `*CommandHandler` và `*QueryHandler` bắt buộc là class `sealed`.<br>- Toàn bộ `*Validator` bắt buộc là class `sealed` và có hậu tố `Validator`. |
+| **Presentation**| `PresentationTests.cs` | - Không tham chiếu `Infrastructure`, `Persistence`.<br>- Mọi Endpoint class phải kế thừa `EndpointGroupBase` và có hậu tố `Endpoint`.<br>- CẤM inject DbContext hay Repository vào Endpoint. |
+| **Persistence** | `PersistenceTests.cs` | - Chỉ phụ thuộc vào `Domain`, `Application`, `BuildingBlocks`.<br>- CẤM phụ thuộc vào `Presentation` hoặc `Infrastructure`. |
+| **Infrastructure** | `InfrastructureTests.cs` | - CẤM phụ thuộc vào `Presentation` hay `Persistence`. |
+| **Core BuildingBlocks** | `CoreTests.cs` | - Các tầng Core (`Core.Domain`, `Core.Application`, `Core.Infrastructure`, `Core.Persistence`, `Core.Presentation`) tuân thủ nghiêm ngặt ranh giới tương tự. |
 
 ---
 
-## 3. Quy Trình Khắc Phục Khi Gặp Lỗi Kiến Trúc (Troubleshooting)
+## 3. Bảng Hướng Dẫn Sửa Nhanh Khi Test Thất Bại (Troubleshooting)
 
-Nếu bài test báo đỏ (Fail), đối chiếu bảng sau để khắc phục nhanh:
-
-1. **Lỗi `CommandHandlers_ShouldBe_Sealed` hoặc `QueryHandlers_ShouldBe_Sealed`**:
-   * *Nguyên nhân*: Quên từ khóa `sealed` ở khai báo class.
-   * *Khắc phục*: Thêm `sealed` trước `class YourHandlerName : ICommandHandler...`.
-2. **Lỗi `Validators_ShouldHave_ValidatorPostfix`**:
-   * *Nguyên nhân*: Đặt tên class validator không kết thúc bằng chữ `Validator`.
-   * *Khắc phục*: Đổi tên thành `<CommandName>Validator`.
-3. **Lỗi `ApplicationLayer_ShouldNotHaveDependencyOn_PersistenceLayer`**:
-   * *Nguyên nhân*: Trong file handler hoặc service ở Application có import `using LegendsTeamVN.BadmintonClub.Persistence...` hoặc trực tiếp gọi `BadmintonDbContext`.
-   * *Khắc phục*: Chuyển đổi sang sử dụng Repository Interface (ví dụ `IClubRepository`) được khai báo ở Domain/Application Abstractions.
-4. **Lỗi `PresentationLayer_ShouldNotHaveDependencyOn_PersistenceLayer`**:
-   * *Nguyên nhân*: Trong Endpoint có inject DbContext hoặc Repository.
-   * *Khắc phục*: Endpoint chỉ được inject `ISender` (MediatR) và gửi Command/Query.
+| Mã Lỗi / Bài Test Thất Bại | Nguyên Nhân Phổ Biến | Cách Khắc Phục Ngay Lập Tức |
+| :--- | :--- | :--- |
+| `Entities_ShouldHave_PrivateSetters` | Có property dùng `{ get; set; }` công khai | Đổi thành `{ get; private set; }` hoặc `{ get; protected set; }`. Viết method nghiệp vụ để thay đổi giá trị. |
+| `Entities_ShouldHave_ParameterlessConstructor` | Entity chỉ có constructor có tham số | Thêm constructor không tham số: `protected EntityName() { }`. |
+| `CommandHandlers_ShouldBe_Sealed` | Quên từ khóa `sealed` ở Handler | Thêm `sealed` trước khai báo class: `public sealed class ...CommandHandler`. |
+| `Validators_ShouldHave_ValidatorPostfix` | Tên class validator không kết thúc bằng `Validator` | Đổi tên class thành `<CommandName>Validator`. |
+| `Validators_ShouldBe_Sealed` | Quên từ khóa `sealed` ở Validator | Thêm `sealed` trước `class ...Validator`. |
+| `DomainEvents_Should_BeSealed` | Domain event không có từ khóa `sealed` | Khai báo `public sealed class ...DomainEvent : IDomainEvent`. |
+| `DomainEvents_ShouldHave_DomainEventPostfix` | Domain event thiếu hậu tố `DomainEvent` | Đổi tên class kết thúc bằng chữ `DomainEvent`. |
+| `ApplicationLayer_ShouldNotHaveDependencyOn_PersistenceLayer` | Application có `using Persistence...` hoặc gọi `DbContext` | Xóa using. Chuyển sang dùng Repository Interface từ Domain/Application. |
+| `PresentationLayer_ShouldNotHaveDependencyOn_PersistenceLayer` | Endpoint inject `DbContext` hoặc Repository | Xóa injection. Endpoint chỉ inject `ISender` và gửi Command/Query. |
 
 ---
 
-## 4. Biên Dịch Toàn Giải Pháp (Full Build Check)
+## 4. Kiểm Tra Biên Dịch Toàn Giải Pháp (Full Build Check)
 
-Để đảm bảo không có cảnh báo hoặc lỗi biên dịch tiềm ẩn:
-
-```bash
-dotnet build LegendsTeamVN.BadmintonClub.slnx --configuration Debug
+```powershell
+dotnet build "LegendsTeamVN.BadmintonClub.slnx" --configuration Debug
 ```
