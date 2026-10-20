@@ -608,10 +608,15 @@ Swagger Group: `Clubs` & `FR03 - Quản lý CLB & Thành viên`
 
 ### 🔍 Hướng Dẫn Từng API Module 4 Vào Luồng Mobile
 
-#### 4.1. `POST /api/v1/clubs` (Tạo Câu Lạc Bộ Mới)
+#### 4.1. `POST /api/v1/clubs` (Tạo Câu Lạc Bộ Mới - FR03 & FR13)
+> [!NOTE]
+> Xem hướng dẫn chi tiết toàn trình và code mẫu Flutter tại: [`docs/HUONG_DAN_FE_LUONG_TAO_CLB.md`](HUONG_DAN_FE_LUONG_TAO_CLB.md).
 
-- **Màn hình kích hoạt**: BottomSheet "Tham gia hoặc tạo CLB" -> Chọn **"Tạo câu lạc bộ mới"** (`_showCreateClubDialog`).
-- **Request Body JSON**:
+- **Màn hình kích hoạt**: BottomSheet "Tham gia hoặc tạo CLB" -> Chọn **"Tạo câu lạc bộ mới"** (`_showCreateClubDialog` hoặc `CreateClubScreen`).
+- **Headers**: `Authorization: Bearer <ACCESS_TOKEN>`
+- **Request Body JSON (Hỗ trợ 2 chế độ)**:
+
+  **Chế độ A: Tạo nhanh (Quick Mode)**:
   ```json
   {
     "name": "CLB Cầu Lông Legends Quận 7",
@@ -619,15 +624,53 @@ Swagger Group: `Clubs` & `FR03 - Quản lý CLB & Thành viên`
     "avatarUrl": "https://example.com/club_avatar.png"
   }
   ```
-- **Client Validation**:
-  - `name`: Tên CLB không được để trống, độ dài từ 3 đến 100 ký tự.
+
+  **Chế độ B: Tạo đầy đủ kèm sân & lịch tuần (Full Mode)**:
+  ```json
+  {
+    "name": "CLB Cầu Lông Legends Quận 7",
+    "description": "Sinh hoạt tối thứ 3 - 5 - 7 hàng tuần sân Kim Cương",
+    "avatarUrl": "https://example.com/club_avatar.png",
+    "fixedVenueName": "Sân Cầu Lông Kim Cương",
+    "fixedAddress": "123 Nguyễn Thị Thập, Tân Phú, Quận 7, TP.HCM",
+    "lat": 10.7328,
+    "lng": 106.7154,
+    "minSkillLevel": "NB",
+    "maxSkillLevel": "K",
+    "schedules": [
+      {
+        "dayOfWeek": 2,
+        "startTime": "18:00:00",
+        "endTime": "20:00:00"
+      },
+      {
+        "dayOfWeek": 4,
+        "startTime": "18:00:00",
+        "endTime": "20:00:00"
+      }
+    ]
+  }
+  ```
+
+- **Quy tắc Validation**:
+  - `name`: Bắt buộc, chuỗi không được để trống, tối đa 255 ký tự.
   - `description`: Tùy chọn, tối đa 500 ký tự.
-- **Response `201 Created`**: Trả về `Guid` ID của câu lạc bộ vừa tạo.
-- **Luồng Mobile Kế Tiếp**:
-  1. Hiển thị SnackBar: *"Chúc mừng! Bạn đã tạo CLB thành công và trở thành Chủ nhóm (Host) 🎉"*.
-  2. Gọi `await ref.read(clubContextViewModelProvider.notifier).loadMyClubs()` để danh sách CLB của tôi cập nhật nhóm mới.
-  3. Tự động gọi `switchClub(newClubId)` để chuyển context ngay lập tức vào CLB vừa tạo.
-  4. Gợi ý Host mở màn hình "Cài đặt CLB" (`ClubSettingsScreen` - `FR07`) để cấu hình sân cố định và giờ sinh hoạt tuần.
+  - `schedules[].dayOfWeek`: `0..6` (`0 = Chủ nhật, 1 = Thứ 2, ..., 6 = Thứ 7`). Lưu ý: Không dùng dải 1..7.
+  - `schedules[].startTime` < `schedules[].endTime` (`"HH:mm:ss"` hoặc `"HH:mm"`).
+  - `minSkillLevel <= maxSkillLevel` (thang: NB, Y, TBY, TB, TBK, K).
+- **Cơ chế Backend tự động xử lý**:
+  1. Sinh mã code ngắn `CLB-XXXXXX`.
+  2. Sinh 5 vai trò chuẩn: Host (18/18 quyền), Phó nhóm, Thủ quỹ, Thành viên (mặc định), Khách vãng lai.
+  3. Bổ nhiệm người tạo làm Host tối cao với `status: ACTIVE`, `memberType: MONTHLY`.
+  4. Nếu có `schedules`: Tự động tạo trước các buổi chơi (`BadmintonSession`) trong 14 ngày tới.
+  5. Cấu hình quy tắc phí mặc định (`group_fee_rule`: Dynamic mode, làm tròn 1.000 VNĐ).
+- **Response `201 Created`**: Trả về chuỗi `Guid` ID của câu lạc bộ vừa tạo (ví dụ: `"b86fa2e7-03b6-4299-923c-a93108ce8968"`).
+- **Luồng Mobile Kế Tiếp (Context-based `X-Group-Id`)**:
+  1. Hiển thị thông báo thành công: *"Chúc mừng! Bạn đã tạo CLB thành công và trở thành Chủ nhóm (Host)"*.
+  2. Gọi `await ref.read(myClubsViewModelProvider.notifier).loadMyClubs()` để nạp danh sách CLB mới kèm quyền hạn Host.
+  3. Thiết lập biến ngữ cảnh hoạt động `activeClubId = newClubId`.
+  4. Gán header HTTP mặc định cho Dio: `X-Group-Id: <newClubId>`.
+  5. Mở màn hình chính của CLB (`ClubHomeScreen`).
 
 ---
 
