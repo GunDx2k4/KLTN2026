@@ -28,6 +28,7 @@ public sealed class JwtTokenService(IOptions<JwtOptions> options) : IJwtTokenSer
         if (tenantId.HasValue)
         {
             claims.Add(new Claim("tenant_id", tenantId.Value.ToString()));
+            claims.Add(new Claim("tenantId", tenantId.Value.ToString()));
         }
 
         foreach (var role in roles)

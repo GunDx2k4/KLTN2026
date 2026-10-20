@@ -74,8 +74,8 @@ public sealed class GroupPermissionHandler(
             return;
         }
 
-        // 2.1. Fast-Path: Nếu Token hiện tại đã cấp claim tenant_id trùng khớp và chứa permission này
-        var tokenTenantId = context.User.FindFirstValue("tenant_id");
+        // 2.1. Fast-Path: Nếu Token hiện tại đã cấp claim tenant_id hoặc tenantId trùng khớp và chứa permission này
+        var tokenTenantId = context.User.FindFirstValue("tenant_id") ?? context.User.FindFirstValue("tenantId");
         if (Guid.TryParse(tokenTenantId, out var tenantId) && tenantId == groupId.Value)
         {
             var tokenPermissions = context.User.FindAll("permissions").Select(c => c.Value);

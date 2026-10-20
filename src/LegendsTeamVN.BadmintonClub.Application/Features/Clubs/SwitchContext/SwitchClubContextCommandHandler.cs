@@ -35,6 +35,11 @@ public sealed class SwitchClubContextCommandHandler(
             return Result.Failure<SwitchClubResponse>(Error.NotFound("ClubMember.NotFound", "Bạn không phải là thành viên của câu lạc bộ này."));
         }
 
+        if (membership.Group is null || !membership.Group.IsActive)
+        {
+            return Result.Failure<SwitchClubResponse>(Error.Validation("Club.Inactive", "Câu lạc bộ hiện đang tạm ngừng hoạt động."));
+        }
+
         if (membership.Status != ClubMemberStatus.ACTIVE)
         {
             return Result.Failure<SwitchClubResponse>(Error.Forbidden("ClubMember.Inactive", "Tài khoản của bạn trong nhóm này không ở trạng thái hoạt động."));
