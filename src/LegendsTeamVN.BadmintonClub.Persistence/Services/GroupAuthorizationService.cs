@@ -91,7 +91,7 @@ public sealed class GroupAuthorizationService(
 
         var groupId = await dbContext.BadmintonSessions
             .AsNoTracking()
-            .Where(s => s.Id == sessionId)
+            .Where(s => s.Id == sessionId && !s.IsDeleted)
             .Select(s => (Guid?)s.GroupId)
             .FirstOrDefaultAsync(cancellationToken);
 

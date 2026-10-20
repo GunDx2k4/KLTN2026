@@ -1,3 +1,4 @@
+using LegendsTeamVN.BadmintonClub.Application.Abstractions;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Clubs.Responses;
 using LegendsTeamVN.BadmintonClub.Domain.Repositories;
 using LegendsTeamVN.Core.Application.Messaging.CQRS;
@@ -9,7 +10,8 @@ namespace LegendsTeamVN.BadmintonClub.Application.Features.Clubs.GetMyClubs;
 
 public sealed class GetMyClubsQueryHandler(
     IClubMemberRepository clubMemberRepository,
-    ICurrentUserService currentUserService) : IQueryHandler<GetMyClubsQuery, List<MyClubResponse>>
+    ICurrentUserService currentUserService,
+    IGroupAuthorizationService groupAuthService) : IQueryHandler<GetMyClubsQuery, List<MyClubResponse>>
 {
     public async Task<Result<List<MyClubResponse>>> Handle(GetMyClubsQuery request, CancellationToken cancellationToken)
     {
@@ -23,18 +25,24 @@ public sealed class GetMyClubsQueryHandler(
             .OrderByDescending(m => m.JoinedAt)
             .ToListAsync(cancellationToken);
 
-        var result = memberships.Select(m => new MyClubResponse(
-            m.GroupId,
-            m.Group.GroupName,
-            m.Group.Code ?? string.Empty,
-            m.Group.Description,
-            m.Group.AvatarUrl,
-            m.RoleId,
-            m.RoleEntity?.RoleName,
-            m.Status,
-            m.JoinedAt,
-            m.RoleEntity?.GetRoleCode() ?? 1
-        )).ToList();
+        var result = new List<MyClubResponse>(memberships.Count);
+        foreach (var m in memberships)
+        {
+            var permissions = await groupAuthService.GetUserPermissionsInGroupAsync(userId.Value, m.GroupId, cancellationToken);
+            result.Add(new MyClubResponse(
+                m.GroupId,
+                m.Group.GroupName,
+                m.Group.Code ?? string.Empty,
+                m.Group.Description,
+                m.Group.AvatarUrl,
+                m.RoleId,
+                m.RoleEntity?.RoleName,
+                m.Status,
+                m.JoinedAt,
+                m.RoleEntity?.GetRoleCode() ?? 1,
+                permissions
+            ));
+        }
 
         return Result.Success(result);
     }

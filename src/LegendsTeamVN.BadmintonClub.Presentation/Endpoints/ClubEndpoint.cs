@@ -17,7 +17,6 @@ using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.Roles.Delete;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.Roles.GetList;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.Roles.UpdatePermissions;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.Schedules.Update;
-using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.SwitchContext;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.UpdateInfo;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.UpdateMemberRole;
 using LegendsTeamVN.BadmintonClub.Domain.Enums;
@@ -48,11 +47,6 @@ public class ClubEndpoint : EndpointGroupBase
         generalGroup.MapPost("", CreateClub)
             .WithName("CreateClub")
             .WithSummary("Tạo một câu lạc bộ mới (Người tạo tự động thành Host)")
-            .RequireAuthorization();
-
-        generalGroup.MapPost("{id:guid}/switch-context", SwitchContext)
-            .WithName("SwitchClubContext")
-            .WithSummary("Chuyển đổi câu lạc bộ đang hoạt động, trả về Token đồng bộ vai trò & quyền hạn (FR04)")
             .RequireAuthorization();
 
         // --- FR03: MEMBERSHIP & ROLES MANAGEMENT ---
@@ -275,16 +269,6 @@ public class ClubEndpoint : EndpointGroupBase
         var command = new RemoveMemberCommand(id, userId);
         var result = await sender.Send(command, cancellationToken);
         return result.Match(onSuccess: success => Results.Ok(new { Success = success }));
-    }
-
-    private static async Task<IResult> SwitchContext(
-        [FromRoute] Guid id,
-        ISender sender,
-        CancellationToken cancellationToken)
-    {
-        var command = new SwitchClubContextCommand(id);
-        var result = await sender.Send(command, cancellationToken);
-        return result.Match(onSuccess: response => Results.Ok(response));
     }
 
     private static async Task<IResult> GetAllClubPermissions(
