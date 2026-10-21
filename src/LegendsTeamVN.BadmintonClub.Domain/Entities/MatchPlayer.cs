@@ -59,6 +59,12 @@ public class MatchPlayer : Entity<Guid>
 
     internal void EnterCourt(DateTime now) => CheckinCourtAt = now;
 
+    internal void SetManualTeam(SideTeam team, bool differsFromOriginal)
+    {
+        SideTeam = team;
+        IsManualSwapped = differsFromOriginal;
+    }
+
     public void SwapTeam(string newSideTeam)
     {
         SwapTeam(ParseSideTeam(newSideTeam));

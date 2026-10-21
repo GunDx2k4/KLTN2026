@@ -19,6 +19,7 @@ public class SessionBooking : AggregateRoot<Guid>
     public DateTime? CheckinAt { get; private set; }
     public DateTime? AttendanceMarkedAt { get; private set; }
     public Guid? AttendanceMarkedBy { get; private set; }
+    public bool IsRotationPaused { get; private set; }
 
     public virtual BadmintonSession Session { get; private set; } = default!;
     public virtual AppUser User { get; private set; } = default!;
@@ -103,6 +104,8 @@ public class SessionBooking : AggregateRoot<Guid>
     }
 
     public void AssignRecruitment(Guid? recruitmentId) => RecruitmentId = recruitmentId;
+
+    internal void SetRotationPaused(bool isPaused) => IsRotationPaused = isPaused;
 
     private static BookingStatus ParseStatus(string status)
     {

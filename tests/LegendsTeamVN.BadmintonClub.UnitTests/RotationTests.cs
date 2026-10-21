@@ -121,6 +121,46 @@ public sealed class RotationTests
     }
 
     [Fact]
+    public void SkillBalanceDoesNotChangeTheChosenTeams()
+    {
+        var teamA = new[] { SkillLevel.NB, SkillLevel.Y };
+        var teamB = new[] { SkillLevel.TBY, SkillLevel.TB };
+        var result = MatchRotationEngine.CalculateSkillBalance(teamA, teamB);
+
+        Assert.Equal((3, 7, 4), result);
+        Assert.Equal(new[] { SkillLevel.NB, SkillLevel.Y }, teamA);
+        Assert.Equal(new[] { SkillLevel.TBY, SkillLevel.TB }, teamB);
+        Assert.Equal((7, 3, 4), MatchRotationEngine.CalculateSkillBalance(teamB, teamA));
+        Assert.Equal((5, 5, 0), MatchRotationEngine.CalculateSkillBalance(
+            [SkillLevel.NB, SkillLevel.TB], [SkillLevel.Y, SkillLevel.TBY]));
+    }
+
+    [Fact]
+    public void SkillBalanceRequiresTwoPlayersOnEachTeam()
+    {
+        Assert.Throws<ArgumentNullException>(() => MatchRotationEngine.CalculateSkillBalance(null!, [SkillLevel.NB, SkillLevel.Y]));
+        Assert.Throws<ArgumentNullException>(() => MatchRotationEngine.CalculateSkillBalance([SkillLevel.NB, SkillLevel.Y], null!));
+        Assert.Throws<ArgumentException>(() => MatchRotationEngine.CalculateSkillBalance([SkillLevel.NB], [SkillLevel.Y, SkillLevel.TB]));
+        Assert.Throws<ArgumentException>(() => MatchRotationEngine.CalculateSkillBalance([SkillLevel.NB, SkillLevel.Y], []));
+        Assert.Throws<ArgumentException>(() => MatchRotationEngine.CalculateSkillBalance(
+            [SkillLevel.NB, SkillLevel.Y, SkillLevel.TBY], [SkillLevel.TB, SkillLevel.K]));
+    }
+
+    [Fact]
+    public void BalanceKeepsStablePairingWhenAllSkillsTieAndUsersAreNotLoaded()
+    {
+        var sessionId = Guid.NewGuid();
+        var selected = Enumerable.Range(1, 4).Select(i => new SessionBooking(sessionId,
+            Guid.Parse($"00000000-0000-0000-0000-{i:D12}"))).Reverse().ToArray();
+        var inputOrder = selected.Select(b => b.UserId).ToArray();
+
+        var balanced = MatchRotationEngine.Balance(selected);
+
+        Assert.Equal(inputOrder.OrderBy(id => id), balanced.Select(b => b.UserId));
+        Assert.Equal(inputOrder, selected.Select(b => b.UserId));
+    }
+
+    [Fact]
     public void NoShowInvalidatesAndRebuildsButCannotRemovePlayingPerson()
     {
         var s = Session(); s.InitializeRotation(Actor, Now);

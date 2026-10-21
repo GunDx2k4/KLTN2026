@@ -2,6 +2,8 @@
 
 BE và hợp đồng bàn giao giao diện, cập nhật ngày 18/10/2026. Chưa triển khai FE hoặc chỉnh đội hình thủ công UC14.
 
+Bổ sung 20/10/2026: hợp đồng UC14 đã được duyệt tại [UC14-BE.md](UC14-BE.md). Đợt A bổ sung Domain dùng chung; đợt B bổ sung JSONB/pause và kiểm tra integrity khi tải rotation. API start/finish và quyền UC13 giữ nguyên; schema mới chỉ được áp dụng trên sandbox, DB đích chưa nâng cấp. Đợt C đã có PUT manual-lineup và GET rotation mở rộng, chỉ Host hợp lệ được chỉnh; D đã bổ sung reset/pause/resume với eligibility dùng chung scheduler/attendance; E đã có confirm kèm version và guard start cũ cho trận có baseline: client UC14 dùng confirm-manual-start; proposal untouched UC13 vẫn start cũ được. Retry confirm Playing không thêm lời mời. UC13 start/finish giữ nguyên trong đợt C, chưa bật manual ở môi trường đang dùng.
+
 Giải thích từng file và đường gọi: báo cáo cá nhân `D:\KhoaLuan\UC13-GIAI-THICH-MA-NGUON.md` (nằm ngoài repository).
 
 ## 1. Quyền, thời gian và chuyển trạng thái
@@ -257,3 +259,5 @@ Các script tích hợp là Node.js, không phải project xUnit và không tự
 - API proposals và scheduler cùng dùng khóa cha, kiểm tra aggregate và unique index sân. Scheduler không giả JWT/Host, không có route công khai.
 - FE đếm ngược từ ServerTime/EligibleAgainAt, rồi nhận sự kiện hoặc GET lại. Hết 5 phút có thể chờ thêm nhịp poll; Host có thể gọi proposals để xét ngay.
 - Rollback vận hành: tắt Enabled để ngừng tạo/start mới, giữ finish. DispatchEnabled không tắt scheduler. Có thể giữ cột lịch khi rollback binary tương thích; Down migration mới xóa lịch đã lưu, chỉ thực hiện khi chấp nhận mất lịch, không cần xóa trận/outbox.
+
+Bổ sung E ngày 21/10/2026: legacy start từ chối 409 với mọi trận có OriginalLineupSnapshot, kể cả đã reset về gốc hoặc đang Playing; client UC14 phải confirm kèm version và quyền Host hiện hành. Finish UC13 không đổi. F/G đã kiểm chứng nhiều writer/realtime UC14 và hồi quy UC12–UC13 trên sandbox; DB đích chưa nâng cấp.

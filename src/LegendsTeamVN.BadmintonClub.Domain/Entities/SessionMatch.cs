@@ -16,6 +16,8 @@ public class SessionMatch : AggregateRoot<Guid>
     /// </summary>
     public MatchStatus Status { get; private set; } = MatchStatus.WAITING;
 
+    public LineupSnapshot? OriginalLineupSnapshot { get; private set; }
+
     public virtual BadmintonSession Session { get; private set; } = default!;
     public virtual ICollection<MatchPlayer> Players { get; private set; } = new List<MatchPlayer>();
 
@@ -60,6 +62,27 @@ public class SessionMatch : AggregateRoot<Guid>
     }
 
     public void StartMatch() => StartMatch(DateTime.UtcNow);
+
+    internal bool HasLineup(IReadOnlyCollection<Guid> teamA, IReadOnlyCollection<Guid> teamB) =>
+        Players.Count == 4 && teamA.Order().SequenceEqual(Players.Where(p => p.SideTeam == SideTeam.TEAM_A).Select(p => p.UserId).Order()) &&
+        teamB.Order().SequenceEqual(Players.Where(p => p.SideTeam == SideTeam.TEAM_B).Select(p => p.UserId).Order());
+
+    // Called only after the session aggregate has validated every player under its row lock.
+    internal void ApplyManualLineup(IReadOnlyCollection<Guid> teamA, IReadOnlyCollection<Guid> teamB)
+    {
+        if (Status != MatchStatus.WAITING) throw new InvalidOperationException("Only waiting lineups can change.");
+        if (HasLineup(teamA, teamB)) return;
+        OriginalLineupSnapshot ??= LineupSnapshot.Capture(Players.ToArray());
+        var desired = teamA.Concat(teamB).ToHashSet();
+        foreach (var removed in Players.Where(p => !desired.Contains(p.UserId)).ToList()) Players.Remove(removed);
+        foreach (var userId in desired)
+        {
+            var team = teamA.Contains(userId) ? SideTeam.TEAM_A : SideTeam.TEAM_B;
+            var player = Players.SingleOrDefault(p => p.UserId == userId);
+            if (player is null) { player = MatchPlayer.Proposed(Id, userId, team); Players.Add(player); }
+            player.SetManualTeam(team, !(team == SideTeam.TEAM_A ? OriginalLineupSnapshot.TeamA : OriginalLineupSnapshot.TeamB).Contains(userId));
+        }
+    }
 
     public void StartMatch(DateTime now)
     {
@@ -118,4 +141,79 @@ public class SessionMatch : AggregateRoot<Guid>
     {
         return Enum.TryParse<MatchStatus>(status, true, out var result) ? result : MatchStatus.WAITING;
     }
+}
+
+/// <summary>
+/// Immutable original doubles lineup. Persistence mapping is configured outside Domain.
+/// </summary>
+public sealed class LineupSnapshot : IEquatable<LineupSnapshot>
+{
+    public const int CurrentSchemaVersion = 1;
+
+    private List<Guid> _teamA = [];
+    private List<Guid> _teamB = [];
+
+    public int SchemaVersion { get; private set; }
+    public IReadOnlyList<Guid> TeamA => _teamA.AsReadOnly();
+    public IReadOnlyList<Guid> TeamB => _teamB.AsReadOnly();
+
+    private LineupSnapshot() { }
+
+    public static LineupSnapshot Capture(IReadOnlyCollection<MatchPlayer> players)
+    {
+        ArgumentNullException.ThrowIfNull(players);
+        if (players.Count != 4 || players.Any(player => player is null))
+            throw new ArgumentException("A lineup snapshot requires four match players.", nameof(players));
+        if (players.Any(player => player.MatchId == Guid.Empty) ||
+            players.Select(player => player.MatchId).Distinct().Count() != 1)
+            throw new ArgumentException("Snapshot players must belong to the same match.", nameof(players));
+
+        var snapshot = new LineupSnapshot
+        {
+            SchemaVersion = CurrentSchemaVersion,
+            _teamA = players.Where(player => player.SideTeam == SideTeam.TEAM_A).Select(player => player.UserId).ToList(),
+            _teamB = players.Where(player => player.SideTeam == SideTeam.TEAM_B).Select(player => player.UserId).ToList()
+        };
+        snapshot.Validate();
+        return snapshot;
+    }
+
+    /// <summary>
+    /// Rechecks structural invariants when a snapshot has been materialized without the factory.
+    /// Current player eligibility must be checked separately by the session aggregate before restoring.
+    /// </summary>
+    public void Validate()
+    {
+        if (SchemaVersion != CurrentSchemaVersion)
+            throw new InvalidOperationException("Unsupported lineup snapshot schema version.");
+        if (_teamA is null || _teamB is null || _teamA.Count != 2 || _teamB.Count != 2)
+            throw new InvalidOperationException("A lineup snapshot requires two players on each team.");
+        var users = _teamA.Concat(_teamB).ToArray();
+        if (users.Any(userId => userId == Guid.Empty) || users.Distinct().Count() != 4)
+            throw new InvalidOperationException("A lineup snapshot requires four distinct non-empty user IDs.");
+    }
+
+    public bool Equals(LineupSnapshot? other) => other is not null &&
+        SchemaVersion == other.SchemaVersion &&
+        _teamA.Order().SequenceEqual(other._teamA.Order()) &&
+        _teamB.Order().SequenceEqual(other._teamB.Order());
+
+    public override bool Equals(object? obj) => obj is LineupSnapshot other && Equals(other);
+
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(SchemaVersion);
+        foreach (var userId in _teamA.Order()) hash.Add(userId);
+        foreach (var userId in _teamB.Order()) hash.Add(userId);
+        return hash.ToHashCode();
+    }
+}
+
+/// <summary>Safe integrity failure for persisted lineup data, without exposing its serialized contents.</summary>
+public sealed class InvalidLineupSnapshotException(Guid sessionId, Guid? matchId = null)
+    : InvalidOperationException("Stored original lineup is invalid. Review the session data before continuing.")
+{
+    public Guid SessionId { get; } = sessionId;
+    public Guid? MatchId { get; } = matchId;
 }

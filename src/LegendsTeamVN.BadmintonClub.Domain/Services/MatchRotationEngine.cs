@@ -7,7 +7,9 @@ public static class MatchRotationEngine
 {
     public const int MinRestMinutes = 5;
 
-    public static bool IsEligible(SessionBooking booking) => !booking.IsDeleted &&
+    public static bool IsEligible(SessionBooking booking) => !booking.IsRotationPaused && IsCheckedInParticipant(booking);
+
+    public static bool IsCheckedInParticipant(SessionBooking booking) => !booking.IsDeleted &&
         booking.Status == BookingStatus.CHECKED_IN &&
         (booking.User is null || (booking.User.IsActive && !booking.User.IsDeleted));
 
@@ -46,14 +48,28 @@ public static class MatchRotationEngine
             .ThenBy(b => b.CheckinAt ?? b.AttendanceMarkedAt ?? b.BookedAt).ThenBy(b => b.UserId).ToList();
     }
 
+    public static (int TeamATotal, int TeamBTotal, int Difference) CalculateSkillBalance(
+        IReadOnlyCollection<SkillLevel> teamA, IReadOnlyCollection<SkillLevel> teamB)
+    {
+        ArgumentNullException.ThrowIfNull(teamA);
+        ArgumentNullException.ThrowIfNull(teamB);
+        if (teamA.Count != 2 || teamB.Count != 2)
+            throw new ArgumentException("Each doubles team requires exactly two skill levels.");
+
+        var totalA = teamA.Sum(skill => (int)skill);
+        var totalB = teamB.Sum(skill => (int)skill);
+        return (totalA, totalB, Math.Abs(totalA - totalB));
+    }
+
     // The first two players form TEAM_A, the final two TEAM_B. Inputs are already priority ordered.
     public static IReadOnlyList<SessionBooking> Balance(IReadOnlyList<SessionBooking> selected)
     {
         if (selected.Count != 4) throw new ArgumentException("Exactly four players are required.", nameof(selected));
         var p = selected.OrderBy(b => b.UserId).ToArray();
-        int Score(int i) => (int)(p[i].User?.SkillLevel ?? SkillLevel.NB);
+        SkillLevel Score(int i) => p[i].User?.SkillLevel ?? SkillLevel.NB;
         var pairings = new[] { new[] { 0, 1, 2, 3 }, new[] { 0, 2, 1, 3 }, new[] { 0, 3, 1, 2 } };
-        var best = pairings.OrderBy(x => Math.Abs(Score(x[0]) + Score(x[1]) - Score(x[2]) - Score(x[3]))).First();
+        var best = pairings.OrderBy(x => CalculateSkillBalance(
+            [Score(x[0]), Score(x[1])], [Score(x[2]), Score(x[3])]).Difference).First();
         return best.Select(i => p[i]).ToList();
     }
 }

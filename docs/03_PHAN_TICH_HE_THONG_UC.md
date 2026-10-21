@@ -190,6 +190,14 @@ graph TD
 - **Luồng chính**: Host dùng thao tác kéo thả trên ứng dụng để hoán đổi người chơi hoặc đổi bạn cùng chơi/đối thủ theo yêu cầu riêng ➔ Đánh dấu cờ `is_manual_swapped = true` ➔ Bấm bắt đầu trận.
 - **Hậu điều kiện**: Cặp đấu được cập nhật theo ý muốn của Host.
 
+**Hợp đồng BE đã duyệt, triển khai theo từng đợt (20/10/2026):** xem [UC14-BE.md](Detail%20Design/UC14-BE.md). UC14 BE A–G đã hoàn tất trên sandbox: chỉnh/reset/pause/resume/confirm kèm version, guard start cũ, tranh chấp hai writer, rollback và SignalR hai instance đều được kiểm chứng. Lời mời tới đúng 4 người cuối, retry không tạo thêm bản ghi. Flutter chưa triển khai; DB đích chưa nâng cấp.
+
+- Host được nhận diện bằng tên role Host hoặc IsHostRole theo cơ chế hiện có, kèm MatchManage trong CLB sở hữu buổi. Không thay quyền UC13.
+- No-op không chụp gợi ý gốc, tăng version hoặc phát event. Chỉ thay đổi thực sự đầu tiên mới chụp baseline; các lần chỉnh/reset sau giữ nguyên baseline.
+- Khôi phục phải kiểm tra lại người chơi còn hợp lệ, không pause/cooldown hoặc ở sân khác; xung đột trả 409, không khôi phục một phần.
+- Tạm nghỉ tới khi Host bật lại; có người thay hợp lệ thì thay, không chỉ định người thay thì SKIPPED proposal và xét lại. Chưa bắt đầu trận mới được chỉnh/pause người trong đội hình.
+- Trận chỉ bắt đầu khi đủ 4 người hợp lệ, mỗi đội 2 người; start lấy giờ server và mời đúng đội hình cuối. Phần Flutter kéo thả không nằm trong đợt BE.
+
 ### UC15: Theo dõi lịch thi đấu cá nhân theo thời gian thực
 - **FR đáp ứng**: FR17 (F3.5) | **Tác nhân**: Hội viên, Khách tại sân.
 - **Tiền điều kiện**: Người chơi đã được điểm danh `CHECKED_IN`.
