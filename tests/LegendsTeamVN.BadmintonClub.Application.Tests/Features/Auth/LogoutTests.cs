@@ -8,14 +8,14 @@ using Xunit;
 
 namespace LegendsTeamVN.BadmintonClub.Application.Tests.Features.Auth;
 
-public class UT_AUTH_03_LogoutTests
+public class LogoutTests
 {
     private readonly ICurrentUserService _currentUserService = Substitute.For<ICurrentUserService>();
     private readonly IDeviceRepository _deviceRepository = Substitute.For<IDeviceRepository>();
     private readonly ICacheService _cacheService = Substitute.For<ICacheService>();
     private readonly LogoutCommandHandler _handler;
 
-    public UT_AUTH_03_LogoutTests()
+    public LogoutTests()
     {
         _handler = new LogoutCommandHandler(
             _currentUserService,

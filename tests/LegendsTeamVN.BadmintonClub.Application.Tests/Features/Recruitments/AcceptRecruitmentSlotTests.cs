@@ -10,7 +10,7 @@ using Xunit;
 
 namespace LegendsTeamVN.BadmintonClub.Application.Tests.Features.Recruitments;
 
-public class UT_RECRUIT_02_AcceptRecruitmentSlotTests
+public class AcceptRecruitmentSlotTests
 {
     [Fact]
     public async Task Handle_WhenLastSlotAccepted_ShouldCreateConfirmedBookingAndSetRecruitmentStatusFilled()

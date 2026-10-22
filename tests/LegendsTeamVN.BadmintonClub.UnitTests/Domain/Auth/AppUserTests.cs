@@ -10,7 +10,7 @@ namespace LegendsTeamVN.BadmintonClub.UnitTests.Domain.Auth;
 public sealed class AppUserTests
 {
     [Fact]
-    public void FR05_AppUser_UpdateProfile_ShouldUpdateFieldsCorrectly()
+    public void UpdateProfile_WhenValid_ShouldUpdateFieldsCorrectly()
     {
         var user = AppUser.CreateStandard(Guid.NewGuid(), "Nguyễn Văn A", "a@test.com", "0901234567", 1, SkillLevel.NB);
         user.SkillLevel.Should().Be(SkillLevel.NB);

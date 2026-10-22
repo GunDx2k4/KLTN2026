@@ -11,7 +11,7 @@ namespace LegendsTeamVN.BadmintonClub.UnitTests.Domain.Sessions;
 public sealed class GuestRecruitmentTests
 {
     [Fact]
-    public void FR11_FR12_GuestRecruitment_Transitions_ShouldWorkCorrectly()
+    public void GuestRecruitment_Transitions_ShouldWorkCorrectly()
     {
         var sessionId = Guid.NewGuid();
         var recruitment = new GuestRecruitment(sessionId, slotsNeeded: 2, sharedCost: 50000);

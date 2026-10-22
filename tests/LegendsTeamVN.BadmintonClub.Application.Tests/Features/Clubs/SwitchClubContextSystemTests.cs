@@ -24,7 +24,7 @@ namespace LegendsTeamVN.BadmintonClub.Application.Tests.Features.Clubs;
 /// FR04 / UC05: Chuyển đổi ngữ cảnh nhóm (Switch Club Context) & Xác thực phân quyền đa nhóm (Multi-Tenant RBAC).
 /// Mô hình V-Model (Cấp độ 4): Kiểm chứng liên thông toàn trình từ Database -> CQRS Use Case -> Group Auth Service -> JWT Token Claims.
 /// </summary>
-public class ST_TENANT_02_SwitchClubContextSystemTests
+public class SwitchClubContextSystemTests
 {
     private readonly IOptions<JwtOptions> _jwtOptions = Options.Create(new JwtOptions
     {

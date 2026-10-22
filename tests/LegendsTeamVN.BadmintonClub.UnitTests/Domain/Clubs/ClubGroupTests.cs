@@ -10,7 +10,7 @@ namespace LegendsTeamVN.BadmintonClub.UnitTests.Domain.Clubs;
 public sealed class ClubGroupTests
 {
     [Fact]
-    public void FR07_ClubGroup_UpdateInfoAndSchedule_ShouldWorkCorrectly()
+    public void UpdateInfoAndSchedule_WhenValid_ShouldWorkCorrectly()
     {
         var club = new ClubGroup("CLB Test", description: "Mô tả", avatarUrl: "https://avatar.png");
         club.FixedVenueName.Should().BeNull();

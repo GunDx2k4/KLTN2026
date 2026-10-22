@@ -9,7 +9,7 @@ using Xunit;
 
 namespace LegendsTeamVN.BadmintonClub.Application.Tests.Features.Recruitments;
 
-public class UT_RECRUIT_01_CreateRecruitmentTests
+public class CreateRecruitmentTests
 {
     [Fact]
     public async Task Handle_WhenValidSessionAndData_ShouldCreateActiveGuestRecruitment()

@@ -9,7 +9,7 @@ using Xunit;
 
 namespace LegendsTeamVN.BadmintonClub.Application.Tests.Features.Sessions;
 
-public class UT_SES_02_CreateSessionExecutionTests
+public class CreateSessionExecutionTests
 {
     [Fact]
     public async Task Handle_WhenValidRequestWithoutExplicitMaxPlayers_ShouldCalculateFromCourtsAndOpenSession()

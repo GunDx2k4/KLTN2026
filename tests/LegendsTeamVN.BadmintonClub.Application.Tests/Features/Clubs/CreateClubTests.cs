@@ -11,7 +11,7 @@ using Xunit;
 
 namespace LegendsTeamVN.BadmintonClub.Application.Tests.Features.Clubs;
 
-public class UT_GRP_03_CreateClubTests
+public class CreateClubTests
 {
     [Fact]
     public async Task Handle_WhenValidRequest_ShouldCreateClubWithHostRoleAndSchedules()

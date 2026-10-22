@@ -10,7 +10,7 @@ namespace LegendsTeamVN.BadmintonClub.UnitTests.Domain.Sessions;
 public sealed class BadmintonSessionTests
 {
     [Fact]
-    public void FR13_CreateBadmintonSession_ShouldInitializeCorrectly()
+    public void CreateBadmintonSession_WhenValid_ShouldInitializeCorrectly()
     {
         var groupId = Guid.NewGuid();
         var startTime = DateTime.UtcNow.AddDays(1);

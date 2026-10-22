@@ -17,7 +17,7 @@ namespace LegendsTeamVN.BadmintonClub.Application.Tests.Features.Clubs;
 /// BỘ KIỂM THỬ ĐƠN VỊ (UNIT TESTS) - FR04 / UC05: Chuyển đổi ngữ cảnh nhóm (Switch Club Context)
 /// Mục tiêu: Kiểm thử cô lập từng thành phần: Command Validator và Command Handler logic với Mock dependencies.
 /// </summary>
-public class UT_TENANT_02_SwitchClubContextTests
+public class SwitchClubContextTests
 {
     private readonly IClubMemberRepository _clubMemberRepository = Substitute.For<IClubMemberRepository>();
     private readonly ICurrentUserService _currentUserService = Substitute.For<ICurrentUserService>();
@@ -27,7 +27,7 @@ public class UT_TENANT_02_SwitchClubContextTests
     private readonly SwitchClubContextCommandHandler _handler;
     private readonly SwitchClubContextCommandValidator _validator = new();
 
-    public UT_TENANT_02_SwitchClubContextTests()
+    public SwitchClubContextTests()
     {
         _handler = new SwitchClubContextCommandHandler(
             _clubMemberRepository,

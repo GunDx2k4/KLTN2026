@@ -10,7 +10,7 @@ namespace LegendsTeamVN.BadmintonClub.UnitTests.Domain.Clubs;
 public sealed class GroupMemberTests
 {
     [Fact]
-    public void FR03_UserCanHoldIndependentRoles_AcrossMultipleClubs()
+    public void UserCanHoldIndependentRoles_AcrossMultipleClubs()
     {
         var userId = Guid.NewGuid();
         var clubAId = Guid.NewGuid();

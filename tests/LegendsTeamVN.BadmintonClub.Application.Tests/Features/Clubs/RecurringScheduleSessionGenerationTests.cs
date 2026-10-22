@@ -14,7 +14,7 @@ using Xunit;
 
 namespace LegendsTeamVN.BadmintonClub.Application.Tests.Features.Clubs;
 
-public class UT_SCHED_01_RecurringScheduleSessionGenerationTests
+public class RecurringScheduleSessionGenerationTests
 {
     private sealed class FixedClock(DateTimeOffset now) : TimeProvider
     {

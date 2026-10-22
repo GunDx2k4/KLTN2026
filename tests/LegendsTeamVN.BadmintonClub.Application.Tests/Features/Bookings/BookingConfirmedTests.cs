@@ -10,10 +10,10 @@ using Xunit;
 
 namespace LegendsTeamVN.BadmintonClub.Application.Tests.Features.Bookings;
 
-public class UT_BOOK_03_BookingWaitingQueueTests
+public class BookingConfirmedTests
 {
     [Fact]
-    public async Task Handle_WhenConfirmedSlotsFull_ShouldAutomaticallyAddToWaitingQueueWithNextOrder()
+    public async Task Handle_WhenCourtNotFull_ShouldCreateConfirmedBookingWithQueueZero()
     {
         // Arrange
         using var dbContext = TestDbContextFactory.Create();
@@ -28,18 +28,18 @@ public class UT_BOOK_03_BookingWaitingQueueTests
             userRepo,
             currentUserService);
 
-        var user15Id = Guid.NewGuid();
-        currentUserService.UserId.Returns(user15Id);
+        var userId = Guid.NewGuid();
+        currentUserService.UserId.Returns(userId);
 
-        var user15 = AppUser.CreateStandard(user15Id, "User 15", "u15@example.com", "0915151515", 1, SkillLevel.TB);
-        dbContext.AppUsers.Add(user15);
+        var user = AppUser.CreateStandard(userId, "Người Chơi Mới", "player@example.com", "0912345678", 1, SkillLevel.TB);
+        dbContext.AppUsers.Add(user);
 
-        // Buổi chơi: max_players = 12
+        // Buổi chơi: court_count=2, max_players=12, deadline còn 2 tiếng nữa
         var session = new BadmintonSession(
             groupId: Guid.NewGuid(),
-            title: "Buổi sinh hoạt cuối tuần",
-            startTime: DateTime.UtcNow.AddHours(4),
-            endTime: DateTime.UtcNow.AddHours(6),
+            title: "Buổi sinh hoạt tối Thứ 7",
+            startTime: DateTime.UtcNow.AddHours(3),
+            endTime: DateTime.UtcNow.AddHours(5),
             courtLocation: "Sân Cầu Lông Cầu Giấy",
             courtCount: 2,
             targetPlayerPerCourt: 6,
@@ -49,41 +49,37 @@ public class UT_BOOK_03_BookingWaitingQueueTests
         );
         dbContext.BadmintonSessions.Add(session);
 
-        // Đã có đủ 12 người CONFIRMED (đạt trần max_players)
-        for (int i = 0; i < 12; i++)
+        // Giả lập hiện tại đã có 10 người CONFIRMED (chưa chạm trần 12)
+        for (int i = 0; i < 10; i++)
         {
-            var confirmedBooking = new SessionBooking(
+            var existingMemberId = Guid.NewGuid();
+            var existingBooking = new SessionBooking(
                 session.Id,
-                Guid.NewGuid(),
+                existingMemberId,
                 status: BookingStatus.CONFIRMED,
                 queueOrder: 0
             );
-            dbContext.SessionBookings.Add(confirmedBooking);
+            dbContext.SessionBookings.Add(existingBooking);
         }
-
-        // Đã có 2 người trong Hàng đợi (WAITING): queue_order = 1 và queue_order = 2
-        var waiting1 = new SessionBooking(session.Id, Guid.NewGuid(), status: BookingStatus.WAITING, queueOrder: 1);
-        var waiting2 = new SessionBooking(session.Id, Guid.NewGuid(), status: BookingStatus.WAITING, queueOrder: 2);
-        dbContext.SessionBookings.AddRange(waiting1, waiting2);
 
         await dbContext.SaveChangesAsync();
         dbContext.ChangeTracker.Clear();
 
         var command = new VoteBookingCommand(session.Id);
 
-        // Act: User_15 đăng ký
+        // Act
         var result = await handler.Handle(command, CancellationToken.None);
         await dbContext.SaveChangesAsync();
 
-        // Assert: Tự động nạp vào Hàng đợi với status = WAITING và queue_order = 3
+        // Assert
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().NotBeNull();
-        result.Value.Status.Should().Be(BookingStatus.WAITING);
-        result.Value.QueueOrder.Should().Be(3);
+        result.Value.Status.Should().Be(BookingStatus.CONFIRMED);
+        result.Value.QueueOrder.Should().Be(0);
 
-        var savedBooking = dbContext.SessionBookings.FirstOrDefault(b => b.SessionId == session.Id && b.UserId == user15Id);
+        var savedBooking = dbContext.SessionBookings.FirstOrDefault(b => b.SessionId == session.Id && b.UserId == userId);
         savedBooking.Should().NotBeNull();
-        savedBooking!.Status.Should().Be(BookingStatus.WAITING);
-        savedBooking.QueueOrder.Should().Be(3);
+        savedBooking!.Status.Should().Be(BookingStatus.CONFIRMED);
+        savedBooking.QueueOrder.Should().Be(0);
     }
 }

@@ -11,7 +11,7 @@ using Xunit;
 
 namespace LegendsTeamVN.BadmintonClub.Application.Tests.Features.Clubs;
 
-public class UT_TENANT_01_TenantPermissionTests
+public class TenantPermissionTests
 {
     [Fact]
     public async Task HasPermissionAsync_WhenUserIsHostInGroupA_ShouldHaveAllPermissions()

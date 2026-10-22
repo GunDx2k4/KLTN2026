@@ -10,14 +10,14 @@ using Xunit;
 
 namespace LegendsTeamVN.BadmintonClub.Application.Tests.Features.Users;
 
-public class UT_USER_01_UserProfileTests
+public class UserProfileTests
 {
     private readonly ICurrentUserService _currentUserService = Substitute.For<ICurrentUserService>();
     private readonly IUserRepository _userRepository = Substitute.For<IUserRepository>();
     private readonly IUserManagerService _userManagerService = Substitute.For<IUserManagerService>();
     private readonly UpdateUserProfileCommandHandler _handler;
 
-    public UT_USER_01_UserProfileTests()
+    public UserProfileTests()
     {
         _handler = new UpdateUserProfileCommandHandler(
             _currentUserService,

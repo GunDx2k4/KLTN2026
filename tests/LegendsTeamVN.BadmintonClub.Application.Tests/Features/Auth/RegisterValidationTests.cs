@@ -10,7 +10,7 @@ using Xunit;
 
 namespace LegendsTeamVN.BadmintonClub.Application.Tests.Features.Auth;
 
-public class UT_AUTH_02_RegisterValidationTests
+public class RegisterValidationTests
 {
     private readonly RegisterCommandValidator _validator = new();
     private readonly IUserRepository _userRepository = Substitute.For<IUserRepository>();
@@ -19,7 +19,7 @@ public class UT_AUTH_02_RegisterValidationTests
     private readonly ICacheService _cacheService = Substitute.For<ICacheService>();
     private readonly RegisterCommandHandler _handler;
 
-    public UT_AUTH_02_RegisterValidationTests()
+    public RegisterValidationTests()
     {
         _handler = new RegisterCommandHandler(
             _userRepository,

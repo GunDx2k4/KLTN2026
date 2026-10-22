@@ -5,7 +5,7 @@ using Xunit;
 
 namespace LegendsTeamVN.BadmintonClub.Application.Tests.Features.Sessions;
 
-public class UT_SES_01_CreateSessionConstraintTests
+public class CreateSessionConstraintTests
 {
     private readonly CreateSessionCommandValidator _validator = new();
 

@@ -18,7 +18,7 @@ namespace LegendsTeamVN.BadmintonClub.Application.Tests.Features.Clubs;
 /// 2. Header X-Group-Id / Route: Xác định ngữ cảnh CLB.
 /// 3. IGroupAuthorizationService: Thẩm tra quyền động qua Redis Cache (10m TTL) -> DB.
 /// </summary>
-public class UT_TENANT_03_GroupPermissionHandlerTests
+public class GroupPermissionHandlerTests
 {
     private readonly IGroupAuthorizationService _groupAuthService = Substitute.For<IGroupAuthorizationService>();
     private readonly IHttpContextAccessor _httpContextAccessor = Substitute.For<IHttpContextAccessor>();

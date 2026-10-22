@@ -11,7 +11,7 @@ using Xunit;
 
 namespace LegendsTeamVN.BadmintonClub.Application.Tests.Features.Clubs;
 
-public class UT_GRP_01_JoinRequestTests
+public class JoinRequestTests
 {
     private readonly IClubRepository _clubRepository = Substitute.For<IClubRepository>();
     private readonly IClubMemberRepository _clubMemberRepository = Substitute.For<IClubMemberRepository>();
@@ -19,7 +19,7 @@ public class UT_GRP_01_JoinRequestTests
     private readonly ICurrentUserService _currentUserService = Substitute.For<ICurrentUserService>();
     private readonly CreateJoinRequestCommandHandler _handler;
 
-    public UT_GRP_01_JoinRequestTests()
+    public JoinRequestTests()
     {
         _handler = new CreateJoinRequestCommandHandler(
             _clubRepository,

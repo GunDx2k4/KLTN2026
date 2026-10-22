@@ -10,7 +10,7 @@ using Xunit;
 
 namespace LegendsTeamVN.BadmintonClub.Application.Tests.Features.Bookings;
 
-public class UT_BOOK_04_CancelAndPromoteQueueTests
+public class CancelAndPromoteQueueTests
 {
     [Fact]
     public async Task Handle_WhenConfirmedUserCancels_ShouldPromoteFirstWaitingToConfirmedAndShiftRemainingQueue()

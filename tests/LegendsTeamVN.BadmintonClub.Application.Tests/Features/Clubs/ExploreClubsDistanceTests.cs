@@ -9,7 +9,7 @@ using Xunit;
 
 namespace LegendsTeamVN.BadmintonClub.Application.Tests.Features.Clubs;
 
-public class UT_GEO_01_ExploreClubsDistanceTests
+public class ExploreClubsDistanceTests
 {
     [Fact]
     public async Task Handle_WithGpsCoordinates_ShouldFilterClubsWithin5KmRadiusAccurately()

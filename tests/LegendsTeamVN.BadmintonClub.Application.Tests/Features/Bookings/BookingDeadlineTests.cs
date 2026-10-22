@@ -11,7 +11,7 @@ using Xunit;
 
 namespace LegendsTeamVN.BadmintonClub.Application.Tests.Features.Bookings;
 
-public class UT_BOOK_02_BookingDeadlineTests
+public class BookingDeadlineTests
 {
     [Fact]
     public async Task VoteBooking_WhenPastDeadline_ShouldReturnDeadlinePassedError()

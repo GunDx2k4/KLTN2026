@@ -11,7 +11,7 @@ namespace LegendsTeamVN.BadmintonClub.UnitTests.Domain.Sessions;
 public sealed class SessionBookingTests
 {
     [Fact]
-    public void FR08_FR10_SessionBooking_QueueAndCheckIn_ShouldWorkAsExpected()
+    public void SessionBooking_QueueAndCheckIn_ShouldWorkAsExpected()
     {
         var sessionId = Guid.NewGuid();
         var user1 = Guid.NewGuid();

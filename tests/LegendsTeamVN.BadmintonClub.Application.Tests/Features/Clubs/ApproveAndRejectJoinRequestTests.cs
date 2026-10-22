@@ -11,7 +11,7 @@ using Xunit;
 
 namespace LegendsTeamVN.BadmintonClub.Application.Tests.Features.Clubs;
 
-public class UT_GRP_02_ApproveAndRejectJoinRequestTests
+public class ApproveAndRejectJoinRequestTests
 {
     [Fact]
     public async Task Handle_WhenHostApprovesPendingRequest_ShouldUpdateStatusToApprovedAndCreateClubMember()
