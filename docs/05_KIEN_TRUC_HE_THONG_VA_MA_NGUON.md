@@ -54,7 +54,7 @@ graph TD
   - **Tối ưu hiệu năng bộ nhớ đệm (Redis Caching)**:
     - Quyền hạn được cache theo cặp `group:perm:{userId}:{groupId}` với thời gian sống 10 phút, tự động bị xóa (Invalidate) khi Ban Quản Trị thay đổi vai trò của người dùng.
   - **Không sử dụng Global Query Filter áp cứng**: Việc lọc dữ liệu theo nhóm được quản lý tường minh ở cấp Use Case / Repository (`Where(x => x.GroupId == groupId)`), giúp người dùng tự do truy vấn danh sách mọi nhóm mình tham gia, tìm kiếm nhóm công khai, và xem lịch sử thi đấu cá nhân xuyên suốt.
-  - **Fast-path Switch Context (Tùy chọn)**: Hỗ trợ Endpoint `POST /api/v1/clubs/{id}/switch-context` cấp token tạm chứa `tenant_id` và danh sách permissions để ứng dụng Mobile tăng tốc xử lý khi thao tác sâu trong một câu lạc bộ.
+  - **Clean Context-Based Authorization qua Header (Chuẩn chính thức)**: Bỏ hoàn toàn API `switch-context`. Ứng dụng Frontend đăng nhập nhận 1 JWT toàn cục duy nhất, khi thao tác trong CLB chỉ cần đính kèm Header HTTP `X-Group-Id: <clubId>` hoặc gọi qua route parameter. `GroupPermissionHandler` tự động thẩm tra quyền động theo cặp `(UserId, GroupId)` và cache Redis TTL 10 phút.
   - Phân quyền tại Endpoint sử dụng cú pháp chuẩn:
     ```csharp
     group.MapPost("{id:guid}/roles", CreateClubRole)

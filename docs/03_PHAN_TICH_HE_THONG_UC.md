@@ -100,7 +100,7 @@ graph TD
 ### UC05: Chuyển đổi ngữ cảnh nhóm (Switch Context)
 - **FR đáp ứng**: FR03, FR04 (F1.3) | **Tác nhân**: Toàn bộ người dùng.
 - **Tiền điều kiện**: Người dùng đang tham gia ít nhất 1 hội nhóm.
-- **Luồng chính**: Người dùng chọn nhóm muốn làm việc trên thanh trượt ➔ Hệ thống kiểm tra tư cách thành viên (`group_member.status == ACTIVE`) ➔ Lấy toàn bộ quyền hạn thực tế của vai trò người dùng tại nhóm đó ➔ Phát hành Access Token mới có claim `tenantId` và mảng `permissions` tương ứng ➔ Ứng dụng cập nhật giao diện và quyền hạn tức thì (< 300ms) mà không bắt đăng nhập lại.
+- **Luồng chính**: Người dùng chọn nhóm muốn làm việc trên thanh trượt/Server-Rail ➔ Ứng dụng thiết lập Header HTTP ngữ cảnh `X-Group-Id = <clubId>` (hoặc truyền qua Route parameter) ➔ Giữ nguyên 1 JWT Access Token toàn cục duy nhất ➔ Hệ thống thẩm tra quyền hạn động qua `GroupPermissionHandler` và Redis Cache (`group:perm:{userId}:{groupId}`) ➔ Ứng dụng cập nhật giao diện và dữ liệu theo nhóm vừa chọn tức thì mà không cần xin cấp lại Token.
 - **Hậu điều kiện**: Ngữ cảnh làm việc được đồng bộ chính xác theo vai trò tại nhóm vừa chọn.
 
 ### UC06: Tìm kiếm & Gửi yêu cầu gia nhập nhóm

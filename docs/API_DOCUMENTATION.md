@@ -47,9 +47,10 @@ graph TD
    X-Group-Id: <CLUB_GUID>
    ```
    *(Áp dụng khi endpoint không truyền `{clubId}` trên URL, ví dụ: cập nhật buổi chơi `PUT /api/v1/sessions/{sessionId}`, đăng tin tuyển khách `POST /api/v1/sessions/{sessionId}/recruitments`, cập nhật thông tin CLB `PUT /api/v1/clubs/{id}/info`)*.
-3. **Cơ chế Chuyển Đổi Nhóm (Switch Context - FR04)**:
-   - Khi người dùng bấm vào một CLB trên Mobile UI, Mobile gọi `POST /api/v1/clubs/{id}/switch-context`.
-   - Backend sinh Token mới đã đóng gói `tenantId: clubId` và toàn bộ danh sách `permissions` của vai trò trong CLB đó.
+3. **Cơ chế Ngữ Cảnh Nhóm (Clean Context-Based Authorization - FR04)**:
+   - Hệ thống bỏ hoàn toàn API `switch-context` cấp lại Token.
+   - Khi người dùng chọn CLB trên giao diện, Mobile chỉ cần gán Header HTTP `X-Group-Id: <CLUB_GUID>` hoặc gọi endpoint mang route param `{clubId}`, `{groupId}`, `{sessionId}`.
+   - Backend thẩm tra quyền hạn động qua Redis Cache (`group:perm:{userId}:{groupId}`) tức thì 0ms.
 
 ---
 
@@ -301,7 +302,7 @@ graph TD
     A[Đọc currentUserStatus từ Response] --> B{isMember == true?}
     B -- Đúng --> C[User đã là thành viên CLB]
     C --> D[Hiển thị Nút Xanh: 'Vào Sinh Hoạt CLB']
-    D --> E[Bấm nút: Gọi switch-context & mở ClubHomeScreen]
+    D --> E[Bấm nút: Gán X-Group-Id & mở ClubHomeScreen]
     
     B -- Sai --> F{hasPendingJoinRequest == true?}
     F -- Đúng --> G[Đơn xin gia nhập đang chờ duyệt]
@@ -471,7 +472,7 @@ Swagger Group: `Auth`
 1. **Lưu Token**: Gán `accessToken` vào `Dio` client header: `dio.options.headers['Authorization'] = 'Bearer $token'`.
 2. **Khởi Tạo Ngữ Cảnh CLB (FR03 & FR04)**: Gọi ngay `GET /api/v1/clubs/my-clubs`:
    - Nếu danh sách trả về **rỗng** (user mới chưa tham gia nhóm nào): Điều hướng sang màn hình Khám phá (`ExploreClubsScreen`) để user quét tìm CLB quanh đây.
-   - Nếu danh sách **có ít nhất 1 CLB**: Lấy CLB đầu tiên hoặc CLB đã chọn gần nhất (`activeClubId`), tự động gọi `POST /api/v1/clubs/{id}/switch-context` để nạp token ngữ cảnh CLB đó và mở thẳng `ClubHomeScreen`.
+   - Nếu danh sách **có ít nhất 1 CLB**: Lấy CLB đầu tiên hoặc CLB đã chọn gần nhất (`activeClubId`), thiết lập Header HTTP mặc định `X-Group-Id: selectedClub.clubId` và mở thẳng `ClubHomeScreen` (không gọi API switch-context).
 3. **Xử Lý Lỗi (Error Handling)**:
    - `400 Bad Request`: Sai tài khoản hoặc mật khẩu -> Hiển thị thông báo đỏ dưới ô nhập hoặc SnackBar: *"Tài khoản hoặc mật khẩu không chính xác."*
    - Tài khoản bị khóa (`isLocked == true`): Hiển thị Dialog cảnh báo: *"Tài khoản của bạn đã bị tạm khóa. Vui lòng liên hệ ban quản trị để được hỗ trợ."*
@@ -589,7 +590,7 @@ Swagger Group: `Clubs` & `FR03 - Quản lý CLB & Thành viên`
 | Method | Endpoint | Quyền Hạn Yêu Cầu | Swagger Group | Mô Tả Nghiệp Vụ |
 | :--- | :--- | :--- | :--- | :--- |
 | `POST` | `/api/v1/clubs` | Bearer Token | `Clubs` | Tạo CLB mới (Người tạo tự động nhận vai trò Host sở hữu 100% quyền hạn) |
-| `POST` | `/api/v1/clubs/{id}/switch-context` | Bearer Token | `Clubs` | **FR04**: Đổi context sang CLB này, cấp Token chứa đúng quyền thực tế |
+| *Header* | `X-Group-Id: <id>` | Bearer Token | `Security` | **FR04**: Header ngữ cảnh nhóm, thay thế API switch-context cũ |
 | `GET` | `/api/v1/clubs/my-clubs` | Bearer Token | `FR03` | **FR03**: Lấy danh sách CLB user đang tham gia kèm vai trò độc lập |
 | `POST` | `/api/v1/clubs/join` | Bearer Token | `FR03` | **FR03**: Tham gia CLB trực tiếp tức thì bằng mã Code nhóm |
 | `POST` | `/api/v1/clubs/{id}/join-requests` | Bearer Token | `FR03` | **FR03**: Gửi đơn xin gia nhập CLB kèm lời giới thiệu bản thân |
@@ -707,43 +708,21 @@ Swagger Group: `Clubs` & `FR03 - Quản lý CLB & Thành viên`
 
 ---
 
-#### 4.3. `POST /api/v1/clubs/{id}/switch-context` (FR04 - Chuyển Đổi Ngữ Cảnh Hoạt Động Của Nhóm)
+#### 4.3. Header `X-Group-Id` (FR04 - Chuyển Đổi Ngữ Cảnh Hoạt Động Của Nhóm)
 
-- **Màn hình kích hoạt**: Bấm vào một icon CLB trên thanh Discord Rail, chọn nhóm từ Dropdown trên AppBar, hoặc bấm nút **"Vào sinh hoạt CLB"** từ màn hình chi tiết CLB (`ClubDetailScreen`).
-- **Headers**: `Authorization: Bearer <ACCESS_TOKEN>`
-- **Response `200 OK`**:
-  ```json
-  {
-    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-    "clubId": "b86fa2e7-03b6-4299-923c-a93108ce8968",
-    "clubName": "CLB Cầu Lông Legends Quận 7",
-    "roleId": "e1586a65-1d02-4fc5-9118-28308bc25752",
-    "roleName": "Chủ phòng (Host)",
-    "permissions": [
-      "OPERATIONS.SESSION.VIEW",
-      "OPERATIONS.SESSION.CREATE",
-      "OPERATIONS.SESSION.UPDATE",
-      "OPERATIONS.SESSION.DELETE",
-      "OPERATIONS.RECRUIT.MANAGE",
-      "MEMBER.VIEW",
-      "MEMBER.ROLE.MANAGE",
-      "MEMBER.INFO.UPDATE",
-      "OPERATIONS.SCHEDULE.MANAGE"
-    ]
-  }
-  ```
+> [!NOTE]
+> **Đã bỏ API `POST /api/v1/clubs/{id}/switch-context`**. Toàn bộ hệ thống chuyển sang kiến trúc **Clean Context-Based Authorization** qua Header `X-Group-Id`.
 
-##### 🔄 Luồng Đồng Bộ Toàn Diện Phía Mobile:
-1. **Lưu Token Mới**: Thay thế Token cũ trong `Dio` client và `SecureStorageService`. Token mới này đã chứa claim `tenantId: clubId`.
-2. **Cập Nhật Active Context State**:
-   - `ref.read(clubContextViewModelProvider.notifier).state = state.copyWith(activeContext: response);`
-   - Ghi nhớ `activeClubId` vào local storage để lần mở app tiếp theo tự động vào đúng nhóm này.
-3. **Phân Quyền Động Các Nút Tương Tác Trên Mọi Màn Hình (`Permission-based UI Rendering`)**:
-   - Nút **"Tạo buổi chơi mới (+)"**: Ẩn nếu không có `OPERATIONS.SESSION.CREATE`.
-   - Nút **"Tuyển khách giao lưu"**: Ẩn nếu không có `OPERATIONS.RECRUIT.MANAGE`.
-   - Tab **"Duyệt đơn gia nhập"**: Ẩn nếu không có `MEMBER.JOIN_REQUEST.MANAGE`.
-   - Nút **"Cài đặt sân & giờ sinh hoạt tuần (⚙️)"**: Ẩn nếu không có `MEMBER.INFO.UPDATE`.
-4. **Tải Lại Dữ Liệu**: Gọi `ref.invalidate(clubSessionsViewModelProvider(clubId))` để tải đúng danh sách lịch sinh hoạt của câu lạc bộ vừa chọn.
+- **Màn hình kích hoạt**: Bấm vào icon CLB trên thanh Discord Rail, chọn nhóm từ Dropdown trên AppBar, hoặc bấm nút **"Vào sinh hoạt CLB"** từ màn hình chi tiết CLB (`ClubDetailScreen`).
+- **Cơ chế**:
+  1. Lấy danh sách CLB và mảng quyền hạn của từng CLB từ `GET /api/v1/clubs/my-clubs`.
+  2. Khi người dùng chọn CLB nào, Frontend chỉ cần gán Header HTTP:
+     ```http
+     X-Group-Id: <CLUB_GUID>
+     ```
+  3. Giữ nguyên 1 JWT Access Token toàn cục, không cần gọi API cấp lại token.
+  4. Backend thẩm tra quyền hạn động qua `GroupPermissionHandler` và Redis Cache (`group:perm:{userId}:{groupId}`) với TTL 10 phút.
+  5. Chi tiết hướng dẫn: Xem [`HUONG_DAN_FE_XAC_THUC_VA_NGU_CANH_X_GROUP_ID.md`](HUONG_DAN_FE_XAC_THUC_VA_NGU_CANH_X_GROUP_ID.md).
 
 ---
 

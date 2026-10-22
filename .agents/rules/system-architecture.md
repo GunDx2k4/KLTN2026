@@ -98,6 +98,9 @@ flowchart TD
    - Chỉ inject `ISender`. Cấm inject `DbContext` hay `IRepository`.
    - Tuyến đường CLB phải gắn guard `.RequireGroupPermission(GroupPermissions.*)`.
    - Kết quả phản hồi bắt buộc chuẩn hóa qua `result.Match(...)`.
+6. **Tầng Lõi BuildingBlocks (`src/BuildingBlocks/LegendsTeamVN.Core.*`):**
+   - Cung cấp các abstractions dùng chung (`Entity<TId>`, `IDomainEvent`, `ICommandHandler`, `EndpointGroupBase`, `Result<T>`).
+   - Tuân thủ ranh giới Clean Architecture bất biến: `Core.Domain` zero dependencies; `Core.Application` không phụ thuộc `Core.Infrastructure`, `Core.Persistence` hay `Core.Presentation`.
 
 ---
 

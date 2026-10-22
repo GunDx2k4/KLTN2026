@@ -284,7 +284,7 @@ graph TD
     A[Đọc currentUserStatus từ Response] --> B{isMember == true?}
     B -- Đúng --> C[User đã là thành viên CLB]
     C --> D[Hiển thị Nút Xanh: 'Vào Sinh Hoạt CLB']
-    D --> E[Bấm nút: Gọi switch-context & mở ClubHomeScreen]
+    D --> E[Bấm nút: Gán Header X-Group-Id & mở ClubHomeScreen]
     
     B -- Sai --> F{hasPendingJoinRequest == true?}
     F -- Đúng --> G[Đơn xin gia nhập đang chờ duyệt]
