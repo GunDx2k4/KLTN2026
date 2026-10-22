@@ -4,43 +4,10 @@ using LegendsTeamVN.Core.Application.Messaging.CQRS;
 using NetArchTest.Rules;
 using Xunit;
 
-namespace LegendsTeamVN.BadmintonClub.Architecture.Tests;
+namespace LegendsTeamVN.BadmintonClub.Architecture.Tests.Conventions;
 
-public class ApplicationTests
+public sealed class ApplicationConventionTests
 {
-    [Fact]
-    public void ApplicationLayer_ShouldNotHaveDependencyOn_InfrastructureLayer()
-    {
-        var result = Types.InAssembly(Application.AssemblyReference.Assembly)
-            .ShouldNot()
-            .HaveDependencyOn("LegendsTeamVN.BadmintonClub.Infrastructure")
-            .GetResult();
-
-        result.IsSuccessful.Should().BeTrue();
-    }
-
-    [Fact]
-    public void ApplicationLayer_ShouldNotHaveDependencyOn_PersistenceLayer()
-    {
-        var result = Types.InAssembly(Application.AssemblyReference.Assembly)
-            .ShouldNot()
-            .HaveDependencyOn("LegendsTeamVN.BadmintonClub.Persistence")
-            .GetResult();
-
-        result.IsSuccessful.Should().BeTrue();
-    }
-
-    [Fact]
-    public void ApplicationLayer_ShouldNotHaveDependencyOn_PresentationLayer()
-    {
-        var result = Types.InAssembly(Application.AssemblyReference.Assembly)
-            .ShouldNot()
-            .HaveDependencyOn("LegendsTeamVN.BadmintonClub.Presentation")
-            .GetResult();
-
-        result.IsSuccessful.Should().BeTrue();
-    }
-
     [Fact]
     public void CommandHandlers_ShouldHave_CommandHandlerPostfix()
     {
@@ -118,6 +85,21 @@ public class ApplicationTests
             .Inherit(typeof(AbstractValidator<>))
             .Should()
             .BeSealed()
+            .GetResult();
+
+        result.IsSuccessful.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Commands_ShouldHave_CommandPostfix()
+    {
+        var result = Types.InAssembly(Application.AssemblyReference.Assembly)
+            .That()
+            .ImplementInterface(typeof(ICommand))
+            .Or()
+            .ImplementInterface(typeof(ICommand<>))
+            .Should()
+            .HaveNameEndingWith("Command")
             .GetResult();
 
         result.IsSuccessful.Should().BeTrue();

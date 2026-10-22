@@ -2,9 +2,9 @@ using FluentAssertions;
 using NetArchTest.Rules;
 using Xunit;
 
-namespace LegendsTeamVN.BadmintonClub.Architecture.Tests;
+namespace LegendsTeamVN.BadmintonClub.Architecture.Tests.Dependencies;
 
-public class CoreTests
+public sealed class BuildingBlocksDependencyTests
 {
     [Fact]
     public void CoreDomainLayer_ShouldNotHaveDependencyOn_OtherCoreLayers()
@@ -74,6 +74,36 @@ public class CoreTests
             .HaveDependencyOnAny(
                 "LegendsTeamVN.Core.Infrastructure",
                 "LegendsTeamVN.Core.Persistence"
+            )
+            .GetResult();
+
+        result.IsSuccessful.Should().BeTrue();
+    }
+
+    [Fact]
+    public void DomainLayer_ShouldNotHaveDependencyOn_CoreInfrastructureOrPersistence()
+    {
+        var result = Types.InAssembly(Domain.AssemblyReference.Assembly)
+            .ShouldNot()
+            .HaveDependencyOnAny(
+                "LegendsTeamVN.Core.Infrastructure",
+                "LegendsTeamVN.Core.Persistence",
+                "LegendsTeamVN.Core.Presentation"
+            )
+            .GetResult();
+
+        result.IsSuccessful.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ApplicationLayer_ShouldNotHaveDependencyOn_CoreInfrastructureOrPersistence()
+    {
+        var result = Types.InAssembly(Application.AssemblyReference.Assembly)
+            .ShouldNot()
+            .HaveDependencyOnAny(
+                "LegendsTeamVN.Core.Infrastructure",
+                "LegendsTeamVN.Core.Persistence",
+                "LegendsTeamVN.Core.Presentation"
             )
             .GetResult();
 

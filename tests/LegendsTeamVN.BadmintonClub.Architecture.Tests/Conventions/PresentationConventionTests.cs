@@ -3,32 +3,10 @@ using LegendsTeamVN.Core.Presentation.Abstractions;
 using NetArchTest.Rules;
 using Xunit;
 
-namespace LegendsTeamVN.BadmintonClub.Architecture.Tests;
+namespace LegendsTeamVN.BadmintonClub.Architecture.Tests.Conventions;
 
-public class PresentationTests
+public sealed class PresentationConventionTests
 {
-    [Fact]
-    public void PresentationLayer_ShouldNotHaveDependencyOn_InfrastructureLayer()
-    {
-        var result = Types.InAssembly(Presentation.AssemblyReference.Assembly)
-            .ShouldNot()
-            .HaveDependencyOn("LegendsTeamVN.BadmintonClub.Infrastructure")
-            .GetResult();
-
-        result.IsSuccessful.Should().BeTrue();
-    }
-
-    [Fact]
-    public void PresentationLayer_ShouldNotHaveDependencyOn_PersistenceLayer()
-    {
-        var result = Types.InAssembly(Presentation.AssemblyReference.Assembly)
-            .ShouldNot()
-            .HaveDependencyOn("LegendsTeamVN.BadmintonClub.Persistence")
-            .GetResult();
-
-        result.IsSuccessful.Should().BeTrue();
-    }
-
     [Fact]
     public void Endpoints_ShouldHave_EndpointPostfix()
     {
@@ -37,6 +15,32 @@ public class PresentationTests
             .Inherit(typeof(EndpointGroupBase))
             .Should()
             .HaveNameEndingWith("Endpoint")
+            .GetResult();
+
+        result.IsSuccessful.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Endpoints_ShouldInheritFrom_EndpointGroupBase()
+    {
+        var result = Types.InAssembly(Presentation.AssemblyReference.Assembly)
+            .That()
+            .HaveNameEndingWith("Endpoint")
+            .Should()
+            .Inherit(typeof(EndpointGroupBase))
+            .GetResult();
+
+        result.IsSuccessful.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Endpoints_ShouldResideIn_PresentationEndpointsNamespace()
+    {
+        var result = Types.InAssembly(Presentation.AssemblyReference.Assembly)
+            .That()
+            .Inherit(typeof(EndpointGroupBase))
+            .Should()
+            .ResideInNamespace("LegendsTeamVN.BadmintonClub.Presentation.Endpoints")
             .GetResult();
 
         result.IsSuccessful.Should().BeTrue();
