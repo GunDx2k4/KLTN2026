@@ -12,5 +12,7 @@ public interface ISessionRepository : IGenericRepository<BadmintonSession, Guid>
     Task<bool> CanManageRotationAsync(Guid groupId, Guid userId, CancellationToken cancellationToken = default);
     Task<BadmintonSession?> GetRotationAsync(Guid sessionId, bool forUpdate, CancellationToken cancellationToken = default);
     void AddRotationMatches(IEnumerable<SessionMatch> matches);
+    void SynchronizeRotationPlayers(SessionMatch match, IReadOnlyCollection<MatchPlayer> previousPlayers);
+    Task<bool> CanEditManualRotationAsync(Guid groupId, Guid userId, CancellationToken ct = default);
     Task<bool> CanReceiveMatchInvitationAsync(Guid sessionId, Guid matchId, Guid userId, CancellationToken ct);
 }

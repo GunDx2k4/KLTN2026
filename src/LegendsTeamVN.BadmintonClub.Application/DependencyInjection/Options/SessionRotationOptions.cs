@@ -5,4 +5,5 @@ public sealed class SessionRotationOptions
     public const string SectionName = "SessionRotation";
     public bool Enabled { get; set; }
     public bool DispatchEnabled { get; set; }
+    public bool ManualEditingEnabled { get; set; }
 }

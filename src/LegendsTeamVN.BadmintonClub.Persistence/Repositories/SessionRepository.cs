@@ -1,3 +1,4 @@
+using System.Text.Json;
 using LegendsTeamVN.BadmintonClub.Domain.Entities;
 using LegendsTeamVN.BadmintonClub.Domain.Repositories;
 using LegendsTeamVN.Core.Persistence.Repositories;
@@ -34,6 +35,27 @@ public class SessionRepository(BadmintonDbContext dbContext)
         }
     }
 
+    public void SynchronizeRotationPlayers(SessionMatch match, IReadOnlyCollection<MatchPlayer> previousPlayers)
+    {
+        var retained = match.Players.Select(p => p.Id).ToHashSet();
+        var previousIds = previousPlayers.Select(p => p.Id).ToHashSet();
+        foreach (var player in previousPlayers.Where(p => !retained.Contains(p.Id)))
+            DbContext.Entry(player).State = EntityState.Deleted;
+        foreach (var player in match.Players.Where(p => !previousIds.Contains(p.Id)))
+            DbContext.Entry(player).State = EntityState.Added;
+    }
+
+    public async Task<bool> CanEditManualRotationAsync(Guid groupId, Guid userId, CancellationToken ct = default)
+    {
+        var role = await DbContext.GroupMembers.AsNoTracking().Where(m => m.GroupId == groupId && m.UserId == userId &&
+                m.Status == ClubMemberStatus.ACTIVE && !m.IsDeleted && m.Group.IsActive && !m.Group.IsDeleted &&
+                m.User.IsActive && !m.User.IsDeleted && m.RoleEntity.GroupId == groupId && !m.RoleEntity.IsDeleted &&
+                m.RoleEntity.RolePermissions.Any(rp => rp.Permission.PermissionCode == GroupPermissions.Operations.MatchManage))
+            .Select(m => new { m.RoleEntity.RoleName, PermissionCount = m.RoleEntity.RolePermissions.Count }).SingleOrDefaultAsync(ct);
+        return role is not null && (string.Equals(role.RoleName, "Host", StringComparison.OrdinalIgnoreCase) ||
+            role.PermissionCount >= GroupPermissions.TotalCount);
+    }
+
     public Task<bool> CanReceiveMatchInvitationAsync(Guid sessionId, Guid matchId, Guid userId, CancellationToken ct) =>
         DbContext.SessionMatches.AsNoTracking().AnyAsync(m => m.Id == matchId && m.SessionId == sessionId &&
             !m.IsDeleted && !m.Session.IsDeleted && m.Status == MatchStatus.PLAYING &&
@@ -54,11 +76,38 @@ public class SessionRepository(BadmintonDbContext dbContext)
 
         await DbContext.Entry(session).Collection(s => s.Bookings).Query()
             .Include(b => b.User).LoadAsync(cancellationToken);
-        await DbContext.Entry(session).Collection(s => s.Matches).Query()
-            .IgnoreQueryFilters().Include(m => m.Players).LoadAsync(cancellationToken);
+        try
+        {
+            await DbContext.Entry(session).Collection(s => s.Matches).Query()
+                .IgnoreQueryFilters().Include(m => m.Players).LoadAsync(cancellationToken);
+        }
+        catch (Exception ex) when (IsSnapshotReadFailure(ex))
+        {
+            throw new InvalidLineupSnapshotException(sessionId);
+        }
+        foreach (var match in session.Matches)
+        {
+            try { match.OriginalLineupSnapshot?.Validate(); }
+            catch (InvalidOperationException)
+            {
+                throw new InvalidLineupSnapshotException(sessionId, match.Id);
+            }
+        }
         await DbContext.Entry(session).Collection(s => s.Recruitments).Query()
             .Where(r => !r.IsDeleted).LoadAsync(cancellationToken);
         return session;
+    }
+
+    private static bool IsSnapshotReadFailure(Exception exception)
+    {
+        for (Exception? error = exception; error is not null; error = error.InnerException)
+        {
+            if (error is JsonException) return true;
+            if (error is FormatException or InvalidOperationException &&
+                (error.StackTrace?.Contains("System.Text.Json", StringComparison.Ordinal) == true ||
+                 error.StackTrace?.Contains("Storage.Json", StringComparison.Ordinal) == true)) return true;
+        }
+        return false;
     }
 
     public async Task<BadmintonSession?> GetRotationAsync(Guid sessionId, bool forUpdate, CancellationToken cancellationToken = default)

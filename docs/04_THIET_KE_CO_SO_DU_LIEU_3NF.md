@@ -348,6 +348,7 @@ Lưu danh sách người đăng ký tham gia buổi chơi và hàng đợi.
 | `queue_order` | INT | NOT NULL | 0 | Thứ tự hàng đợi (0: chính thức, 1, 2...: hàng đợi) |
 | `booked_at` | TIMESTAMP | NOT NULL | `now()` | Thời điểm bấm giữ chỗ |
 | `checkin_at` | TIMESTAMP | NULL | - | Thời điểm điểm danh có mặt tại sân |
+| `is_rotation_paused` | BOOLEAN | NOT NULL | false | UC14: cờ tạm nghỉ, migration mới đã kiểm chứng trên sandbox; chưa áp dụng DB đích |
 | `attendance_marked_at` | TIMESTAMP WITH TIME ZONE | NULL | - | Thời điểm cập nhật điểm danh gần nhất |
 | `attendance_marked_by` | UUID | NULL | - | ID người cập nhật điểm danh; dấu vết thực hiện, không khai báo FK trong migration hiện tại |
 
@@ -383,8 +384,11 @@ Lưu thông tin các trận đấu diễn ra trên từng sân của buổi chơ
 | `time_start` | TIMESTAMP WITH TIME ZONE | NULL | - | Giờ bắt đầu thực tế; đề xuất WAITING chưa có giá trị |
 | `time_end` | TIMESTAMP WITH TIME ZONE | NULL | - | Giờ kết thúc trận hoặc hủy đề xuất; trận FINISHED không kết thúc trước time_start |
 | `status` | VARCHAR(20) | NOT NULL | `'WAITING'` | Trạng thái: `WAITING`, `PLAYING`, `FINISHED`, `SKIPPED` |
+| `original_lineup_snapshot` | JSONB | NULL; CHECK SQL NULL hoặc JSON object | NULL | UC14: gợi ý gốc dưới dạng object; migration mới đã kiểm chứng sandbox, DB đích chưa nâng cấp |
 
 UC13 có unique index `ux_session_match_active_court` trên `(id_session, court_number)` với điều kiện trạng thái WAITING/PLAYING và chưa xóa. Phân trùng người giữa các trận được ngăn bởi khóa dòng session và kiểm tra Domain trong cùng transaction. Số lượt tăng theo từng sân; proposal luôn đúng bốn người, mỗi đội hai người.
+
+**UC14 — mapping/migration đã kiểm chứng sandbox ở đợt B:** migration `20261020150546_AddManualRotationIntervention` thêm hai cột được ghi ở các bảng trên; DB đích chưa được migrate. Object LineupSnapshot trong SessionMatch.cs được EF complex type + ToJson lưu thành JSONB, không thêm bảng/entity/converter riêng. SQL NULL là chưa chụp; CHECK ck_session_match_original_lineup_object chặn JSON null/scalar/array. Repository kiểm tra cấu trúc snapshot sau tải; UserId trong JSONB không có FK nên reset vẫn phải kiểm tra eligibility ở các đợt sau. Down chặn mọi snapshot IS NOT NULL hoặc người pause, không tự xóa dữ liệu để rollback. Chi tiết: [UC14-BE.md](Detail%20Design/UC14-BE.md).
 
 ---
 

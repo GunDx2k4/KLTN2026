@@ -356,14 +356,137 @@ public class BadmintonSession : AggregateRoot<Guid>
         return Result.Success();
     }
 
-    public Result StartRotationMatch(Guid matchId, DateTime now)
+    public Result UpdateManualLineup(Guid matchId, IReadOnlyCollection<Guid>? teamA,
+        IReadOnlyCollection<Guid>? teamB, long expectedRotationVersion, DateTime now)
     {
-        var match = Matches.FirstOrDefault(m => m.Id == matchId && !m.IsDeleted);
+        if (teamA is null || teamB is null || teamA.Count != 2 || teamB.Count != 2 ||
+            teamA.Concat(teamB).Any(id => id == Guid.Empty) || teamA.Concat(teamB).Distinct().Count() != 4 || expectedRotationVersion < 0)
+            return Result.Failure(Error.Validation("Rotation.InvalidLineup", "Cần 4 người khác nhau, mỗi đội đúng 2 người và version hợp lệ."));
+        var allowed = ValidateRotation(now);
+        if (allowed.IsFailure) return allowed;
+        if (!RotationStartedAt.HasValue)
+            return Result.Failure(Error.Conflict("Rotation.NotInitialized", "Chưa bắt đầu điều phối."));
+        if (expectedRotationVersion != RotationVersion)
+            return Result.Failure(Error.Conflict("Rotation.VersionConflict", "Đội hình đã thay đổi. Hãy tải lại."));
+        var match = Matches.SingleOrDefault(m => m.Id == matchId && m.SessionId == Id && !m.IsDeleted);
         if (match is null) return Result.Failure(Error.NotFound("Match.NotFound", "Không tìm thấy trận đấu."));
+        bool Eligible(Guid id) => ManualPlayerIsEligible(id, now);
+        var requested = teamA.Concat(teamB).ToHashSet();
+        if (match.Status != MatchStatus.WAITING || match.TimeStart.HasValue || match.TimeEnd.HasValue || !ValidProposal(match, now) ||
+            match.Players.Any(p => p.MatchId != match.Id || p.CheckinCourtAt.HasValue || !Eligible(p.UserId)) ||
+            requested.Any(id => !Eligible(id)) ||
+            Matches.Any(m => !m.IsDeleted && m.Id != match.Id && m.Status is MatchStatus.WAITING or MatchStatus.PLAYING &&
+                (m.CourtNumber == match.CourtNumber || m.Players.Any(p => requested.Contains(p.UserId) || match.Players.Any(x => x.UserId == p.UserId)))))
+            return Result.Failure(Error.Conflict("Rotation.StaleProposal", "Đội hình, sân hoặc người chơi không còn khả dụng. Hãy tải lại."));
+        if (match.HasLineup(teamA, teamB)) return Result.Success();
+        if (match.OriginalLineupSnapshot is null && match.Players.Any(p => p.IsManualSwapped))
+            return Result.Failure(Error.Conflict("Rotation.MissingOriginalLineup", "Không xác định được gợi ý gốc của đội hình đã chỉnh."));
+        match.OriginalLineupSnapshot?.Validate();
+        match.ApplyManualLineup(teamA, teamB);
+        UpdateRotationSchedule(now, true);
+        RecordRotationChange(now);
+        return Result.Success();
+    }
+
+    public Result SetRotationPause(Guid userId, bool isPaused, long expectedRotationVersion,
+        Guid? replacementUserId, DateTime now, bool generateProposals = true)
+    {
+        if (userId == Guid.Empty || expectedRotationVersion < 0 || replacementUserId == Guid.Empty ||
+            replacementUserId == userId || (!isPaused && replacementUserId.HasValue))
+            return Result.Failure(Error.Validation("Rotation.InvalidPause", "Thông tin tạm nghỉ/người thay không hợp lệ."));
+        if (IsDeleted || (isPaused && ValidateRotation(now).IsFailure))
+            return Result.Failure(Error.Conflict("Rotation.Closed", "Không được đặt tạm nghỉ khi buổi chưa bắt đầu hoặc đã đóng."));
+        if (!RotationStartedAt.HasValue)
+            return Result.Failure(Error.Conflict("Rotation.NotInitialized", "Chưa bắt đầu điều phối."));
+        if (expectedRotationVersion != RotationVersion)
+            return Result.Failure(Error.Conflict("Rotation.VersionConflict", "Điều phối đã thay đổi. Hãy tải lại."));
+        var booking = Bookings.SingleOrDefault(b => b.SessionId == Id && b.UserId == userId && !b.IsDeleted);
+        if (booking is null) return Result.Failure(Error.NotFound("Attendance.BookingNotFound", "Không tìm thấy người chơi trong buổi."));
+        if (isPaused && (!MatchRotationEngine.IsCheckedInParticipant(booking) || booking.User is null ||
+            Matches.Any(m => !m.IsDeleted && m.Status == MatchStatus.PLAYING && m.Players.Any(p => p.UserId == userId))))
+            return Result.Failure(Error.Conflict("Rotation.CannotPause", "Chỉ tạm nghỉ người đã điểm danh, có tài khoản hợp lệ và chưa thi đấu."));
+        var pending = Matches.Where(m => !m.IsDeleted && m.Status == MatchStatus.WAITING && m.Players.Any(p => p.UserId == userId)).ToList();
+        if (pending.Count > 1 || (replacementUserId.HasValue && pending.Count != 1))
+            return Result.Failure(Error.Conflict("Rotation.InvalidReplacement", "Người thay chỉ áp dụng cho một đề xuất đang giữ người này."));
+        if (booking.IsRotationPaused == isPaused && replacementUserId is null) return Result.Success();
+        var version = RotationVersion;
+        if (isPaused && replacementUserId is Guid replacement)
+        {
+            var match = pending.Single();
+            if (!ManualPlayerIsEligible(replacement, now) || match.Players.Any(p => p.UserId == replacement) ||
+                Matches.Any(m => !m.IsDeleted && m.Id != match.Id && m.Status is MatchStatus.WAITING or MatchStatus.PLAYING && m.Players.Any(p => p.UserId == replacement)))
+                return Result.Failure(Error.Conflict("Rotation.InvalidReplacement", "Người thay không còn khả dụng."));
+            var teamA = match.Players.Where(p => p.SideTeam == SideTeam.TEAM_A).Select(p => p.UserId == userId ? replacement : p.UserId).ToArray();
+            var teamB = match.Players.Where(p => p.SideTeam == SideTeam.TEAM_B).Select(p => p.UserId == userId ? replacement : p.UserId).ToArray();
+            var change = UpdateManualLineup(match.Id, teamA, teamB, expectedRotationVersion, now);
+            if (change.IsFailure) return change;
+        }
+        else if (isPaused)
+            foreach (var match in pending) match.SkipMatch(now);
+        booking.SetRotationPaused(isPaused);
+        // Resume never fakes an end time/check-in or bypasses the existing rest period.
+        if (ValidateRotation(now).IsSuccess) ReconcileRotation(now, generateProposals);
+        else NextProposalCheckAt = null;
+        if (RotationVersion == version) RecordRotationChange(now);
+        return Result.Success();
+    }
+
+    public Result RestoreManualLineup(Guid matchId, long expectedRotationVersion, DateTime now)
+    {
+        if (expectedRotationVersion < 0)
+            return Result.Failure(Error.Validation("Rotation.InvalidVersion", "Version không được âm."));
+        var allowed = ValidateRotation(now);
+        if (allowed.IsFailure) return allowed;
+        if (!RotationStartedAt.HasValue)
+            return Result.Failure(Error.Conflict("Rotation.NotInitialized", "Chưa bắt đầu điều phối."));
+        if (expectedRotationVersion != RotationVersion)
+            return Result.Failure(Error.Conflict("Rotation.VersionConflict", "Đội hình đã thay đổi. Hãy tải lại."));
+        var match = Matches.SingleOrDefault(m => m.Id == matchId && m.SessionId == Id && !m.IsDeleted);
+        if (match is null) return Result.Failure(Error.NotFound("Match.NotFound", "Không tìm thấy trận đấu."));
+        if (match.Status != MatchStatus.WAITING || match.TimeStart.HasValue || match.TimeEnd.HasValue ||
+            match.CourtNumber < 1 || match.CourtNumber > CourtCount || match.OriginalLineupSnapshot is null)
+            return Result.Failure(Error.Conflict("Rotation.CannotRestore", "Chỉ khôi phục trận đề xuất có gợi ý gốc hợp lệ."));
+        var original = match.OriginalLineupSnapshot;
+        original.Validate();
+        var ids = original.TeamA.Concat(original.TeamB).ToHashSet();
+        if (ids.Any(id => !ManualPlayerIsEligible(id, now)) ||
+            Matches.Any(m => !m.IsDeleted && m.Id != match.Id && m.Status is MatchStatus.WAITING or MatchStatus.PLAYING &&
+                (m.CourtNumber == match.CourtNumber || m.Players.Any(p => ids.Contains(p.UserId)))))
+            return Result.Failure(Error.Conflict("Rotation.OriginalPlayersUnavailable", "Người trong gợi ý gốc không còn khả dụng. Không thể khôi phục."));
+        if (match.HasLineup(original.TeamA, original.TeamB)) return Result.Success();
+        match.ApplyManualLineup(original.TeamA, original.TeamB);
+        UpdateRotationSchedule(now, true);
+        RecordRotationChange(now);
+        return Result.Success();
+    }
+
+    private bool ManualPlayerIsEligible(Guid userId, DateTime now) => Bookings.Any(b => b.SessionId == Id && b.UserId == userId &&
+        !b.IsDeleted && b.Status == BookingStatus.CHECKED_IN && !b.IsRotationPaused &&
+        b.User is { IsActive: true, IsDeleted: false } && b.User.Id == userId) && MatchRotationEngine.HasRested(this, userId, now);
+
+    public Result StartRotationMatch(Guid matchId, DateTime now) => StartRotationMatchCore(matchId, now, null);
+
+    public Result ConfirmManualMatch(Guid matchId, long expectedRotationVersion, DateTime now)
+    {
+        if (expectedRotationVersion < 0)
+            return Result.Failure(Error.Validation("Rotation.InvalidVersion", "Version không được âm."));
+        return StartRotationMatchCore(matchId, now, expectedRotationVersion);
+    }
+
+    private Result StartRotationMatchCore(Guid matchId, DateTime now, long? expectedRotationVersion)
+    {
+        var match = Matches.FirstOrDefault(m => m.Id == matchId && m.SessionId == Id && !m.IsDeleted);
+        if (match is null) return Result.Failure(Error.NotFound("Match.NotFound", "Không tìm thấy trận đấu."));
+        if (expectedRotationVersion is null && match.OriginalLineupSnapshot is not null)
+            return Result.Failure(Error.Conflict("Rotation.ManualConfirmationRequired", "Đội hình đã qua can thiệp thủ công. Cần xác nhận kèm version."));
         if (match.Status == MatchStatus.PLAYING) return Result.Success();
+        if (expectedRotationVersion.HasValue && expectedRotationVersion != RotationVersion)
+            return Result.Failure(Error.Conflict("Rotation.VersionConflict", "Đội hình đã thay đổi. Hãy tải lại trước khi xác nhận."));
         var allowed = ValidateRotation(now);
         if (allowed.IsFailure) return allowed;
         if (!RotationStartedAt.HasValue || match.Status != MatchStatus.WAITING || !ValidProposal(match, now) ||
+            (expectedRotationVersion.HasValue && (match.TimeStart.HasValue || match.TimeEnd.HasValue ||
+                match.Players.Any(p => p.MatchId != match.Id || p.CheckinCourtAt.HasValue || !ManualPlayerIsEligible(p.UserId, now)))) ||
             Matches.Any(m => !m.IsDeleted && m.Id != match.Id && m.Status is MatchStatus.WAITING or MatchStatus.PLAYING &&
                 (m.CourtNumber == match.CourtNumber || m.Players.Any(p => match.Players.Any(x => x.UserId == p.UserId)))))
             return Result.Failure(Error.Conflict("Rotation.StaleProposal", "Đội hình hoặc sân không còn hợp lệ. Hãy tải lại."));

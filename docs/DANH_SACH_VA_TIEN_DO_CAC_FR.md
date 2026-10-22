@@ -24,8 +24,8 @@
 | **FR12** | Khách vãng lai quét radar & Đăng ký trực tiếp slot giao lưu | Khám phá, Giữ chỗ & Kết nối (F2) |  **Đã xong 100%** | 3 APIs |
 | **FR13** | Cấu hình nhóm, phân quyền & Khởi tạo buổi chơi | Vận hành Buổi chơi & Điều phối (F3) |  **Đã xong 100%** | 6 APIs |
 | **FR14** | Điểm danh nhanh danh sách người chơi thực tế có mặt tại sân | Vận hành Buổi chơi & Điều phối (F3) | ⏳ *Sẵn sàng DB, cần thêm Endpoint* | 0 API |
-| **FR15** | Giải thuật tự động đề xuất xoay tua sân (Nghỉ lâu + Trình độ) | Vận hành Buổi chơi & Điều phối (F3) | ⏳ *Sẵn sàng DB, cần thêm Engine* | 0 API |
-| **FR16** | Host can thiệp điều chỉnh danh sách thi đấu thủ công | Vận hành Buổi chơi & Điều phối (F3) | ⏳ *Sẵn sàng DB, cần thêm Endpoint* | 0 API |
+| **FR15** | Giải thuật tự động đề xuất xoay tua sân (Nghỉ lâu + Trình độ) | Vận hành Buổi chơi & Điều phối (F3) | BE UC13 đã có engine/API; FE chưa triển khai | 5 API |
+| **FR16** | Host can thiệp điều chỉnh danh sách thi đấu thủ công | Vận hành Buổi chơi & Điều phối (F3) | BE A–G hoàn thành trên sandbox: chức năng, tranh chấp/rollback/SignalR hai instance/hồi quy đều đạt; FE và DB đích chưa triển khai | 4 API mới + mở rộng GET rotation |
 | **FR17** | Người chơi theo dõi lượt thi đấu cá nhân theo thời gian thực | Vận hành Buổi chơi & Điều phối (F3) | ⏳ *Sẵn sàng DB, cần thêm Endpoint* | 0 API |
 | **FR18** | Ghi nhận số quả cầu bóc mới và phụ phí phát sinh buổi chơi | Hạch toán Vật tư & Sổ quỹ (F4) | ⏳ *Sẵn sàng DB, cần thêm Endpoint* | 0 API |
 | **FR19** | Hạch toán chi phí đa hệ số tự động (Nam, Nữ, Tháng, Ngày) | Hạch toán Vật tư & Sổ quỹ (F4) | ⏳ *Sẵn sàng DB, cần thêm Engine* | 0 API |
@@ -191,10 +191,11 @@ Các phân hệ dưới đây đã có sẵn cấu trúc bảng và mô hình th
 - **FR15 - Điều phối xoay tua sân tự động**:
   - *Mục tiêu*: Khi một sân trống, giải thuật tự động chọn 4 người chơi tiếp theo ưu tiên theo: (1) Thời gian nghỉ lâu nhất (chống ngồi ngoài liên tiếp 2 trận), (2) Cân bằng tổng trình độ giữa 2 cặp đấu.
   - *Bảng dữ liệu đã có*: `session_match`, `match_player`.
-  - *Endpoint dự kiến*: `POST /api/v1/sessions/{sessionId}/matches/next`.
+  - *API BE hiện có*: GET `/api/v1/sessions/{sessionId}/rotation`, POST `/api/v1/sessions/{sessionId}/rotation/initialize`, POST `/api/v1/sessions/{sessionId}/rotation/proposals`, POST `/api/v1/sessions/{sessionId}/matches/{matchId}/start`, POST `/api/v1/sessions/{sessionId}/matches/{matchId}/finish`. Xem [UC13-BE.md](Detail%20Design/UC13-BE.md); endpoint matches/next cũ là dự kiến, không phải API đã triển khai.
 - **FR16 - Can thiệp xếp trận thủ công**:
   - *Mục tiêu*: Cho phép Host hoán đổi cặp đấu, đổi người vào sân bằng thao tác kéo thả trên mobile khi có yêu cầu phát sinh.
-  - *Endpoint dự kiến*: `PUT /api/v1/sessions/matches/{matchId}/swap-players`.
+  - *Đã triển khai C/D/E, kiểm chứng sandbox*: PUT `/api/v1/sessions/{sessionId}/matches/{matchId}/manual-lineup`; mở rộng GET rotation với baseline, chênh lệch, manual flags/capability. Mặc định ManualEditingEnabled=false; chỉ Host theo DB hiện hành và MatchManage được chỉnh/reset/pause/resume.
+  - *Đã triển khai D*: POST `/api/v1/sessions/{sessionId}/matches/{matchId}/restore-proposal`, PUT `/api/v1/sessions/{sessionId}/rotation/players/{userId}/pause`. *Đã triển khai E*: POST `/api/v1/sessions/{sessionId}/matches/{matchId}/confirm-manual-start`; start UC13 cũ bị 409 với baseline, untouched giữ nguyên; retry Playing không thêm bản ghi. F/G đã đạt trên sandbox; bộ review SQL/backup/rollback chuẩn bị tại D:/KhoaLuan/PLan_agent/UC14-DB-REVIEW/. Chưa chạy DB đích hoặc deploy. Xem [UC14-BE.md](Detail%20Design/UC14-BE.md). Endpoint swap-players cũ được thay bằng contract này. DB đích chưa nâng cấp.
 - **FR17 - Theo dõi lịch thi đấu thời gian thực**:
   - *Mục tiêu*: Cung cấp màn hình hiển thị trực quan cho người chơi: sân sắp đánh, bạn cùng chơi/đối thủ ở lượt tiếp theo và thời gian nghỉ dự kiến.
   - *Endpoint dự kiến*: `GET /api/v1/sessions/{sessionId}/my-matches`.

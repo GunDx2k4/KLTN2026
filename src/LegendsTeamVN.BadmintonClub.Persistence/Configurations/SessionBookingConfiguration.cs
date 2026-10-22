@@ -34,6 +34,8 @@ public class SessionBookingConfiguration : IEntityTypeConfiguration<SessionBooki
             .HasSentinel((Domain.Enums.BookingStatus)0)
             .HasComment("Trạng thái đăng ký của biểu quyết giữ chỗ. Miền giá trị: CONFIRMED, WAITING, ABSENT, CHECKED_IN.");
 
+        builder.Property(b => b.IsRotationPaused).HasColumnName("is_rotation_paused").HasDefaultValue(false);
+
         builder.Property(b => b.QueueOrder)
             .HasColumnName("queue_order")
             .HasDefaultValue(0);
