@@ -75,7 +75,8 @@ Toàn bộ các phản hồi lỗi từ server đều trả về theo chuẩn **
 
 > 🌟 **DÀNH CHO ĐỘI NGŨ MOBILE**: Xem toàn bộ các API mới triển khai được viết riêng tập trung tại:  
 > 👉 [**PHẦN ĐẶC TẢ ĐỘC LẬP: PHÂN HỆ HỒ SƠ CÁ NHÂN & TÌM KIẾM CLB QUANH ĐÂY (FR05 - FR06 - FR07)**](#-phần-đặc-tả-độc-lập-phân-hệ-hồ-sơ-cá-nhân--tìm-kiếm-clb-quanh-đây-fr05---fr06---fr07)  
-> 📄 Hoặc đọc file độc lập ngắn gọn: [PHAN_HE_1_HO_SO_VA_TIM_KIEM_CLB_FR05_FR06_FR07.md](file:///c:/code/abp_be/KLTN2026/docs/PHAN_HE_1_HO_SO_VA_TIM_KIEM_CLB_FR05_FR06_FR07.md)
+> 📄 Hoặc đọc file độc lập ngắn gọn: [PHAN_HE_1_HO_SO_VA_TIM_KIEM_CLB_FR05_FR06_FR07.md](docs/PHAN_HE_1_HO_SO_VA_TIM_KIEM_CLB_FR05_FR06_FR07.md)
+> 🏸 Hướng dẫn FE Phân hệ Quản lý Nhóm & CLB (19 APIs): [HUONG_DAN_FE_PHAN_HE_QUAN_LY_NHOM_CLB.md](docs/HUONG_DAN_FE_PHAN_HE_QUAN_LY_NHOM_CLB.md)
 
 1. [🌟 **PHÂN HỆ MỚI: HỒ SƠ & TÌM KIẾM CLB (FR05 - FR06 - FR07)**](#-phần-đặc-tả-độc-lập-phân-hệ-hồ-sơ-cá-nhân--tìm-kiếm-clb-quanh-đây-fr05---fr06---fr07) *(5 APIs - MỚI HOÀN THIỆN)*
 2. [Module 1: Xác Thực & Đăng Nhập (Auth)](#-module-1-xác-thực--đăng-nhập-auth) *(5 APIs)*
@@ -92,7 +93,7 @@ Toàn bộ các phản hồi lỗi từ server đều trả về theo chuẩn **
 ## 🌟 PHẦN ĐẶC TẢ ĐỘC LẬP: PHÂN HỆ HỒ SƠ CÁ NHÂN & TÌM KIẾM CLB QUANH ĐÂY (FR05 - FR06 - FR07)
 
 > **Mục đích**: Viết riêng toàn bộ nghiệp vụ, luồng xử lý và dữ liệu của nhóm chức năng mới: Hồ sơ cá nhân & Trình độ (`FR05`), Tìm kiếm CLB quanh vị trí GPS (`FR06`), và Xem thông tin chi tiết CLB & Lịch định kỳ tuần (`FR07`).  
-> **Tài liệu độc lập dành cho Mobile**: [PHAN_HE_1_HO_SO_VA_TIM_KIEM_CLB_FR05_FR06_FR07.md](file:///c:/code/abp_be/KLTN2026/docs/PHAN_HE_1_HO_SO_VA_TIM_KIEM_CLB_FR05_FR06_FR07.md)
+> **Tài liệu độc lập dành cho Mobile**: [PHAN_HE_1_HO_SO_VA_TIM_KIEM_CLB_FR05_FR06_FR07.md](docs/PHAN_HE_1_HO_SO_VA_TIM_KIEM_CLB_FR05_FR06_FR07.md) | [HUONG_DAN_FE_PHAN_HE_QUAN_LY_NHOM_CLB.md](docs/HUONG_DAN_FE_PHAN_HE_QUAN_LY_NHOM_CLB.md)
 
 ### 📌 Bảng Tổng Hợp 5 API Phân Hệ Mới
 
@@ -406,7 +407,7 @@ graph TD
 ### 📱 Hướng Dẫn Tích Hợp Nhanh Cho Mobile Flutter
 
 > 💡 **Chi tiết mã nguồn mẫu đầy đủ**: Toàn bộ Enums, DTOs (`UserProfileResponseDto`, `ExploreClubResponseDto`, `ClubDetailResponseDto`...), RemoteDataSource implementations và Riverpod ViewModels đã được viết sẵn từng dòng tại:  
-> 👉 [**Tài liệu kỹ thuật độc lập Phân hệ 1 cho Mobile**](file:///c:/code/abp_be/KLTN2026/docs/PHAN_HE_1_HO_SO_VA_TIM_KIEM_CLB_FR05_FR06_FR07.md#5-hướng-dẫn-triển-khai-code-mobile-flutter)
+> 👉 [**Tài liệu kỹ thuật độc lập Phân hệ 1 cho Mobile**](docs/PHAN_HE_1_HO_SO_VA_TIM_KIEM_CLB_FR05_FR06_FR07.md#5-hướng-dẫn-triển-khai-code-mobile-flutter)
 
 1. **Hồ sơ cá nhân & Trình độ (FR05)**:
    - Thêm vào [user_remote_datasource.dart](file:///c:/code/base_fe/KLTN2026-2027/KLTN2026-2027/lib/data/datasource/remote/abstract/user_remote_datasource.dart): `getUserProfile()` và `updateUserProfile(UpdateUserProfileRequestDto request)`.
@@ -1302,7 +1303,7 @@ graph TD
 
 ## 📌 Bảng Tra Cứu Toàn Bộ Mã Quyền Hạn (`GroupPermissions`)
 
-Bảng mã quyền hạn chuẩn hóa theo hệ thống phân quyền đa nhóm (Multi-Group RBAC) tại [GroupPermissions.cs](file:///c:/code/abp_be/KLTN2026/src/LegendsTeamVN.BadmintonClub.Domain/Constants/GroupPermissions.cs):
+Bảng mã quyền hạn chuẩn hóa theo hệ thống phân quyền đa nhóm (Multi-Group RBAC) tại [GroupPermissions.cs](src/LegendsTeamVN.BadmintonClub.Domain/Constants/GroupPermissions.cs):
 
 | Phân Nhóm | Mã Quyền (`Code`) | Tên Quyền | Phạm Vi Áp Dụng |
 | :--- | :--- | :--- | :--- |

@@ -280,7 +280,8 @@ Các phân hệ dưới đây đã có sẵn cấu trúc bảng và mô hình th
 
 2. **Tài liệu đặc tả chi tiết chuyên sâu**:
    - Đặc tả luồng dữ liệu, JSON Request/Response, logic Flutter mẫu: [docs/API_DOCUMENTATION.md](file:///c:/code/abp_be/KLTN2026/docs/API_DOCUMENTATION.md)
-   - Đặc tả độc lập cho Phân hệ 1 (FR05, FR06, FR07): [docs/PHAN_HE_1_HO_SO_VA_TIM_KIEM_CLB_FR05_FR06_FR07.md](file:///c:/code/abp_be/KLTN2026/docs/PHAN_HE_1_HO_SO_VA_TIM_KIEM_CLB_FR05_FR06_FR07.md)
+   - Đặc tả độc lập cho Phân hệ 1 (FR05, FR06, FR07): [docs/PHAN_HE_1_HO_SO_VA_TIM_KIEM_CLB_FR05_FR06_FR07.md](docs/PHAN_HE_1_HO_SO_VA_TIM_KIEM_CLB_FR05_FR06_FR07.md)
+   - Hướng dẫn FE Phân hệ Quản lý Nhóm & CLB (19 APIs): [docs/HUONG_DAN_FE_PHAN_HE_QUAN_LY_NHOM_CLB.md](docs/HUONG_DAN_FE_PHAN_HE_QUAN_LY_NHOM_CLB.md)
 
 3. **Tài khoản kiểm thử có sẵn dữ liệu**:
    - Mật khẩu tất cả tài khoản: **`admin`**
