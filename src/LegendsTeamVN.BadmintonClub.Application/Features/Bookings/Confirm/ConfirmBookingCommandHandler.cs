@@ -3,6 +3,7 @@ using LegendsTeamVN.BadmintonClub.Application.Features.Recruitments;
 using LegendsTeamVN.BadmintonClub.Domain.Enums;
 using LegendsTeamVN.BadmintonClub.Domain.Repositories;
 using LegendsTeamVN.Core.Application.Messaging.CQRS;
+using LegendsTeamVN.Core.Identity.Abstractions;
 using LegendsTeamVN.Core.Utilities.Results;
 
 namespace LegendsTeamVN.BadmintonClub.Application.Features.Bookings.Confirm;
@@ -10,14 +11,27 @@ namespace LegendsTeamVN.BadmintonClub.Application.Features.Bookings.Confirm;
 public sealed class ConfirmBookingCommandHandler(
     ISessionRepository sessionRepository,
     IBookingRepository bookingRepository,
-    IUserRepository userRepository) : ICommandHandler<ConfirmBookingCommand, SessionBookingResponse>
+    IUserRepository userRepository,
+    ICurrentUserService currentUserService) : ICommandHandler<ConfirmBookingCommand, SessionBookingResponse>
 {
     public async Task<Result<SessionBookingResponse>> Handle(ConfirmBookingCommand command, CancellationToken cancellationToken)
     {
+        var userId = currentUserService.UserId;
+        if (!userId.HasValue)
+        {
+            return Result.Failure<SessionBookingResponse>(Error.Unauthorized("User.Unauthorized", "Vui lòng đăng nhập để thực hiện thao tác."));
+        }
+
         var session = await sessionRepository.GetAttendanceAsync(command.SessionId, true, cancellationToken);
         if (session is null)
         {
             return Result.Failure<SessionBookingResponse>(Error.NotFound("Session.NotFound", "Không tìm thấy buổi chơi."));
+        }
+
+        var canManage = await sessionRepository.CanManageAttendanceAsync(session.GroupId, userId.Value, cancellationToken);
+        if (!canManage)
+        {
+            return Result.Failure<SessionBookingResponse>(Error.Forbidden("Booking.Forbidden", "Bạn không có quyền duyệt người chơi vào buổi sinh hoạt này."));
         }
 
         if (DateTime.UtcNow >= session.EndTime)
