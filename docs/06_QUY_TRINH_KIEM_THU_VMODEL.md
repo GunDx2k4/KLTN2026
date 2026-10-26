@@ -24,7 +24,7 @@ Nhằm đảm bảo tính đúng đắn của các giải pháp kỹ thuật, t�
 
 ### 2.1. Cấp độ 1: Kiểm thử Kiến trúc Tự động (Architecture Testing với NetArchTest)
 
-Hệ thống tích hợp bộ kiểm thử kiến trúc tự động trong project [`LegendsTeamVN.BadmintonClub.Architecture.Tests`](file:///d:/[l7TeamVN]/LegendsTeamVN.BadmintonClub/tests/LegendsTeamVN.BadmintonClub.Architecture.Tests). Bất kỳ đoạn mã nào vi phạm ranh giới phân tầng Clean Architecture sẽ lập tức làm bài test thất bại (Failed) trong quy trình CI/CD.
+Hệ thống tích hợp bộ kiểm thử kiến trúc tự động trong project [`LegendsTeamVN.BadmintonClub.Architecture.Tests`]. Bất kỳ đoạn mã nào vi phạm ranh giới phân tầng Clean Architecture sẽ lập tức làm bài test thất bại (Failed) trong quy trình CI/CD.
 
 ```bash
 dotnet test tests/LegendsTeamVN.BadmintonClub.Architecture.Tests/LegendsTeamVN.BadmintonClub.Architecture.Tests.csproj --verbosity minimal
@@ -48,7 +48,7 @@ dotnet test tests/LegendsTeamVN.BadmintonClub.Architecture.Tests/LegendsTeamVN.B
 
 ### 2.2. Cấp độ 2: Kiểm thử Ứng dụng & Nghiệp vụ (Application & Unit Testing)
 
-Project [`LegendsTeamVN.BadmintonClub.Application.Tests`](file:///d:/[l7TeamVN]/LegendsTeamVN.BadmintonClub/tests/LegendsTeamVN.BadmintonClub.Application.Tests) tập trung kiểm thử các kịch bản nghiệp vụ cốt lõi, bảo vệ tính toàn vẹn (Invariants) của Aggregate Roots.
+Project [`LegendsTeamVN.BadmintonClub.Application.Tests`] tập trung kiểm thử các kịch bản nghiệp vụ cốt lõi, bảo vệ tính toàn vẹn (Invariants) của Aggregate Roots.
 
 ```bash
 dotnet test tests/LegendsTeamVN.BadmintonClub.Application.Tests/LegendsTeamVN.BadmintonClub.Application.Tests.csproj --verbosity minimal
@@ -103,12 +103,12 @@ Kiểm tra sự phối hợp đồng bộ giữa các tầng thành phần kỹ 
 | **UAT-03** | Duyệt đơn gia nhập CLB | 1. Host mở tab Join Requests.<br>2. Bấm "Chấp thuận". | Ứng viên trở thành Thành viên chính thức (`ACTIVE`), được gán vai trò mặc định. |  Đạt |
 | **UAT-04** | Giữ chỗ & Hàng đợi tự động | 1. Host mở buổi chơi 12 người.<br>2. 12 thành viên bấm giữ chỗ.<br>3. Người thứ 13 bấm giữ chỗ. | 12 người đầu tiên có vé `CONFIRMED`. Người thứ 13 vào hàng đợi `WAITING (Top 1)`. |  Đạt |
 | **UAT-05** | Phát radar tìm khách giao lưu | 1. Buổi chơi thiếu 2 người.<br>2. Host phát tín hiệu bán kính 5km.<br>3. Khách vãng lai lân cận nhận thông báo. | Khách vãng lai bấm tham gia trực tiếp, lấp đầy slot trống thành công. |  Đạt |
-| **UAT-06** | Hạch toán chia tiền & Quét VietQR | 1. Host nhập 3 quả cầu bóc mới.<br>2. Bấm chốt sổ buổi chơi.<br>3. Người chơi quét mã VietQR chuyển tiền. | Hệ thống tự động gạch nợ sang `PAID`, Sổ quỹ mở ghi nhận dòng tiền thu tức thì. |  Đạt |
+| **UAT-06** | Hạch toán chia tiền & Quét VietQR | 1. Host nhập 3 quả cầu bóc mới.<br>2. Bấm chốt sổ buổi chơi.<br>3. Người chơi quét mã VietQR chuyển tiền. | Hệ thống tự động xác nhận thanh toán sang `PAID`, Sổ quỹ mở ghi nhận dòng tiền thu tức thì. |  Đạt |
 
 ---
 
 ## 3. KẾT LUẬN ĐÁNH GIÁ CHẤT LƯỢNG HỆ THỐNG
 
 1. **Về độ ổn định & Tính toàn vẹn kiến trúc**: 100% các quy tắc phân tầng Clean Architecture, mã hóa mật khẩu, kiểm soát ngữ cảnh đa nhóm và đóng gói Entity đều được kiểm chứng tự động, không có bất kỳ vi phạm kiến trúc nào.
-2. **Về độ chính xác nghiệp vụ**: Hệ thống khép kín và tự động hóa thành công toàn bộ 4 bài toán điểm đau thực tế: Giữ chỗ không vượt trần, Xoay tua sân công bằng theo thời gian nghỉ, Hạch toán chi phí đa hệ số theo lượng cầu bóc mới và Tự động gạch nợ vào Sổ quỹ mở qua VietQR.
+2. **Về độ chính xác nghiệp vụ**: Hệ thống khép kín và tự động hóa thành công toàn bộ 4 bài toán điểm đau thực tế: Giữ chỗ không vượt trần, Xoay tua sân công bằng theo thời gian nghỉ, Hạch toán chi phí đa hệ số theo lượng cầu bóc mới và Tự động xác nhận thanh toán vào Sổ quỹ mở qua VietQR.
 3. **Mức độ hoàn thiện**: Sản phẩm đã sẵn sàng chuyển giao và nghiệm thu thực tế trên cả nền tảng Backend API và ứng dụng di động Flutter.

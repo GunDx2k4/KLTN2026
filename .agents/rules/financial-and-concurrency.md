@@ -12,7 +12,7 @@ Tài liệu định nghĩa các quy tắc xử lý tranh chấp và an toàn tà
 ## 1. Quy Tắc Khóa Phân Tán (Redis Distributed Lock)
 
 ### 1.1. Bối cảnh bắt buộc sử dụng:
-1. **Biểu quyết giữ slot buổi chơi (`BookSlotCommand`):** Khi nhiều người cùng ấn giữ slot tại giây cuối, tránh trường hợp tổng số người `CONFIRMED` vượt quá trần `MaxPlayers` của sân.
+1. **Đăng ký giữ chỗ buổi chơi (`VoteBookingCommand`):** Khi nhiều người cùng ấn giữ slot tại giây cuối, tránh trường hợp tổng số người `CONFIRMED` vượt quá trần `MaxPlayers` của sân.
 2. **Tiếp nhận slot giao lưu (`AcceptRecruitmentSlotCommand`):** Tránh 2 khách cùng chiếm 1 suất tuyển duy nhất còn lại.
 3. **Quyết toán chi phí buổi chơi (`CalculateSessionFeeCommand`):** Tránh trường hợp 2 Host cùng bấm tính tiền đồng thời gây tạo 2 bộ hóa đơn trùng lặp.
 4. **Tiếp nhận Webhook SePay (`ProcessSepayWebhookCommand`):** Ngăn chặn 2 request webhook cùng xử lý một mã giao dịch ngân hàng cùng lúc.

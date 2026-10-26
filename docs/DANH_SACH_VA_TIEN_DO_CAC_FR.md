@@ -17,7 +17,7 @@
 | **FR05** | Quản lý hồ sơ cá nhân & Trình độ chuyên môn tự đánh giá | Quản trị Tài khoản & Đa nhóm (F1) |  **Đã xong 100%** | 2 APIs |
 | **FR06** | Tìm kiếm & Khám phá CLB quanh vị trí GPS & Bán kính | Khám phá, Giữ chỗ & Kết nối (F2) |  **Đã xong 100%** | 1 API |
 | **FR07** | Xem chi tiết thông tin CLB & Lịch sinh hoạt định kỳ tuần | Khám phá, Giữ chỗ & Kết nối (F2) |  **Đã xong 100%** | 3 APIs |
-| **FR08** | Biểu quyết giữ chỗ buổi chơi có kiểm soát sĩ số | Khám phá, Giữ chỗ & Kết nối (F2) |  **Đã xong 100%** | 3 APIs |
+| **FR08** | Đăng ký giữ chỗ buổi chơi có kiểm soát sĩ số | Khám phá, Giữ chỗ & Kết nối (F2) |  **Đã xong 100%** | 3 APIs |
 | **FR09** | Tự động kích hoạt hàng đợi khi đạt trần sức chứa sân | Khám phá, Giữ chỗ & Kết nối (F2) |  **Đã xong 100%** | Logic tự động |
 | **FR10** | Tự động đôn người chơi đầu hàng đợi khi có người báo vắng | Khám phá, Giữ chỗ & Kết nối (F2) |  **Đã xong 100%** | 1 API + Logic |
 | **FR11** | Host phát tín hiệu tìm người giao lưu lân cận khi thiếu quân | Khám phá, Giữ chỗ & Kết nối (F2) |  **Đã xong 100%** | 3 APIs |
@@ -30,7 +30,7 @@
 | **FR18** | Ghi nhận số quả cầu bóc mới và phụ phí phát sinh buổi chơi | Hạch toán Vật tư & Sổ quỹ (F4) | ⏳ *Sẵn sàng DB, cần thêm Endpoint* | 0 API |
 | **FR19** | Hạch toán chi phí đa hệ số tự động (Nam, Nữ, Tháng, Ngày) | Hạch toán Vật tư & Sổ quỹ (F4) | ⏳ *Sẵn sàng DB, cần thêm Engine* | 0 API |
 | **FR20** | Khởi tạo mã VietQR thanh toán nhúng sẵn tiền & mã duy nhất | Hạch toán Vật tư & Sổ quỹ (F4) | ⏳ *Sẵn sàng DB, cần thêm Engine* | 0 API |
-| **FR21** | Tiếp nhận biến động số dư ngân hàng để tự động gạch nợ | Hạch toán Vật tư & Sổ quỹ (F4) | ⏳ *Sẵn sàng DB, cần thêm Webhook* | 0 API |
+| **FR21** | Tiếp nhận biến động số dư ngân hàng để tự động xác nhận thanh toán | Hạch toán Vật tư & Sổ quỹ (F4) | ⏳ *Sẵn sàng DB, cần thêm Webhook* | 0 API |
 | **FR22** | Quản trị Sổ quỹ mở nội bộ minh bạch (Thu, Chi, Dư nợ) | Hạch toán Vật tư & Sổ quỹ (F4) | ⏳ *Sẵn sàng DB, cần thêm Endpoint* | 0 API |
 | **FR23** | Đánh giá tín nhiệm hai chiều (Điểm thành viên & Điểm CLB) | Đánh giá & Tín nhiệm (F5) | ⏳ *Sẵn sàng DB, cần thêm Endpoint* | 0 API |
 
@@ -81,7 +81,7 @@
 ---
 
 ### 4. FR05: Quản Lý Hồ Sơ Cá Nhân & Trình Độ Tự Đánh Giá
-- **Mục tiêu**: Quản lý ảnh đại diện thật, họ tên, giới tính, trạng thái mở nhận kèo giao lưu (`isOpenForGuest`), điểm uy tín cá nhân và 6 bậc trình độ kỹ năng chuyên môn chuẩn:
+- **Mục tiêu**: Quản lý ảnh đại diện thật, họ tên, giới tính, trạng thái sẵn sàng tham gia giao lưu (`isOpenForGuest`), điểm uy tín cá nhân và 6 bậc trình độ kỹ năng chuyên môn chuẩn:
   - `1 - NB`: Mới tập chơi (Newbie)
   - `2 - Y`: Yếu (Biết luật, đỡ được cầu cơ bản)
   - `3 - TBY`: Trung bình yếu (Phông cầu, đập cầu cơ bản)
@@ -91,7 +91,7 @@
 - **Swagger Group**: `FR05 - Quản lý hồ sơ cá nhân & Trình độ`
 - **Danh sách API**:
   1. `GET /api/v1/user/profile`: Xem thông tin chi tiết hồ sơ cá nhân, ảnh đại diện, trình độ hiện tại và điểm uy tín.
-  2. `PUT /api/v1/user/profile`: Cập nhật ảnh đại diện (`avatarUrl`), họ và tên, giới tính, trình độ tự đánh giá (`skillLevel`) và bật/tắt nhận kèo giao lưu (`isOpenForGuest`).
+  2. `PUT /api/v1/user/profile`: Cập nhật ảnh đại diện (`avatarUrl`), họ và tên, giới tính, trình độ tự đánh giá (`skillLevel`) và bật/tắt sẵn sàng tham gia giao lưu (`isOpenForGuest`).
 
 ---
 
@@ -115,17 +115,17 @@
 
 ---
 
-### 7. FR08, FR09, FR10: Biểu Quyết Giữ Chỗ, Hàng Đợi & Tự Động Đôn Hàng
+### 7. FR08, FR09, FR10: Đăng Ký Giữ Chỗ, Hàng Đợi & Tự Động Đôn Hàng
 - **Mục tiêu**:
-  - **FR08**: Thành viên biểu quyết giữ chỗ (`Vote YES`) trước hạn đóng sổ.
+  - **FR08**: Thành viên đăng ký giữ chỗ (`Vote YES`) trước hạn đóng sổ.
   - **FR09 (Hàng đợi tự động)**: Khi số lượng vé chính thức chạm trần tối đa theo số sân (`maxPlayers = courtCount * playersPerCourt`), các lượt vote tiếp theo tự động chuyển vào Hàng đợi dự bị (`WAITING_LIST`) theo thứ tự thời gian (`queueNumber = 1, 2, 3...`).
   - **FR10 (Tự động đôn hàng)**: Khi một người có vé chính thức báo vắng (`Cancel Booking`), hệ thống tự động đôn người chờ ở vị trí số #1 lên vé chính thức (`CONFIRMED`) và tự động đẩy các thứ tự còn lại lên trước.
-- **Swagger Group**: `FR08-FR10 - Biểu quyết giữ chỗ & Hàng đợi`
+- **Swagger Group**: `FR08-FR10 - Đăng ký giữ chỗ & Hàng đợi`
 - **Danh sách API**:
-  1. `POST /api/v1/sessions/{sessionId}/bookings`: Biểu quyết giữ chỗ tham gia buổi chơi (Hệ thống tự động phân nhánh cấp vé `CONFIRMED` hoặc đưa vào `WAITING_LIST`).
+  1. `POST /api/v1/sessions/{sessionId}/bookings`: Đăng ký giữ chỗ tham gia buổi chơi (Hệ thống tự động phân nhánh cấp vé `CONFIRMED` hoặc đưa vào `WAITING_LIST`).
   2. `DELETE /api/v1/sessions/{sessionId}/bookings/me`: Hủy giữ chỗ / Báo vắng (Tự động đôn người đầu hàng đợi lên chính thức).
   3. `GET /api/v1/sessions/{sessionId}/bookings`: Lấy danh sách toàn bộ người đã giữ vé chính thức và danh sách hàng đợi của buổi chơi.
-  4. `GET /api/v1/sessions/{sessionId}/bookings/me`: Kiểm tra trạng thái vé biểu quyết giữ chỗ của chính mình.
+  4. `GET /api/v1/sessions/{sessionId}/bookings/me`: Kiểm tra trạng thái vé đăng ký giữ chỗ của chính mình.
 
 ---
 
@@ -212,7 +212,7 @@ Các phân hệ dưới đây đã có sẵn cấu trúc bảng và mô hình th
 │ Nhóm Tài Chính & Sổ Quỹ  │ • FR18: Ghi nhận số quả cầu bóc & Phụ phí   │
 │                          │ • FR19: Hạch toán chia tiền đa hệ số        │
 │                          │ • FR20: Khởi tạo mã VietQR thanh toán       │
-│                          │ • FR21: Webhook ngân hàng tự động gạch nợ   │
+│                          │ • FR21: Webhook ngân hàng tự động xác nhận thanh toán   │
 │                          │ • FR22: Quản trị Sổ quỹ mở minh bạch        │
 ├──────────────────────────┼─────────────────────────────────────────────┤
 │ Nhóm Đánh Giá & Tín Nhiệm│ • FR23: Đánh giá uy tín 2 chiều (User & CLB)│
@@ -251,8 +251,8 @@ Các phân hệ dưới đây đã có sẵn cấu trúc bảng và mô hình th
   - *Mục tiêu*: Tự động sinh chuỗi mã VietQR nhúng sẵn chính xác số tiền phải đóng và mã giao dịch định danh duy nhất (ví dụ: `PAY_SES123_USR456`) để người chơi quét chuyển khoản bằng app ngân hàng.
   - *Bảng dữ liệu đã có*: `session_fee`, `group_bank_account`.
   - *Endpoint dự kiến*: `GET /api/v1/sessions/{sessionId}/fees/me/qr`.
-- **FR21 - Đối soát & Gạch nợ ngân hàng tự động**:
-  - *Mục tiêu*: Tiếp nhận webhook biến động số dư tài khoản ngân hàng (Casso / SePay / VietinBank), tự động khớp nội dung chuyển khoản với mã định danh hóa đơn, gạch nợ sang trạng thái `PAID` mà không cần thủ quỹ kiểm tra sao kê thủ công.
+- **FR21 - Đối soát & Xác nhận thanh toán ngân hàng tự động**:
+  - *Mục tiêu*: Tiếp nhận webhook biến động số dư tài khoản ngân hàng (Casso / SePay / VietinBank), tự động khớp nội dung chuyển khoản với mã định danh hóa đơn, xác nhận thanh toán sang trạng thái `PAID` mà không cần thủ quỹ kiểm tra sao kê thủ công.
   - *Bảng dữ liệu đã có*: `bank_transaction`.
   - *Endpoint dự kiến*: `POST /api/v1/webhooks/bank-transfer`.
 - **FR22 - Quản trị Sổ quỹ mở nội bộ minh bạch**:
@@ -265,7 +265,7 @@ Các phân hệ dưới đây đã có sẵn cấu trúc bảng và mô hình th
 ### 3. Phân hệ Đánh giá uy tín & Chất lượng nhóm (FR23)
 - **FR23 - Đánh giá tín nhiệm hai chiều & Điểm uy tín**:
   - *Mục tiêu*:
-    - **Điểm uy tín thành viên**: Tự động tăng khi tham gia đúng giờ, thanh toán sòng phẳng; tự động trừ điểm khi bùng kèo (báo vắng sát giờ hoặc không đến).
+    - **Điểm uy tín thành viên**: Tự động tăng khi tham gia đúng giờ, thanh toán sòng phẳng; tự động trừ điểm khi hủy hẹn sát giờ (báo vắng sát giờ hoặc không đến).
     - **Điểm chất lượng hội nhóm**: Tính theo điểm đánh giá của thành viên sau buổi chơi kết hợp tính minh bạch của sổ quỹ.
   - *Bảng dữ liệu đã có*: `member_review`, `group_review`.
   - *Endpoint dự kiến*: `POST /api/v1/reviews/member`, `POST /api/v1/reviews/club`.
@@ -276,7 +276,7 @@ Các phân hệ dưới đây đã có sẵn cấu trúc bảng và mô hình th
 
 1. **Swagger UI trực quan**:
    - Khi Backend đang chạy, truy cập đường dẫn: **`http://localhost:54796/swagger`**
-   - Toàn bộ các API đều được phân nhóm rõ ràng theo Tag từng FR (ví dụ: `FR03 - Quản lý CLB & Thành viên`, `FR05 - Quản lý hồ sơ cá nhân & Trình độ`, `FR06 - Khám phá nhóm theo vị trí`, `FR07 - Thông tin chi tiết & Lịch sinh hoạt nhóm`, `FR08-FR10 - Biểu quyết giữ chỗ & Hàng đợi`, `FR11 - Phát tín hiệu tìm khách giao lưu`, `FR12 - Khách vãng lai đăng ký tham gia`, `FR13 - Khởi tạo buổi chơi`).
+   - Toàn bộ các API đều được phân nhóm rõ ràng theo Tag từng FR (ví dụ: `FR03 - Quản lý CLB & Thành viên`, `FR05 - Quản lý hồ sơ cá nhân & Trình độ`, `FR06 - Khám phá nhóm theo vị trí`, `FR07 - Thông tin chi tiết & Lịch sinh hoạt nhóm`, `FR08-FR10 - Đăng ký giữ chỗ & Hàng đợi`, `FR11 - Phát tín hiệu tìm khách giao lưu`, `FR12 - Khách vãng lai đăng ký tham gia`, `FR13 - Khởi tạo buổi chơi`).
 
 2. **Tài liệu đặc tả chi tiết chuyên sâu**:
    - Đặc tả luồng dữ liệu, JSON Request/Response, logic Flutter mẫu: [docs/API_DOCUMENTATION.md](file:///c:/code/abp_be/KLTN2026/docs/API_DOCUMENTATION.md)

@@ -32,7 +32,7 @@ public class SessionBookingConfiguration : IEntityTypeConfiguration<SessionBooki
             .HasMaxLength(50)
             .HasDefaultValue(Domain.Enums.BookingStatus.CONFIRMED)
             .HasSentinel((Domain.Enums.BookingStatus)0)
-            .HasComment("Trạng thái đăng ký của biểu quyết giữ chỗ. Miền giá trị: CONFIRMED, WAITING, ABSENT, CHECKED_IN.");
+            .HasComment("Trạng thái đăng ký giữ chỗ. Miền giá trị: CONFIRMED, WAITING, ABSENT, CHECKED_IN.");
 
         builder.Property(b => b.IsRotationPaused).HasColumnName("is_rotation_paused").HasDefaultValue(false);
 

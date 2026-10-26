@@ -59,7 +59,7 @@ public class BookingDeadlineTests
         // Assert: Chặn đặt chỗ khi quá hạn
         result.IsFailure.Should().BeTrue();
         result.Error.Code.Should().Be("Session.DeadlinePassed");
-        result.Error.Message.Should().Contain("Đã quá hạn chốt biểu quyết giữ chỗ");
+        result.Error.Message.Should().Contain("Đã quá hạn chốt đăng ký giữ chỗ");
     }
 
     [Fact]

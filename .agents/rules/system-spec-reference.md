@@ -35,12 +35,12 @@ Khi lập trình bất kỳ tính năng nào, Agent bắt buộc phải xác đ�
 
 ### 2.2. Phân Hệ 2: Khám Phá, Giữ Chỗ & Kết Nối (F2)
 - **FR06, FR07 / UC06**: Tìm kiếm CLB quanh tọa độ GPS bán kính km (công thức Haversine), xem thông tin CLB & lịch tuần $\rightarrow$ Bảng: `club_group`, `group_schedule`.
-- **FR08, FR09, FR10 / UC08, UC09**: Biểu quyết giữ chỗ buổi sinh hoạt có kiểm soát trần sức chứa sân & Hàng đợi thông minh $\rightarrow$ Bảng: `badminton_session`, `session_booking`.
+- **FR08, FR09, FR10 / UC08, UC09**: Đăng ký giữ chỗ buổi sinh hoạt có kiểm soát trần sức chứa sân & Hàng đợi thông minh $\rightarrow$ Bảng: `badminton_session`, `session_booking`.
   - *Bất biến*: Khi đạt trần `MaxPlayers`, người tiếp theo nhận trạng thái `WAITING` với `queue_order` tăng dần; khi có người `ABSENT`, tự động dồn `queue_order = 1` lên `CONFIRMED`. Bắt buộc khóa phân tán **Redis Distributed Lock**.
 - **FR11, FR12 / UC10, UC11**: Host phát radar tìm khách giao lưu lân cận khi thiếu quân & Khách đăng ký slot $\rightarrow$ Bảng: `guest_recruitment`, `session_booking`.
 
 ### 2.3. Phân Hệ 3: Vận Hành Buổi Chơi & Sân Đấu (F3)
-- **FR13 / UC08**: Khởi tạo buổi sinh hoạt (Mở kèo chơi) $\rightarrow$ Bảng: `badminton_session`.
+- **FR13 / UC08**: Khởi tạo buổi sinh hoạt (Mở buổi chơi) $\rightarrow$ Bảng: `badminton_session`.
 - **FR14 / UC12**: Điểm danh nhanh tại sân $\rightarrow$ Bảng: `session_booking` (`CheckIn()` $\rightarrow$ `CHECKED_IN`, gán `checkin_at = UtcNow`).
 - **FR15 / UC13**: Giải thuật tự động đề xuất 4 người vào sân xoay tua $\rightarrow$ Bảng: `session_match`, `match_player`.
   - *Bất biến giải thuật*: Ưu tiên thời gian nghỉ lâu nhất (chống ngồi ngoài liên tiếp 2 trận) + ghép đôi có chênh lệch tổng điểm trình độ nhỏ nhất.

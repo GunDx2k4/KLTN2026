@@ -10,7 +10,7 @@
 ## 📌 1. Thông Tin Mạng & Quy Ước Kết Nối Toàn Hệ Thống
 
 ### 1.1. Bảng cấu hình địa chỉ IP (Base URL)
-Được cấu hình sẵn tại [app_config.dart](file:///c:/code/base_fe/KLTN2026-2027/KLTN2026-2027/lib/app/consts/app_config.dart):
+Được cấu hình sẵn tại [app_config.dart](lib/app/consts/app_config.dart):
 
 | Môi trường | Base URL | Ghi chú |
 | :--- | :--- | :--- |
@@ -62,9 +62,9 @@ Toàn bộ các phản hồi lỗi từ server đều trả về theo chuẩn **
   "type": "https://tools.ietf.org/html/rfc7231#section-6.5.1",
   "title": "Bad Request",
   "status": 400,
-  "detail": "Buổi chơi hiện không mở biểu quyết giữ chỗ.",
+  "detail": "Buổi chơi hiện không mở đăng ký giữ chỗ.",
   "errors": {
-    "Status": ["Buổi chơi hiện không mở biểu quyết giữ chỗ."]
+    "Status": ["Buổi chơi hiện không mở đăng ký giữ chỗ."]
   }
 }
 ```
@@ -83,8 +83,8 @@ Toàn bộ các phản hồi lỗi từ server đều trả về theo chuẩn **
 3. [Module 3: Quản Trị Người Dùng & Vai Trò Toàn Cục (Users & Roles - Admin)](#-module-3-quản-trị-người-dùng--vai-trò-hệ-thống-users--roles) *(16 APIs)*
 4. [Module 4: Quản Trị Đa Nhóm, Gia Nhập & Chuyển Đổi Ngữ Cảnh (FR03, FR04)](#-module-4-quản-trị-đa-nhóm-gia-nhập--chuyển-đổi-ngữ-cảnh-fr03-fr04) *(15 APIs)*
 5. [Module 7: Quản Lý Buổi Sinh Hoạt (FR13 - Sessions)](#-module-7-quản-lý-buổi-sinh-hoạt-fr13---sessions) *(6 APIs)*
-6. [Module 8: Biểu Quyết Giữ Chỗ & Hàng Đợi (FR08, FR09, FR10 - Bookings)](#-module-8-biểu-quyết-giữ-chỗ--hàng-đợi-fr08-fr09-fr10---bookings) *(4 APIs)*
-7. [Module 9: Khách Vãng Lai & Tuyển Kèo Giao Lưu (FR11, FR12 - Recruitments)](#-module-9-khách-vãng-lai--tuyển-kèo-giao-lưu-fr11-fr12---recruitments) *(6 APIs)*
+6. [Module 8: Đăng Ký Giữ Chỗ & Hàng Đợi (FR08, FR09, FR10 - Bookings)](#-module-8-biểu-quyết-giữ-chỗ--hàng-đợi-fr08-fr09-fr10---bookings) *(4 APIs)*
+7. [Module 9: Khách Vãng Lai & Buổi Giao Lưu (FR11, FR12 - Recruitments)](#-module-9-khách-vãng-lai--tuyển-kèo-giao-lưu-fr11-fr12---recruitments) *(6 APIs)*
 8. [Kế Hoạch Triển Khai Cho Mobile Làm Thông API (Mobile Integration Master Plan)](#-kế-hoạch-triển-khai-cho-mobile-làm-thông-api-chi-tiết-rõ-ràng)
 9. [Bảng Tra Cứu Toàn Bộ Mã Quyền Hạn (`GroupPermissions`)](#-bảng-tra-cứu-toàn-bộ-mã-quyền-hạn-grouppermissions)
 
@@ -243,8 +243,8 @@ graph TD
 | `distanceKm` | `double?` | `Chip(label: Text('📍 ${distanceKm.toStringAsFixed(1)} km'))` | Cự ly thực tế tính theo giải thuật Haversine. Nếu `null` (do user tắt GPS) thì ẩn Chip này đi. |
 | `fixedVenueName` & `fixedAddress` | `string?` | `Text(fixedVenueName)` & `Text(fixedAddress)` | Tên sân và địa chỉ cụ thể nơi nhóm sinh hoạt cố định. |
 | `schedulesSummary` | `string?` | `Row(children: [Icon(Icons.calendar_today), Text(schedulesSummary)])` | Chuỗi tóm tắt lịch cố định tuần (ví dụ: *"T3, T5, T7 (18:00 - 21:00)"*). |
-| `minSkillLevel` - `maxSkillLevel` | `string?` | `Text('Trình độ: $minSkillLevel - $maxSkillLevel')` | Khoảng trình độ của CLB. So sánh với `profile.skillLevel` của người dùng: Nếu người dùng yếu hơn `minSkillLevel`, hiển thị icon cảnh báo nhẹ: *"Kèo có thể hơi nặng so với bạn"*. |
-| `isRecruiting` | `bool` | `Badge(label: Text(isRecruiting ? 'Đang tuyển' : 'Đủ quân'))` | `true` = Badge xanh lá; `false` = Badge xám. |
+| `minSkillLevel` - `maxSkillLevel` | `string?` | `Text('Trình độ: $minSkillLevel - $maxSkillLevel')` | Khoảng trình độ của CLB. So sánh với `profile.skillLevel` của người dùng: Nếu người dùng yếu hơn `minSkillLevel`, hiển thị icon cảnh báo nhẹ: *"Trình độ buổi chơi có thể cao hơn so với bạn"*. |
+| `isRecruiting` | `bool` | `Badge(label: Text(isRecruiting ? 'Đang tuyển' : 'Đã đủ người'))` | `true` = Badge xanh lá; `false` = Badge xám. |
 | `memberCount` | `int` | `Text('👥 $memberCount thành viên')` | Tổng số thành viên hiện tại của CLB. |
 
 ---
@@ -1058,9 +1058,9 @@ Swagger Group: `FR13 - Khởi tạo buổi chơi`
 
 ---
 
-## 🎟️ Module 8: Biểu Quyết Giữ Chỗ & Hàng Đợi Tự Động (FR08, FR09, FR10 - Bookings)
+## 🎟️ Module 8: Đăng Ký Giữ Chỗ & Hàng Đợi Tự Động (FR08, FR09, FR10 - Bookings)
 Prefix: `/api/v1/sessions`  
-Swagger Group: `FR08-FR10 - Biểu quyết giữ chỗ & Hàng đợi`
+Swagger Group: `FR08-FR10 - Đăng ký giữ chỗ & Hàng đợi`
 
 > **Nghiệp vụ cốt lõi**:
 > - **FR08**: Thành viên CLB biểu quyết tham gia buổi chơi (Vote YES). Nếu sĩ số chưa vượt quá `maxPlayers`, hệ thống cấp vé chính thức tức thì (`CONFIRMED`, `queueOrder = 0`).
@@ -1071,7 +1071,7 @@ Swagger Group: `FR08-FR10 - Biểu quyết giữ chỗ & Hàng đợi`
 
 | Method | Endpoint | Yêu Cầu Auth | Swagger Group | Mô Tả Nghiệp Vụ |
 | :--- | :--- | :--- | :--- | :--- |
-| `POST` | `/api/v1/sessions/{sessionId}/bookings` | Đã đăng nhập (Member) | `FR08-FR10` | Biểu quyết giữ chỗ (Vote YES - Cấp vé chính thức hoặc tự vào hàng đợi) |
+| `POST` | `/api/v1/sessions/{sessionId}/bookings` | Đã đăng nhập (Member) | `FR08-FR10` | Đăng ký giữ chỗ (Vote YES - Cấp vé chính thức hoặc tự vào hàng đợi) |
 | `DELETE`| `/api/v1/sessions/{sessionId}/bookings/me`| Người đã có vé / Đang chờ | `FR08-FR10` | Hủy giữ chỗ / Báo vắng (Tự động đôn người chờ đầu hàng đợi lên chính thức) |
 | `GET` | `/api/v1/sessions/{sessionId}/bookings` | Đã đăng nhập | `FR08-FR10` | Lấy danh sách toàn bộ người đã vote & danh sách hàng đợi |
 | `GET` | `/api/v1/sessions/{sessionId}/bookings/me`| Đã đăng nhập | `FR08-FR10` | Kiểm tra trạng thái vé biểu quyết của chính mình |
@@ -1080,7 +1080,7 @@ Swagger Group: `FR08-FR10 - Biểu quyết giữ chỗ & Hàng đợi`
 
 ### 🔍 Hướng Dẫn Từng API Module 8 Vào Luồng Mobile
 
-#### 8.1. `POST /api/v1/sessions/{sessionId}/bookings` (Biểu Quyết Giữ Chỗ - FR08 & FR09)
+#### 8.1. `POST /api/v1/sessions/{sessionId}/bookings` (Đăng Ký Giữ Chỗ - FR08 & FR09)
 
 - **Màn hình kích hoạt**: Nhấn nút **"Biểu Quyết Tham Gia (Vote YES)"** trên `SessionDetailScreen`.
 - **Headers**: `Authorization: Bearer <ACCESS_TOKEN>`
@@ -1289,7 +1289,7 @@ graph TD
    - `UserProfileViewModel`: Tải & cập nhật hồ sơ cá nhân.
    - `ExploreClubsViewModel`: Quét radar GPS tìm CLB gần đây.
    - `ClubDetailViewModel`: Xem thông tin chi tiết CLB, lịch chơi cố định, gửi đơn xin gia nhập.
-   - `SessionDetailViewModel`: Biểu quyết giữ chỗ, hàng đợi realtime, báo vắng.
+   - `SessionDetailViewModel`: Đăng ký giữ chỗ, hàng đợi realtime, báo vắng.
 5. **Giai đoạn 5: UI Screens**:
    - Màn hình Hồ sơ cá nhân (`ProfileScreen` & `EditProfileScreen`).
    - Màn hình Khám phá CLB quanh đây (`ExploreClubsScreen`).

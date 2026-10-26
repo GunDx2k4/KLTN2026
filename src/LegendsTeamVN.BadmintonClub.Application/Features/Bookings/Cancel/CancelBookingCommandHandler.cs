@@ -42,7 +42,7 @@ public sealed class CancelBookingCommandHandler(
         var myBooking = session.Bookings.FirstOrDefault(b => b.UserId == userId.Value && b.Status != BookingStatus.ABSENT);
         if (myBooking is null)
         {
-            return Result.Failure(Error.NotFound("Booking.NotFound", "Bạn không có biểu quyết giữ chỗ cho buổi chơi này."));
+            return Result.Failure(Error.NotFound("Booking.NotFound", "Bạn không có bản ghi đăng ký giữ chỗ cho buổi chơi này."));
         }
 
         if (myBooking.Status is BookingStatus.CHECKED_IN or BookingStatus.NO_SHOW)

@@ -21,7 +21,7 @@ public sealed class VoteBookingCommandHandler(
         var userId = currentUserService.UserId;
         if (!userId.HasValue)
         {
-            return Result.Failure<SessionBookingResponse>(Error.Unauthorized("User.Unauthorized", "Vui lòng đăng nhập để biểu quyết giữ chỗ."));
+            return Result.Failure<SessionBookingResponse>(Error.Unauthorized("User.Unauthorized", "Vui lòng đăng nhập để đăng ký giữ chỗ."));
         }
 
         var session = await sessionRepository.GetAttendanceAsync(request.SessionId, true, cancellationToken);
@@ -33,12 +33,12 @@ public sealed class VoteBookingCommandHandler(
 
         if (session.Status != SessionStatus.OPEN)
         {
-            return Result.Failure<SessionBookingResponse>(Error.Validation("Session.NotOpen", "Buổi chơi hiện không mở biểu quyết giữ chỗ."));
+            return Result.Failure<SessionBookingResponse>(Error.Validation("Session.NotOpen", "Buổi chơi hiện không mở đăng ký giữ chỗ."));
         }
 
         if (DateTime.UtcNow >= session.DeadlineBooking)
         {
-            return Result.Failure<SessionBookingResponse>(Error.Validation("Session.DeadlinePassed", "Đã quá hạn chốt biểu quyết giữ chỗ cho buổi chơi này."));
+            return Result.Failure<SessionBookingResponse>(Error.Validation("Session.DeadlinePassed", "Đã quá hạn chốt đăng ký giữ chỗ cho buổi chơi này."));
         }
 
         var user = await userRepository.FindByIdAsync(userId.Value, cancellationToken);
@@ -50,7 +50,7 @@ public sealed class VoteBookingCommandHandler(
         var existingBooking = session.Bookings.FirstOrDefault(b => b.UserId == userId.Value);
         if (existingBooking != null && existingBooking.Status is BookingStatus.CONFIRMED or BookingStatus.WAITING or BookingStatus.CHECKED_IN or BookingStatus.NO_SHOW)
         {
-            return Result.Failure<SessionBookingResponse>(Error.Conflict("Booking.AlreadyBooked", "Bạn đã thực hiện biểu quyết giữ chỗ cho buổi chơi này rồi."));
+            return Result.Failure<SessionBookingResponse>(Error.Conflict("Booking.AlreadyBooked", "Bạn đã thực hiện đăng ký giữ chỗ cho buổi chơi này rồi."));
         }
 
         var confirmedCount = session.Bookings.Count(RecruitmentRules.OccupiesSlot);
