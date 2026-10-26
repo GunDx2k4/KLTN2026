@@ -14,5 +14,6 @@ public sealed record SessionBookingResponse(
     int QueueOrder,
     DateTime BookedAt,
     DateTime? CheckinAt,
-    Guid? RecruitmentId
+    Guid? RecruitmentId,
+    short Gender = 1
 );

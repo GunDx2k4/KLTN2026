@@ -29,7 +29,8 @@ public sealed class GetSessionBookingsQueryHandler(IBookingRepository bookingRep
                 b.QueueOrder,
                 b.BookedAt,
                 b.CheckinAt,
-                b.RecruitmentId
+                b.RecruitmentId,
+                b.User != null ? b.User.Gender : (short)1
             ))
             .ToListAsync(cancellationToken);
 

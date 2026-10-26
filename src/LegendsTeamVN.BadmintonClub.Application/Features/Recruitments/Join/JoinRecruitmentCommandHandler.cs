@@ -124,7 +124,8 @@ public sealed class JoinRecruitmentCommandHandler(
             booking.QueueOrder,
             booking.BookedAt,
             booking.CheckinAt,
-            booking.RecruitmentId
+            booking.RecruitmentId,
+            user.Gender
         ));
     }
 }

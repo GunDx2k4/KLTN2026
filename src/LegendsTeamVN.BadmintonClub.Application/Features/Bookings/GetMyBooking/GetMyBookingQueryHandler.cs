@@ -41,7 +41,8 @@ public sealed class GetMyBookingQueryHandler(
             booking.QueueOrder,
             booking.BookedAt,
             booking.CheckinAt,
-            booking.RecruitmentId
+            booking.RecruitmentId,
+            booking.User != null ? booking.User.Gender : (short)1
         );
 
         return Result.Success<SessionBookingResponse?>(response);

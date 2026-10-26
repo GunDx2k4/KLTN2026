@@ -98,7 +98,8 @@ public sealed class ConfirmBookingCommandHandler(
             booking.QueueOrder,
             booking.BookedAt,
             booking.CheckinAt,
-            booking.RecruitmentId
+            booking.RecruitmentId,
+            user != null ? user.Gender : (short)1
         ));
     }
 }
