@@ -215,7 +215,7 @@ graph TD
   3. Hệ thống nạp biểu phí của nhóm (`group_fee_rule`) và tự động tính toán theo công thức đa hệ số:
      - Tính tổng chi phí buổi: `Tổng_chi_phí = Tiền_thuê_sân + (Số_cầu * Đơn_giá_cầu) + Phụ_phí`.
      - Phân bổ theo loại người chơi: Hội viên tháng (đã đóng trọn gói), Hội viên ngày, Khách vãng lai.
-     - Áp dụng chính sách ưu đãi giảm trừ cho người chơi Nữ (`female_discount_daily`).
+     - Áp dụng chính sách ưu đãi giảm trừ cho người chơi Nữ: Hội viên ngày (`female_discount_daily`), Khách vãng lai (`female_discount_guest`).
      - Áp dụng quy tắc làm tròn tiền lẻ (`round_rule`, ví dụ làm tròn lên 1.000đ).
   4. Hệ thống tự động sinh các bản ghi Khoản thu buổi chơi (`session_fee`) cho từng người tham gia ở trạng thái `UNPAID`.
   5. Đồng thời sinh mã định danh chuyển khoản duy nhất (`payment_code`, ví dụ: `BC12627_A8F1`).

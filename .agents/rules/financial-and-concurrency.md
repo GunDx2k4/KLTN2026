@@ -51,6 +51,7 @@ $$\text{Tổng chi phí buổi chơi} = \text{Tiền thuê sân cố định} + 
    - Nữ: Tự động trừ đi `FemaleDiscountDaily`.
 3. **Khách vãng lai (`GUEST`):**
    - Đóng theo mức `GuestFee` (chi phí chia đều + phụ phí vãng lai).
+   - Nữ: Tự động trừ đi `FemaleDiscountGuest`.
 4. **Quy tắc làm tròn tiền (`RoundRule`):**
    - Làm tròn số tiền cuối cùng đến hàng nghìn đồng gần nhất ($\text{Round}(\dots, -3)$) để tạo số tiền chuyển khoản thuận tiện (ví dụ: 53.400đ $\rightarrow$ 53.000đ hoặc 54.000đ theo cấu hình CLB).
 

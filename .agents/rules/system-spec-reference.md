@@ -50,7 +50,7 @@ Khi lập trình bất kỳ tính năng nào, Agent bắt buộc phải xác đ�
 ### 2.4. Phân Hệ 4: Hạch Toán Vật Tư & Sổ Quỹ Mở (F4)
 - **FR18, FR19 / UC16**: Ghi nhận số quả cầu bóc mới (`shuttlecock_used`), tiền thuê sân và quyết toán chi phí đa hệ số $\rightarrow$ Bảng: `group_fee_rule`, `badminton_session`, `session_fee`.
   - *Công thức bắt buộc*: Tổng = Tiền sân + (Số cầu x Đơn giá cầu) + Phụ phí.
-  - *Chiết khấu & Làm tròn*: Trừ ưu đãi Nữ (`female_discount_daily`), miễn phí hội viên tháng (`MONTHLY`), làm tròn lên 1.000đ theo `RoundRule`.
+  - *Chiết khấu & Làm tròn*: Trừ ưu đãi Nữ (`female_discount_daily` cho hội viên ngày, `female_discount_guest` cho khách vãng lai), miễn phí hội viên tháng (`MONTHLY`), làm tròn lên 1.000đ theo `RoundRule`.
 - **FR20 / UC17**: Sinh mã VietQR NAPAS 247 nhúng sẵn số tiền và cú pháp `CLB {SessionIdShort} {UserIdShort}`.
 - **FR21 / UC18**: Đối soát Webhook SePay tự động gạch nợ (`session_fee.status = PAID`) $\rightarrow$ Bảng: `bank_transaction` (`MATCHED`), tự động ghi dòng thu `INCOME` vào `group_ledger`.
 - **FR22 / UC19**: Sổ quỹ mở minh bạch (Thu, Chi, Số dư tức thì) $\rightarrow$ Bảng: `group_ledger`.
