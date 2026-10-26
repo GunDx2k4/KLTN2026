@@ -127,6 +127,22 @@ public class SessionRepository(BadmintonDbContext dbContext)
             m.RoleEntity.GroupId == groupId && !m.RoleEntity.IsDeleted &&
             m.RoleEntity.RolePermissions.Any(rp => rp.Permission.PermissionCode == GroupPermissions.Operations.MatchManage), cancellationToken);
 
+        public async Task<BadmintonSession?> GetSettlementAsync(Guid sessionId, CancellationToken cancellationToken = default)
+    {
+        var session = await DbContext.BadmintonSessions
+            .Include(s => s.Bookings).ThenInclude(b => b.User)
+            .Include(s => s.Fees).ThenInclude(f => f.User)
+            .FirstOrDefaultAsync(s => s.Id == sessionId && !s.IsDeleted, cancellationToken);
+        return session;
+    }
+
+    public Task<bool> CanManageFinanceAsync(Guid groupId, Guid userId, CancellationToken cancellationToken = default) =>
+        DbContext.GroupMembers.AsNoTracking().AnyAsync(m =>
+            m.GroupId == groupId && m.UserId == userId && m.Status == ClubMemberStatus.ACTIVE && !m.IsDeleted &&
+            m.Group.IsActive && !m.Group.IsDeleted && m.User.IsActive && !m.User.IsDeleted &&
+            m.RoleEntity.GroupId == groupId && !m.RoleEntity.IsDeleted &&
+            m.RoleEntity.RolePermissions.Any(rp => rp.Permission.PermissionCode == GroupPermissions.Finance.FeeManage), cancellationToken);
+
     public Task<bool> CanManageAttendanceAsync(Guid groupId, Guid userId, CancellationToken cancellationToken = default) =>
         DbContext.GroupMembers.AsNoTracking().AnyAsync(m =>
             m.GroupId == groupId && m.UserId == userId && m.Status == ClubMemberStatus.ACTIVE && !m.IsDeleted &&

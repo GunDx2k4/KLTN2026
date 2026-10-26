@@ -1,3 +1,4 @@
+using LegendsTeamVN.BadmintonClub.Application.Features.Sessions.Settlement;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Rotation.Responses;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Sessions.Requests;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Sessions.Responses;
@@ -252,6 +253,30 @@ public class SessionEndpoint : EndpointGroupBase
             .Produces<RotationResponse>()
             .RequireAuthorization("SessionOperations")
             .RequireGroupPermission(GroupPermissions.Operations.MatchManage);
+
+        // ======================================
+        // FR18 - FR20: Hạch toán & Quyết toán chi phí đa hệ số (Settlement)
+        // ======================================
+        var fr18Group = group.MapGroup("api/v1/sessions")
+            .WithTags("Session Operations - FR18-FR20 Settlement")
+            .RequireAuthorization();
+
+        fr18Group.MapPost("{sessionId:guid}/settlement", CalculateSessionSettlement)
+            .WithName("CalculateSessionSettlement")
+            .WithSummary("Hạch toán chi phí đa hệ số và chốt quyết toán buổi chơi (FR18-FR20)")
+            .Produces<SessionSettlementResponse>()
+            .RequireGroupPermission(GroupPermissions.Finance.FeeManage);
+
+        fr18Group.MapGet("{sessionId:guid}/settlement", GetSessionSettlement)
+            .WithName("GetSessionSettlement")
+            .WithSummary("Xem thông tin quyết toán chi phí buổi chơi (FR18-FR20)")
+            .Produces<SessionSettlementResponse>();
+
+        fr18Group.MapPost("{sessionId:guid}/settlement/members/{userId:guid}/pay", MarkMemberSettlementPaid)
+            .WithName("MarkMemberSettlementPaid")
+            .WithSummary("Đánh dấu thành viên đã thanh toán tiền mặt (FR18-FR20)")
+            .Produces<SessionSettlementResponse>()
+            .RequireGroupPermission(GroupPermissions.Finance.FeeManage);
     }
 
     // --- FR13 Handlers ---
@@ -552,6 +577,45 @@ public class SessionEndpoint : EndpointGroupBase
         CancellationToken cancellationToken)
     {
         var command = new FinishRotationMatchCommand(sessionId, matchId);
+        var result = await sender.Send(command, cancellationToken);
+        return result.Match(Results.Ok);
+    }
+
+    // --- FR18 - FR20 Handlers ---
+    private static async Task<IResult> CalculateSessionSettlement(
+        [FromRoute] Guid sessionId,
+        [FromBody] CalculateSettlementRequest request,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var command = new CalculateSessionSettlementCommand(
+            sessionId,
+            request.ShuttlecockUsed,
+            request.ShuttlecockPrice,
+            request.ExtraFee,
+            request.CourtFee
+        );
+        var result = await sender.Send(command, cancellationToken);
+        return result.Match(Results.Ok);
+    }
+
+    private static async Task<IResult> GetSessionSettlement(
+        [FromRoute] Guid sessionId,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var query = new GetSessionSettlementQuery(sessionId);
+        var result = await sender.Send(query, cancellationToken);
+        return result.Match(Results.Ok);
+    }
+
+    private static async Task<IResult> MarkMemberSettlementPaid(
+        [FromRoute] Guid sessionId,
+        [FromRoute] Guid userId,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var command = new MarkMemberPaidCommand(sessionId, userId);
         var result = await sender.Send(command, cancellationToken);
         return result.Match(Results.Ok);
     }
