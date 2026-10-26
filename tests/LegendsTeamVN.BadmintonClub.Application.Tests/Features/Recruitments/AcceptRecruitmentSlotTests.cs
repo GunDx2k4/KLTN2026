@@ -71,17 +71,17 @@ public class AcceptRecruitmentSlotTests
         // Assert
         result.IsSuccess.Should().BeTrue();
         result.Value.Should().NotBeNull();
-        result.Value.Status.Should().Be(BookingStatus.CONFIRMED);
-        result.Value.QueueOrder.Should().Be(0);
+        result.Value.Status.Should().Be(BookingStatus.WAITING);
+        result.Value.QueueOrder.Should().Be(1);
 
-        // 1. Tạo session_booking với status = CONFIRMED
+        // 1. Tạo session_booking với status = WAITING (hàng đợi chờ Host duyệt)
         var createdBooking = dbContext.SessionBookings.FirstOrDefault(b => b.SessionId == session.Id && b.UserId == guestUserId);
         createdBooking.Should().NotBeNull();
-        createdBooking!.Status.Should().Be(BookingStatus.CONFIRMED);
-        createdBooking.QueueOrder.Should().Be(0);
+        createdBooking!.Status.Should().Be(BookingStatus.WAITING);
+        createdBooking.QueueOrder.Should().Be(1);
         createdBooking.RecruitmentId.Should().Be(recruitment.Id);
 
-        // 2. Bài đăng tự động chuyển sang status = FILLED và đã đủ số suất
+        // 2. Bài đăng tự động chuyển sang FILLED vì đã có người trong hàng đợi WAITING
         var updatedRecruitment = dbContext.GuestRecruitments.First(r => r.Id == recruitment.Id);
         updatedRecruitment.Status.Should().Be(RecruitmentStatus.FILLED);
     }

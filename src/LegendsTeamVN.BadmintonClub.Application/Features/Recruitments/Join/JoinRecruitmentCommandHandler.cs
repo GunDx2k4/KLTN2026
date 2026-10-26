@@ -24,7 +24,6 @@ public sealed class JoinRecruitmentCommandHandler(
             return Result.Failure<SessionBookingResponse>(Error.Unauthorized("User.Unauthorized", "Vui lòng đăng nhập để nhận suất giao lưu."));
         }
 
-        // Resolve the session without tracking a stale recruitment before taking its row lock.
         var recruitment = await recruitmentRepository.FindAll(r => r.Id == request.RecruitmentId && !r.IsDeleted)
             .FirstOrDefaultAsync(cancellationToken);
 
@@ -59,7 +58,6 @@ public sealed class JoinRecruitmentCommandHandler(
             return Result.Failure<SessionBookingResponse>(Error.NotFound("User.NotFound", "Không tìm thấy thông tin người dùng."));
         }
 
-        // Kiểm tra xem user đã có booking trong buổi này chưa
         var existingBooking = session.Bookings.FirstOrDefault(b => b.UserId == userId.Value);
         if (existingBooking != null && existingBooking.Status is BookingStatus.CONFIRMED or BookingStatus.WAITING or BookingStatus.CHECKED_IN or BookingStatus.NO_SHOW)
         {
@@ -78,23 +76,23 @@ public sealed class JoinRecruitmentCommandHandler(
             return Result.Failure<SessionBookingResponse>(Error.Conflict("Booking.TimeOverlap", "Bạn đã có lịch tham gia buổi chơi khác trong cùng khung giờ này."));
         }
 
-        if (session.Bookings.Any(b => !b.IsDeleted && b.Status == BookingStatus.WAITING))
-            return Result.Failure<SessionBookingResponse>(Error.Conflict("Session.WaitlistPending", "Còn người đang chờ suất chính thức. Hãy liên hệ Host để xử lý hàng chờ trước."));
-
-        // Đếm số suất đã nhận qua tin tuyển này
-        if (session.Bookings.Count(b => !b.IsDeleted && b.Status is BookingStatus.CONFIRMED or BookingStatus.CHECKED_IN) >= session.MaxPlayers)
-            return Result.Failure<SessionBookingResponse>(Error.Conflict("Session.Full", "Buổi chơi đã đủ sức chứa."));
-        var takenCount = session.Bookings.Count(b => !b.IsDeleted && b.RecruitmentId == recruitment.Id && b.Status is BookingStatus.CONFIRMED or BookingStatus.CHECKED_IN);
+        var takenCount = session.Bookings.Count(b => !b.IsDeleted && b.RecruitmentId == recruitment.Id && b.OccupiesSlot());
         if (takenCount >= recruitment.SlotsNeeded)
         {
             return Result.Failure<SessionBookingResponse>(Error.Conflict("Recruitment.Full", "Rất tiếc, các suất giao lưu đã được nhận đủ."));
         }
 
+        var maxQueueOrder = session.Bookings
+            .Where(b => !b.IsDeleted && b.Status == BookingStatus.WAITING)
+            .Select(b => (int?)b.QueueOrder)
+            .Max() ?? 0;
+        var queueOrder = maxQueueOrder + 1;
+
         SessionBooking booking;
         if (existingBooking != null)
         {
-            existingBooking.UpdateStatus(BookingStatus.CONFIRMED);
-            existingBooking.UpdateQueueOrder(0);
+            existingBooking.UpdateStatus(BookingStatus.WAITING);
+            existingBooking.UpdateQueueOrder(queueOrder);
             existingBooking.AssignRecruitment(recruitment.Id);
             bookingRepository.Update(existingBooking);
             booking = existingBooking;
@@ -105,8 +103,8 @@ public sealed class JoinRecruitmentCommandHandler(
                 sessionId: recruitment.SessionId,
                 userId: userId.Value,
                 recruitmentId: recruitment.Id,
-                status: BookingStatus.CONFIRMED,
-                queueOrder: 0
+                status: BookingStatus.WAITING,
+                queueOrder: queueOrder
             );
             session.Bookings.Add(booking);
             bookingRepository.Add(booking);

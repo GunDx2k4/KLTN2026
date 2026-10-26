@@ -20,6 +20,7 @@ using LegendsTeamVN.BadmintonClub.Application.Features.Bookings.GetList;
 using LegendsTeamVN.BadmintonClub.Application.Features.Bookings.GetMyBooking;
 using LegendsTeamVN.BadmintonClub.Application.Features.Bookings.GetMyBookings;
 using LegendsTeamVN.BadmintonClub.Application.Features.Bookings.Vote;
+using LegendsTeamVN.BadmintonClub.Application.Features.Bookings.Confirm;
 using LegendsTeamVN.BadmintonClub.Application.Features.Recruitments.Cancel;
 using LegendsTeamVN.BadmintonClub.Application.Features.Recruitments.Create;
 using LegendsTeamVN.BadmintonClub.Application.Features.Recruitments.Delete;
@@ -144,6 +145,11 @@ public class SessionEndpoint : EndpointGroupBase
             .WithName("GetMyBooking")
             .WithSummary("Kiểm tra trạng thái đăng ký giữ chỗ của cá nhân (FR08)")
             .RequireAuthorization();
+
+        fr08fr10Group.MapPost("{sessionId:guid}/bookings/{bookingId:guid}/confirm", ConfirmBooking)
+            .WithName("ConfirmBooking")
+            .WithSummary("Host duyệt người chơi từ hàng đợi vào danh sách chính thức (FR09)")
+            .RequireGroupPermission(GroupPermissions.Operations.BookingManage);
 
         // =======================================================
         // --- FR11: HOST PHÁT TÍN HIỆU TÌM KHÁCH GIAO LƯU LÂN CẬN ---
@@ -350,6 +356,17 @@ public class SessionEndpoint : EndpointGroupBase
         var query = new GetMyBookingQuery(sessionId);
         var result = await sender.Send(query);
         return result.Match(booking => booking != null ? Results.Ok(booking) : Results.NotFound());
+    }
+
+    private static async Task<IResult> ConfirmBooking(
+        [FromRoute] Guid sessionId,
+        [FromRoute] Guid bookingId,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var command = new ConfirmBookingCommand(sessionId, bookingId);
+        var result = await sender.Send(command, cancellationToken);
+        return result.Match(onSuccess: booking => Results.Ok(booking));
     }
 
     // --- FR11 Handlers ---
