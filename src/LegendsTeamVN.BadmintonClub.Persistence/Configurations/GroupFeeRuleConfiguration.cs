@@ -52,6 +52,11 @@ public class GroupFeeRuleConfiguration : IEntityTypeConfiguration<GroupFeeRule>
             .HasPrecision(18, 2)
             .HasDefaultValue(0);
 
+        builder.Property(f => f.FemaleDiscountGuest)
+            .HasColumnName("female_discount_guest")
+            .HasPrecision(18, 2)
+            .HasDefaultValue(0);
+
         builder.Property(f => f.RoundRule)
             .HasColumnName("round_rule")
             .HasDefaultValue(1000);

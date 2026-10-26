@@ -25,7 +25,7 @@ Hệ thống cơ sở dữ liệu được xây dựng trên hệ quản trị *
 | **13** | Quy tắc chia tiền & Biểu phí | `group_fee_rule` | `GroupFeeRule` | Tài chính & Biểu phí |
 | **14** | Yêu cầu gia nhập nhóm | `join_request` | `JoinRequest` | Tuyển quân & Gia nhập |
 | **15** | Buổi sinh hoạt cầu lông | `badminton_session` | `BadmintonSession` | Vận hành Buổi chơi |
-| **16** | Biểu quyết giữ chỗ | `session_booking` | `SessionBooking` | Đặt chỗ & Hàng đợi |
+| **16** | Đăng ký giữ chỗ | `session_booking` | `SessionBooking` | Đặt chỗ & Hàng đợi |
 | **17** | Yêu cầu tìm khách giao lưu | `guest_recruitment` | `GuestRecruitment` | Kết nối Radar GPS |
 | **18** | Trận đấu xoay tua | `session_match` | `SessionMatch` | Điều phối tại sân |
 | **19** | Người chơi trận đấu | `match_player` | `MatchPlayer` | Điều phối tại sân |
@@ -93,7 +93,7 @@ Lưu trữ thông tin tài khoản và hồ sơ thể thao cá nhân.
 | `skill_level` | SMALLINT | NOT NULL | 1 | Trình độ: 1=NB, 2=Y, 3=TBY, 4=TB, 5=TBK, 6=K |
 | `last_lat` | DECIMAL(10,7)| NULL | - | Vĩ độ GPS gần nhất |
 | `last_lng` | DECIMAL(10,7)| NULL | - | Kinh độ GPS gần nhất |
-| `is_open_for_guest`| BOOLEAN | NOT NULL | `true` | Cờ sẵn sàng nhận kèo giao lưu quanh đây |
+| `is_open_for_guest`| BOOLEAN | NOT NULL | `true` | Cờ sẵn sàng tham gia giao lưu quanh đây |
 | `reputation_score` | DECIMAL(5,2)| NOT NULL | 100.00 | Điểm uy tín cá nhân (khởi tạo 100đ) |
 | `is_active` | BOOLEAN | NOT NULL | `true` | Trạng thái hoạt động tài khoản |
 | `created_at` | TIMESTAMP | NOT NULL | `now()` | Thời điểm tạo tài khoản |
@@ -284,6 +284,7 @@ Lưu cấu hình tính phí và ưu đãi tài chính của nhóm.
 | `guest_fee` | DECIMAL(18,2)| NOT NULL | `0` | Tiền buổi cho khách vãng lai |
 | `female_discount_monthly`| DECIMAL(18,2)| NOT NULL | `0` | Giảm trừ tháng cho Nữ |
 | `female_discount_daily` | DECIMAL(18,2)| NOT NULL | `0` | Giảm trừ buổi cho Nữ |
+| `female_discount_guest` | DECIMAL(18,2)| NOT NULL | `0` | Giảm trừ buổi cho Nữ khách giao lưu |
 | `round_rule` | INT | NOT NULL | `1000` | Làm tròn tiền (VD: 1.000đ, 5.000đ) |
 | `applied_at` | TIMESTAMP | NOT NULL | `now()` | Thời điểm áp dụng |
 
@@ -308,7 +309,7 @@ Lưu các đơn xin gia nhập câu lạc bộ từ người chơi.
 ---
 
 ### 3.15. Bảng `badminton_session` (Buổi Sinh Hoạt Cầu Lông)
-Lưu thông tin các buổi chơi (kèo đấu) do câu lạc bộ tổ chức.
+Lưu thông tin các buổi sinh hoạt do câu lạc bộ tổ chức.
 
 | Tên Cột | Kiểu Dữ Liệu | Ràng Buộc | Giá Trị Mặc Định | Mô Tả Nghiệp Vụ |
 | :--- | :--- | :--- | :--- | :--- |
@@ -335,7 +336,7 @@ Lưu thông tin các buổi chơi (kèo đấu) do câu lạc bộ tổ chức.
 
 ---
 
-### 3.16. Bảng `session_booking` (Biểu Quyết Giữ Chỗ)
+### 3.16. Bảng `session_booking` (Đăng Ký Giữ Chỗ)
 Lưu danh sách người đăng ký tham gia buổi chơi và hàng đợi.
 
 | Tên Cột | Kiểu Dữ Liệu | Ràng Buộc | Giá Trị Mặc Định | Mô Tả Nghiệp Vụ |

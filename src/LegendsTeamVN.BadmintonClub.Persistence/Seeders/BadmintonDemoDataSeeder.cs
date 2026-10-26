@@ -86,7 +86,7 @@ public class BadmintonDemoDataSeeder(
 
             // Bank Account & Fee Rule
             dbContext.GroupBankAccounts.Add(new GroupBankAccount(club1.Id, "MBBank", "0987654321", "NGUYEN VAN DUNG"));
-            dbContext.GroupFeeRules.Add(new GroupFeeRule(club1.Id, FeeMode.DYNAMIC, monthlyFee: 350000, dailyMemberFee: 40000, guestFee: 50000, femaleDiscountDaily: 5000));
+            dbContext.GroupFeeRules.Add(new GroupFeeRule(club1.Id, FeeMode.DYNAMIC, monthlyFee: 350000, dailyMemberFee: 40000, guestFee: 50000, femaleDiscountDaily: 5000, femaleDiscountGuest: 10000));
 
             // Join Requests (user8 pending, user7 approved)
             dbContext.JoinRequests.AddRange(
@@ -98,7 +98,7 @@ public class BadmintonDemoDataSeeder(
             // Session 1: Sắp diễn ra (OPEN, còn slot, user1 đã có vé CONFIRMED)
             var s1 = new BadmintonSession(
                 club1.Id,
-                "Kèo tối thứ 5 giao lưu sân Kim Cương",
+                "Buổi tối thứ 5 giao lưu sân Kim Cương",
                 DateTime.UtcNow.AddDays(1).Date.AddHours(18),
                 DateTime.UtcNow.AddDays(1).Date.AddHours(21),
                 "Sân Cầu Lông Kim Cương, 123 Huỳnh Tấn Phát, Q.7",
@@ -128,7 +128,7 @@ public class BadmintonDemoDataSeeder(
             // Session 2: Đầy chỗ (OPEN, 6/6 confirmed, có hàng đợi chờ FR08-FR10)
             var s2 = new BadmintonSession(
                 club1.Id,
-                "Kèo tối thứ 7 đập cầu cọ xát",
+                "Buổi tối thứ 7 giao lưu cọ xát",
                 DateTime.UtcNow.AddDays(3).Date.AddHours(14),
                 DateTime.UtcNow.AddDays(3).Date.AddHours(18),
                 "Sân Cầu Lông Kim Cương, 123 Huỳnh Tấn Phát, Q.7",
@@ -173,7 +173,7 @@ public class BadmintonDemoDataSeeder(
             // Session 4: Hoàn thành tuần trước (COMPLETED)
             var s4 = new BadmintonSession(
                 club1.Id,
-                "Kèo giao lưu tuần trước",
+                "Buổi giao lưu tuần trước",
                 DateTime.UtcNow.AddDays(-7).Date.AddHours(18),
                 DateTime.UtcNow.AddDays(-7).Date.AddHours(21),
                 "Sân Cầu Lông Kim Cương, Q.7",
@@ -212,7 +212,7 @@ public class BadmintonDemoDataSeeder(
             dbContext.GroupReviews.AddRange(
                 new GroupReview(user2.Id, club1.Id, 5, "Sân bãi tốt, đồng đội thân thiện", "Nhóm sinh hoạt rất vui và đúng giờ!"),
                 new GroupReview(user3.Id, club1.Id, 5, "Uy tín", "Host tổ chức chu đáo, nước uống và cầu thi đấu chất lượng cao."),
-                new GroupReview(user4.Id, club1.Id, 4, "Tốt", "Kèo đánh vừa tầm, rất đáng tham gia!")
+                new GroupReview(user4.Id, club1.Id, 4, "Tốt", "Buổi chơi vừa tầm, rất đáng tham gia!")
             );
 
             // =========================================================================
@@ -258,7 +258,7 @@ public class BadmintonDemoDataSeeder(
             // Session 5 in CLB 2: Có tin tuyển khách vãng lai đang ACTIVE (FR11, FR12)
             var s5 = new BadmintonSession(
                 club2.Id,
-                "Kèo tối thứ 4 giao lưu sân Kỳ Hòa",
+                "Buổi tối thứ 4 giao lưu sân Kỳ Hòa",
                 DateTime.UtcNow.AddDays(1).Date.AddHours(19),
                 DateTime.UtcNow.AddDays(1).Date.AddHours(22),
                 "Sân Cầu Lông Kỳ Hòa, 238 Đường 3/2, Quận 10",
