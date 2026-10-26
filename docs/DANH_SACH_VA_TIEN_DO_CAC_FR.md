@@ -28,7 +28,7 @@
 | **FR16** | Host can thiệp điều chỉnh danh sách thi đấu thủ công | Vận hành Buổi chơi & Điều phối (F3) |  **Đã xong 100%** | 4 APIs |
 | **FR17** | Người chơi theo dõi lượt thi đấu cá nhân theo thời gian thực | Vận hành Buổi chơi & Điều phối (F3) | ⏳ *Sẵn sàng DB & Hub, cần hoàn thiện UI* | 0 API |
 | **FR18** | Ghi nhận số quả cầu bóc mới và phụ phí phát sinh buổi chơi | Hạch toán Vật tư & Sổ quỹ (F4) | ⏳ *Sẵn sàng DB, cần thêm Endpoint* | 0 API |
-| **FR19** | Hạch toán chi phí đa hệ số tự động (Nam, Nữ, Tháng, Ngày, Khách vãng lai) | Hạch toán Vật tư & Sổ quỹ (F4) | ⏳ *Sẵn sàng DB, cần thêm Engine* | 0 API |
+| **FR19** | Hạch toán chi phí đa hệ số tự động (Nam, Nữ, Tháng, Ngày, Khách vãng lai) | Hạch toán Vật tư & Sổ quỹ (F4) | 🔄 *Đã có API cấu hình biểu phí, cần thêm Engine tính tiền buổi* | 2 APIs |
 | **FR20** | Khởi tạo mã VietQR thanh toán nhúng sẵn tiền & mã duy nhất | Hạch toán Vật tư & Sổ quỹ (F4) | ⏳ *Sẵn sàng DB, cần thêm Engine* | 0 API |
 | **FR21** | Tiếp nhận biến động số dư ngân hàng để tự động xác nhận thanh toán | Hạch toán Vật tư & Sổ quỹ (F4) | ⏳ *Sẵn sàng DB, cần thêm Webhook* | 0 API |
 | **FR22** | Quản trị Sổ quỹ mở nội bộ minh bạch (Thu, Chi, Dư nợ) | Hạch toán Vật tư & Sổ quỹ (F4) | ⏳ *Sẵn sàng DB, cần thêm Endpoint* | 0 API |

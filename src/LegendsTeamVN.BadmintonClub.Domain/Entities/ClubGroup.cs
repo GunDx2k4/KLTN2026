@@ -281,4 +281,45 @@ public class ClubGroup : AggregateRoot<Guid>
         Sessions.Add(session);
         return session;
     }
+
+    public GroupFeeRule UpdateFeeRule(
+        FeeMode feeMode,
+        decimal monthlyFee,
+        decimal dailyMemberFee,
+        decimal guestFee,
+        decimal femaleDiscountMonthly,
+        decimal femaleDiscountDaily,
+        decimal femaleDiscountGuest,
+        int roundRule = 1000)
+    {
+        var rule = FeeRules.OrderByDescending(f => f.AppliedAt).FirstOrDefault();
+        if (rule is null)
+        {
+            rule = new GroupFeeRule(
+                Id,
+                feeMode,
+                monthlyFee,
+                dailyMemberFee,
+                guestFee,
+                femaleDiscountMonthly,
+                femaleDiscountDaily,
+                femaleDiscountGuest,
+                roundRule);
+            FeeRules.Add(rule);
+        }
+        else
+        {
+            rule.UpdateFees(
+                feeMode,
+                monthlyFee,
+                dailyMemberFee,
+                guestFee,
+                femaleDiscountMonthly,
+                femaleDiscountDaily,
+                femaleDiscountGuest,
+                roundRule);
+        }
+
+        return rule;
+    }
 }

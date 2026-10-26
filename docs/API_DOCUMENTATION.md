@@ -105,6 +105,8 @@ Toàn bộ các phản hồi lỗi từ server đều trả về theo chuẩn **
 | **FR07** | `GET` | `/api/v1/clubs/{id}` | `FR07 - Thông tin chi tiết & Lịch sinh hoạt nhóm` | `Bearer Token` | Xem chi tiết CLB đầy đủ: sân cố định, lịch định kỳ tuần, Host, sĩ số, trạng thái cá nhân |
 | **FR07** | `PUT` | `/api/v1/clubs/{id}/info` | `FR07 - Thông tin chi tiết & Lịch sinh hoạt nhóm` | `MEMBER.INFO.UPDATE` | Host cấu hình sân sinh hoạt cố định, địa chỉ, GPS, tiêu chuẩn tuyển chọn |
 | **FR07** | `PUT` | `/api/v1/clubs/{id}/schedules` | `FR07 - Thông tin chi tiết & Lịch sinh hoạt nhóm` | `OPERATIONS.SCHEDULE.MANAGE` | Host thiết lập các khung giờ sinh hoạt cố định lặp lại hàng tuần của nhóm |
+| **FR19** | `GET` | `/api/v1/clubs/{id}/fee-rule` | `FR19 - Hạch toán biểu phí và Quỹ nhóm` | `Bearer Token` | Xem cấu hình biểu phí và mức ưu đãi của câu lạc bộ |
+| **FR19** | `PUT` | `/api/v1/clubs/{id}/fee-rule` | `FR19 - Hạch toán biểu phí và Quỹ nhóm` | `FINANCE.BANK.MANAGE` | Host/Thủ quỹ cập nhật biểu phí (tháng, ngày, khách, ưu đãi Nữ) |
 
 ---
 
@@ -386,6 +388,48 @@ graph TD
 
 ---
 
+#### 7. `GET /api/v1/clubs/{id}/fee-rule` (FR19 - Xem Cấu Hình Biểu Phí & Ưu Đãi)
+
+- **Mục đích**: Lấy thông tin cấu hình quy tắc tính phí hiện tại của câu lạc bộ.
+- **Headers**: `Authorization: Bearer <TOKEN>`, `Content-Type: application/json`
+- **Response `200 OK`**:
+  ```json
+  {
+    "id": "e4414bc9-a5f1-432a-bc9a-0e9603ef8902",
+    "clubId": "b86fa2e7-03b6-4299-923c-a93108ce8968",
+    "feeMode": "DYNAMIC",
+    "monthlyFee": 350000.00,
+    "dailyMemberFee": 40000.00,
+    "guestFee": 50000.00,
+    "femaleDiscountMonthly": 0.00,
+    "femaleDiscountDaily": 5000.00,
+    "femaleDiscountGuest": 10000.00,
+    "roundRule": 1000,
+    "appliedAt": "2026-10-26T17:00:00Z"
+  }
+  ```
+
+---
+
+#### 8. `PUT /api/v1/clubs/{id}/fee-rule` (FR19 - Host/Thủ Quỹ Cập Nhật Biểu Phí & Ưu Đãi)
+
+- **Màn hình kích hoạt**: Màn hình "Cấu hình biểu phí & Ưu đãi" (`ClubFeeRuleSettingsScreen`), dành cho Host/Thủ quỹ có quyền `FINANCE.BANK.MANAGE`.
+- **Headers**: `Authorization: Bearer <TOKEN>`, `X-Group-Id: <CLUB_ID>`, `Content-Type: application/json`
+- **Request Body JSON**:
+  ```json
+  {
+    "feeMode": 0,
+    "monthlyFee": 350000.00,
+    "dailyMemberFee": 40000.00,
+    "guestFee": 50000.00,
+    "femaleDiscountMonthly": 0.00,
+    "femaleDiscountDaily": 5000.00,
+    "femaleDiscountGuest": 10000.00,
+    "roundRule": 1000
+  }
+  ```
+  *(Ghi chú: `feeMode`: `0` = DYNAMIC, `1` = FIXED).*
+- **Response `200 OK`**: Trả về `ClubFeeRuleResponse` đã cập nhật thành công.
 
 ---
 
