@@ -2,17 +2,21 @@ using LegendsTeamVN.BadmintonClub.Application.DTOs.Sessions.Responses;
 using LegendsTeamVN.BadmintonClub.Domain.Enums;
 using LegendsTeamVN.BadmintonClub.Domain.Repositories;
 using LegendsTeamVN.Core.Application.Messaging.CQRS;
+using LegendsTeamVN.Core.Identity.Abstractions;
 using LegendsTeamVN.Core.Utilities.Results;
 using Microsoft.EntityFrameworkCore;
 
 namespace LegendsTeamVN.BadmintonClub.Application.Features.Recruitments.Explore;
 
-public sealed class ExploreRecruitmentsQueryHandler(IRecruitmentRepository recruitmentRepository) 
+public sealed class ExploreRecruitmentsQueryHandler(
+    IRecruitmentRepository recruitmentRepository,
+    ICurrentUserService currentUserService) 
     : IQueryHandler<ExploreRecruitmentsQuery, List<GuestRecruitmentResponse>>
 {
     public async Task<Result<List<GuestRecruitmentResponse>>> Handle(ExploreRecruitmentsQuery request, CancellationToken cancellationToken)
     {
         var now = DateTime.UtcNow;
+        var currentUserId = currentUserService.UserId;
 
         var recruitments = await recruitmentRepository.FindAll(r => !r.IsDeleted && r.Status == RecruitmentStatus.ACTIVE)
             .Include(r => r.Session)
@@ -26,6 +30,19 @@ public sealed class ExploreRecruitmentsQueryHandler(IRecruitmentRepository recru
 
         foreach (var r in recruitments)
         {
+            if (currentUserId.HasValue)
+            {
+                var hasActiveBooking = r.Session.Bookings.Any(b =>
+                    !b.IsDeleted &&
+                    b.UserId == currentUserId.Value &&
+                    b.Status != BookingStatus.ABSENT);
+
+                if (hasActiveBooking)
+                {
+                    continue;
+                }
+            }
+
             var slotsRemaining = RecruitmentRules.RemainingSlots(r.Session, r);
             if (slotsRemaining <= 0)
             {

@@ -42,7 +42,8 @@ public sealed class GetMyBookingsQueryHandler(
             QueueOrder: b.QueueOrder,
             FeePerMember: b.Session.FeePerMember,
             BookedAt: b.BookedAt,
-            CheckinAt: b.CheckinAt
+            CheckinAt: b.CheckinAt,
+            IsGuest: b.RecruitmentId != null
         )).ToList();
 
         return Result.Success(response);
