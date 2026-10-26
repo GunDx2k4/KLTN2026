@@ -82,4 +82,78 @@ public class BookingConfirmedTests
         savedBooking!.Status.Should().Be(BookingStatus.CONFIRMED);
         savedBooking.QueueOrder.Should().Be(0);
     }
+
+    [Fact]
+    public async Task Handle_WhenUserHasOverlappingBooking_ShouldReturnTimeOverlapError()
+    {
+        // Arrange
+        using var dbContext = TestDbContextFactory.Create();
+        var sessionRepo = TestDbContextFactory.CreateAttendanceSessionRepository(dbContext);
+        var bookingRepo = new BookingRepository(dbContext);
+        var userRepo = new UserRepository(dbContext);
+        var currentUserService = Substitute.For<ICurrentUserService>();
+
+        var handler = new VoteBookingCommandHandler(
+            sessionRepo,
+            bookingRepo,
+            userRepo,
+            currentUserService);
+
+        var userId = Guid.NewGuid();
+        currentUserService.UserId.Returns(userId);
+
+        var user = AppUser.CreateStandard(userId, "Người Chơi", "player@example.com", "0912345678", 1, SkillLevel.TB);
+        dbContext.AppUsers.Add(user);
+
+        // Buổi chơi 1: từ 18:00 đến 20:00 (trong 3h đến 5h tới)
+        var session1 = new BadmintonSession(
+            groupId: Guid.NewGuid(),
+            title: "Buổi chơi CLB A",
+            startTime: DateTime.UtcNow.AddHours(3),
+            endTime: DateTime.UtcNow.AddHours(5),
+            courtLocation: "Sân Cầu Giấy",
+            courtCount: 1,
+            targetPlayerPerCourt: 6,
+            maxPlayers: 6,
+            deadlineBooking: DateTime.UtcNow.AddHours(2),
+            status: SessionStatus.OPEN
+        );
+        dbContext.BadmintonSessions.Add(session1);
+
+        // User đã tham gia và CONFIRMED ở Buổi chơi 1
+        var booking1 = new SessionBooking(
+            session1.Id,
+            userId,
+            status: BookingStatus.CONFIRMED,
+            queueOrder: 0
+        );
+        dbContext.SessionBookings.Add(booking1);
+
+        // Buổi chơi 2: từ 19:00 đến 21:00 (trùng giờ với Buổi chơi 1)
+        var session2 = new BadmintonSession(
+            groupId: Guid.NewGuid(),
+            title: "Buổi chơi CLB B",
+            startTime: DateTime.UtcNow.AddHours(4),
+            endTime: DateTime.UtcNow.AddHours(6),
+            courtLocation: "Sân Thanh Xuân",
+            courtCount: 1,
+            targetPlayerPerCourt: 6,
+            maxPlayers: 6,
+            deadlineBooking: DateTime.UtcNow.AddHours(2),
+            status: SessionStatus.OPEN
+        );
+        dbContext.BadmintonSessions.Add(session2);
+
+        await dbContext.SaveChangesAsync();
+        dbContext.ChangeTracker.Clear();
+
+        var command = new VoteBookingCommand(session2.Id);
+
+        // Act: User cố đăng ký thêm Buổi chơi 2
+        var result = await handler.Handle(command, CancellationToken.None);
+
+        // Assert
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("Booking.TimeOverlap");
+    }
 }

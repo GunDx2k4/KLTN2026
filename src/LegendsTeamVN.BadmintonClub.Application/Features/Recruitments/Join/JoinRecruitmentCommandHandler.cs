@@ -66,6 +66,18 @@ public sealed class JoinRecruitmentCommandHandler(
             return Result.Failure<SessionBookingResponse>(Error.Conflict("Booking.AlreadyBooked", "Bạn đã đăng ký tham gia buổi chơi này rồi."));
         }
 
+        var hasOverlap = await bookingRepository.HasOverlappingBookingAsync(
+            userId.Value,
+            session.StartTime,
+            session.EndTime,
+            session.Id,
+            cancellationToken);
+
+        if (hasOverlap)
+        {
+            return Result.Failure<SessionBookingResponse>(Error.Conflict("Booking.TimeOverlap", "Bạn đã có lịch tham gia buổi chơi khác trong cùng khung giờ này."));
+        }
+
         if (session.Bookings.Any(b => !b.IsDeleted && b.Status == BookingStatus.WAITING))
             return Result.Failure<SessionBookingResponse>(Error.Conflict("Session.WaitlistPending", "Còn người đang chờ suất chính thức. Hãy liên hệ Host để xử lý hàng chờ trước."));
 

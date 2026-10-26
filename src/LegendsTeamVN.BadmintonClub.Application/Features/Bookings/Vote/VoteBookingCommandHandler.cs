@@ -53,6 +53,18 @@ public sealed class VoteBookingCommandHandler(
             return Result.Failure<SessionBookingResponse>(Error.Conflict("Booking.AlreadyBooked", "Bạn đã thực hiện đăng ký giữ chỗ cho buổi chơi này rồi."));
         }
 
+        var hasOverlap = await bookingRepository.HasOverlappingBookingAsync(
+            userId.Value,
+            session.StartTime,
+            session.EndTime,
+            session.Id,
+            cancellationToken);
+
+        if (hasOverlap)
+        {
+            return Result.Failure<SessionBookingResponse>(Error.Conflict("Booking.TimeOverlap", "Bạn đã có lịch tham gia buổi chơi khác trong cùng khung giờ này."));
+        }
+
         var confirmedCount = session.Bookings.Count(RecruitmentRules.OccupiesSlot);
         var hasWaiters = session.Bookings.Any(b => !b.IsDeleted && b.Status == BookingStatus.WAITING);
         
