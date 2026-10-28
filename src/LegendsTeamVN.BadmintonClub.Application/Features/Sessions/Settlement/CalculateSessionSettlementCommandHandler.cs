@@ -21,12 +21,19 @@ public sealed class CalculateSessionSettlementCommandHandler(
         if (currentUser.UserId is not Guid actorId)
             return Result.Failure<SessionSettlementResponse>(Error.Unauthorized("User.Unauthorized", "Vui lòng đăng nhập."));
 
-        var session = await sessions.GetSettlementAsync(request.SessionId, ct);
+        var session = await sessions.GetSettlementAsync(request.SessionId, true, ct);
         if (session is null)
             return Result.Failure<SessionSettlementResponse>(Error.NotFound("Session.NotFound", "Không tìm thấy buổi chơi."));
 
         if (!await sessions.CanManageFinanceAsync(session.GroupId, actorId, ct))
             return Result.Failure<SessionSettlementResponse>(Error.Forbidden("Settlement.Forbidden", "Bạn không có quyền quản lý tài chính buổi chơi."));
+
+        if (session.Status is SessionStatus.OPEN or SessionStatus.LOCKED or SessionStatus.PLAYING)
+        {
+            var closed = session.ChangeOperationalStatus(SessionStatus.CALCULATED, false, actorId, DateTime.UtcNow);
+            if (closed.IsFailure)
+                return Result.Failure<SessionSettlementResponse>(closed.Error);
+        }
 
         var club = await clubs.FindAll(c => c.Id == session.GroupId)
             .Include(c => c.FeeRules)
@@ -44,10 +51,6 @@ public sealed class CalculateSessionSettlementCommandHandler(
 
         var courtCost = request.CourtFee ?? session.CourtRentalCost;
         session.UpdateExpenses(request.ShuttlecockUsed, courtCost, request.ExtraFee);
-        if (session.Status is SessionStatus.OPEN or SessionStatus.LOCKED or SessionStatus.PLAYING)
-        {
-            session.UpdateStatus(SessionStatus.CALCULATED);
-        }
 
         var confirmedBookings = session.Bookings
             .Where(b => !b.IsDeleted && b.Status is BookingStatus.CONFIRMED or BookingStatus.CHECKED_IN)
@@ -81,6 +84,7 @@ public sealed class CalculateSessionSettlementCommandHandler(
             femaleFee = Math.Max(0, maleFee - femaleDiscount);
         }
 
+        var addedFees = new List<SessionFee>();
         foreach (var booking in confirmedBookings)
         {
             var u = booking.User;
@@ -113,6 +117,7 @@ public sealed class CalculateSessionSettlementCommandHandler(
                     isMonthly ? PaymentStatus.EXEMPT : PaymentStatus.UNPAID
                 );
                 session.Fees.Add(newFee);
+                addedFees.Add(newFee);
             }
             else
             {
@@ -131,12 +136,13 @@ public sealed class CalculateSessionSettlementCommandHandler(
                         isMonthly ? PaymentStatus.EXEMPT : PaymentStatus.UNPAID
                     );
                     session.Fees.Add(updatedFee);
+                    addedFees.Add(updatedFee);
                 }
             }
         }
 
-        sessions.Update(session);
+        sessions.AddSettlementFees(addedFees);
 
-        return await SessionSettlementHelper.BuildResponseAsync(sessions, clubMembers, session.Id, ct);
+        return await SessionSettlementHelper.BuildResponseAsync(session, clubMembers, ct);
     }
 }

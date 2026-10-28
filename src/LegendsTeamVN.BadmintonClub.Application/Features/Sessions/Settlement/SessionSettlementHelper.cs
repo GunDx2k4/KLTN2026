@@ -1,5 +1,6 @@
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Sessions.Responses;
 using LegendsTeamVN.BadmintonClub.Domain.Enums;
+using LegendsTeamVN.BadmintonClub.Domain.Entities;
 using LegendsTeamVN.BadmintonClub.Domain.Repositories;
 using LegendsTeamVN.Core.Utilities.Results;
 using Microsoft.EntityFrameworkCore;
@@ -9,15 +10,10 @@ namespace LegendsTeamVN.BadmintonClub.Application.Features.Sessions.Settlement;
 internal static class SessionSettlementHelper
 {
     public static async Task<Result<SessionSettlementResponse>> BuildResponseAsync(
-        ISessionRepository sessions,
+        BadmintonSession session,
         IClubMemberRepository clubMembers,
-        Guid sessionId,
         CancellationToken ct)
     {
-        var session = await sessions.GetSettlementAsync(sessionId, ct);
-        if (session is null)
-            return Result.Failure<SessionSettlementResponse>(Error.NotFound("Session.NotFound", "Không tìm thấy buổi chơi."));
-
         var members = await clubMembers.FindAll(m => m.GroupId == session.GroupId && !m.IsDeleted)
             .Include(m => m.RoleEntity)
             .ToListAsync(ct);

@@ -12,6 +12,9 @@ public sealed class GetSessionSettlementQueryHandler(
 {
     public async Task<Result<SessionSettlementResponse>> Handle(GetSessionSettlementQuery request, CancellationToken ct)
     {
-        return await SessionSettlementHelper.BuildResponseAsync(sessions, clubMembers, request.SessionId, ct);
+        var session = await sessions.GetSettlementAsync(request.SessionId, false, ct);
+        if (session is null)
+            return Result.Failure<SessionSettlementResponse>(Error.NotFound("Session.NotFound", "Không tìm thấy buổi chơi."));
+        return await SessionSettlementHelper.BuildResponseAsync(session, clubMembers, ct);
     }
 }

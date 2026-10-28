@@ -1,6 +1,7 @@
 using System.Text.Json;
 using LegendsTeamVN.BadmintonClub.Domain.Entities;
 using LegendsTeamVN.BadmintonClub.Domain.Repositories;
+using LegendsTeamVN.BadmintonClub.Domain.Services;
 using LegendsTeamVN.Core.Persistence.Repositories;
 using LegendsTeamVN.BadmintonClub.Domain.Constants;
 using LegendsTeamVN.BadmintonClub.Domain.Enums;
@@ -172,13 +173,27 @@ public class SessionRepository(BadmintonDbContext dbContext)
             m.RoleEntity.GroupId == groupId && !m.RoleEntity.IsDeleted &&
             m.RoleEntity.RolePermissions.Any(rp => rp.Permission.PermissionCode == GroupPermissions.Operations.MatchManage), cancellationToken);
 
-        public async Task<BadmintonSession?> GetSettlementAsync(Guid sessionId, CancellationToken cancellationToken = default)
+    public async Task<BadmintonSession?> GetSettlementAsync(Guid sessionId, bool forUpdate, CancellationToken cancellationToken = default)
     {
-        var session = await DbContext.BadmintonSessions
+        if (forUpdate)
+        {
+            var tracked = await GetAttendanceAsync(sessionId, true, cancellationToken);
+            if (tracked is not null)
+                await DbContext.Entry(tracked).Collection(s => s.Fees).Query()
+                    .Include(f => f.User).LoadAsync(cancellationToken);
+            return tracked;
+        }
+
+        return await DbContext.BadmintonSessions.AsNoTracking()
             .Include(s => s.Bookings).ThenInclude(b => b.User)
             .Include(s => s.Fees).ThenInclude(f => f.User)
             .FirstOrDefaultAsync(s => s.Id == sessionId && !s.IsDeleted, cancellationToken);
-        return session;
+    }
+
+    public void AddSettlementFees(IEnumerable<SessionFee> fees)
+    {
+        foreach (var fee in fees)
+            DbContext.Entry(fee).State = EntityState.Added;
     }
 
     public Task<bool> CanManageFinanceAsync(Guid groupId, Guid userId, CancellationToken cancellationToken = default) =>

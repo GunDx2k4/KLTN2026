@@ -18,7 +18,7 @@ public sealed class MarkMemberPaidCommandHandler(
         if (currentUser.UserId is not Guid actorId)
             return Result.Failure<SessionSettlementResponse>(Error.Unauthorized("User.Unauthorized", "Vui lòng đăng nhập."));
 
-        var session = await sessions.GetSettlementAsync(request.SessionId, ct);
+        var session = await sessions.GetSettlementAsync(request.SessionId, true, ct);
         if (session is null)
             return Result.Failure<SessionSettlementResponse>(Error.NotFound("Session.NotFound", "Không tìm thấy buổi chơi."));
 
@@ -29,9 +29,8 @@ public sealed class MarkMemberPaidCommandHandler(
         if (fee is not null)
         {
             fee.MarkAsPaid(PaymentMethod.CASH, actorId);
-            sessions.Update(session);
         }
 
-        return await SessionSettlementHelper.BuildResponseAsync(sessions, clubMembers, session.Id, ct);
+        return await SessionSettlementHelper.BuildResponseAsync(session, clubMembers, ct);
     }
 }

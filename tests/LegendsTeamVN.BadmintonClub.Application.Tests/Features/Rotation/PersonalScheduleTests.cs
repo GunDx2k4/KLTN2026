@@ -5,6 +5,7 @@ using LegendsTeamVN.BadmintonClub.Application.Features.Rotation.Personal.Pause;
 using LegendsTeamVN.BadmintonClub.Application.Features.Rotation.Personal.Resume;
 using LegendsTeamVN.BadmintonClub.Domain.Entities;
 using LegendsTeamVN.BadmintonClub.Domain.Repositories;
+using LegendsTeamVN.BadmintonClub.Domain.Services;
 using LegendsTeamVN.Core.Identity.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;

@@ -323,3 +323,58 @@ Ba cách diễn đạt trong UC gốc cần đọc theo nghiệp vụ đã chố
 Kiểm thử trên thiết bị/trình duyệt thực: mở lịch sau check-in; chuyển Proposed → Playing → nghỉ; tự xin nghỉ → tự hết đúng target; tự quay lại sớm nhưng giữ cooldown; bị Host tạm nghỉ; mất mạng khi đang xem và khi đang gửi POST; có mạng trở lại; foreground/reconnect; token hết hạn; thông báo đẩy và mở thông báo cũ. Xác nhận không hiển thị lịch cũ như dữ liệu hiện hành, không bỏ sót cập nhật sau reconnect và không tạo thông báo mời giả từ proposal.
 
 Đây là đầu việc giao FE, chưa được đánh dấu hoàn tất bằng kết quả test BE/Postman. Những yêu cầu tổng nghỉ cả buổi, ETA chính xác hoặc mời ngay tại proposal nếu được bổ sung sẽ cần BE tham gia, không giao FE tự bù.
+
+## 10. Sửa lỗi tương tác UC15 sau merge tài chính — 28/10/2026
+
+### 10.1. Phạm vi và thay đổi
+
+Sửa ba lỗi phát hiện sau merge `42ff39f`, bảo vệ UC15 khi cùng buổi có thao tác quyết toán/ghi nhận thanh toán. Người dùng đã duyệt sửa cả ba lỗi. **[PAYMENTS]** Thay đổi cách kiểm tra đóng buổi và lưu dữ liệu tài chính dùng chung session; hợp đồng HTTP UC15, cấu trúc DB và công thức chia tiền không thay đổi.
+
+| Lỗi trước sửa | Cách sửa | Hành vi sau sửa |
+|---|---|---|
+| Quyết toán gọi trực tiếp đổi trạng thái sang CALCULATED khi còn trận PLAYING, khiến UC15 Closed nhưng trận/target nghỉ không kết thúc được. | Gọi `ChangeOperationalStatus(CALCULATED, false, actor, now)` trước thay đổi chi phí và tạo khoản thu; trả lỗi nghiệp vụ nếu chưa đủ điều kiện. | Còn trận đang chơi thì từ chối quyết toán, giữ trạng thái trận, lịch, nguồn/target nghỉ và chi phí. Chưa xử lý người chưa đến thì yêu cầu xác nhận qua luồng trạng thái/điểm danh hiện có; không tự đánh dấu NO_SHOW. |
+| Tài chính tải session không dùng khóa chung rồi đánh dấu toàn bộ scalar của session để ghi lại, có thể ghi đè rotationVersion/status đã đổi bởi UC15. | Phân biệt đọc/ghi trong `GetSettlementAsync`; nhánh ghi bắt buộc UoW và lấy cùng khóa dòng session `FOR UPDATE` với điều phối trước khi tải dữ liệu con. Bỏ `sessions.Update(session)` ở hai handler tài chính; EF ghi các trường thực sự thay đổi. | Tài chính và thao tác UC15 trên cùng buổi chờ nhau theo thứ tự khóa, đọc trạng thái sau giao dịch trước. Ghi nhận tiền mặt không tự ghi lại hoặc hạ rotationVersion/status. |
+| Test kiến trúc mới yêu cầu namespace Repositories chỉ có interface, trong khi `PersonalRotationSnapshot` là record nằm tại đó. | Chuyển record sang `Domain.Services`, cập nhật import của các nơi dùng; giữ nguyên nội dung record và bộ kiểm tra kiến trúc. | Đúng ranh giới namespace, không thay JSON/endpoint/quyền truy cập của FE. |
+
+Khi đóng buổi hợp lệ, luồng Domain hiện có hủy các proposal WAITING còn lại, dừng lịch kiểm tra xếp sân và phát sự kiện thay đổi điều phối. Việc đóng buổi không tạo lời mời vào sân mới.
+
+Sau khi bỏ cập nhật toàn bộ aggregate, khoản thu mới được đánh dấu `Added` qua `AddSettlementFees`, tránh EF hiểu GUID đã gán là bản ghi cần UPDATE. Response quyết toán được dựng từ aggregate đang xử lý, không truy vấn lại để lấy dữ liệu cũ trước khi UoW lưu.
+
+### 10.2. Các file sửa chính
+
+| File | Nội dung sửa |
+|---|---|
+| `src/LegendsTeamVN.BadmintonClub.Application/Features/Sessions/Settlement/CalculateSessionSettlementCommandHandler.cs` | Khóa khi tải, dùng kiểm tra đóng buổi Domain, đăng ký khoản thu mới và không cập nhật toàn bộ session. |
+| `src/LegendsTeamVN.BadmintonClub.Application/Features/Sessions/Settlement/MarkMemberPaidCommandHandler.cs` | Khóa khi tải; chỉ thay đổi khoản thu được đánh dấu đã trả. |
+| `src/LegendsTeamVN.BadmintonClub.Application/Features/Sessions/Settlement/GetSessionSettlementQueryHandler.cs` và `SessionSettlementHelper.cs` | Query dùng nhánh đọc; helper dựng response từ session được truyền vào. |
+| `src/LegendsTeamVN.BadmintonClub.Domain/Repositories/ISessionRepository.cs` | Chữ ký đọc/ghi rõ ràng và phương thức đăng ký khoản thu mới. |
+| `src/LegendsTeamVN.BadmintonClub.Persistence/Repositories/SessionRepository.cs` | Nhánh ghi dùng cùng khóa/UoW với UC15, tải aggregate và khoản thu sau khóa; nhánh đọc không tracking. |
+| `src/LegendsTeamVN.BadmintonClub.Domain/Services/PersonalRotationSnapshot.cs` | Vị trí mới của record nội bộ, bỏ khai báo record trong namespace Repositories. |
+| Các test Application liên quan quyết toán và UC15 | Bổ sung hồi quy đóng buổi, bảo toàn trạng thái nghỉ, lưu khoản thu và cập nhật import snapshot. |
+
+### 10.3. FE cần cập nhật cách xử lý
+
+1. **Không đổi request/response UC15.** GET lịch, pause/resume, capability, version và payload realtime tiếp tục dùng theo mục 4/8.
+2. Khi Host/Thủ quỹ quyết toán trong lúc còn trận thi đấu, hiển thị lỗi **“Còn trận đang thi đấu. Hãy kết thúc các trận trước khi đóng buổi.”** Không tự chuyển màn hình sang Closed hoặc bỏ trạng thái nghỉ. Tải lại lịch khi cần; cho Host kết thúc các trận rồi gửi lại thao tác quyết toán theo lựa chọn của họ.
+3. Nếu còn người đăng ký chưa có mặt, hướng người điều hành kiểm tra điểm danh và xác nhận NO_SHOW theo luồng hiện có trước khi quyết toán lại. Lệnh quyết toán không có trường mới để bỏ qua kiểm tra này.
+4. Mã `Session.ActiveMatches`/`Attendance.NoShowConfirmationRequired` là mã nghiệp vụ nội bộ; tiếp tục xử lý ProblemDetails HTTP 409 và `detail`, không giả định có field `code` trên wire.
+5. Đóng buổi thành công có thể phát `MyMatchesChanged`; GET lại và áp dụng `phase=Closed`, capability false, proposal mới nhất theo snapshot. Ghi nhận thanh toán tiền mặt không tự làm tăng version điều phối; không cần chờ một sự kiện UC15 để xác nhận thao tác tài chính đã thành công.
+6. Khi tài chính và điều phối chạy đồng thời, request có thể chờ khóa. Giữ trạng thái đang xử lý, tránh gửi trùng thao tác; nếu mất phản hồi thì tải lại dữ liệu trước khi người dùng quyết định thử lại.
+
+### 10.4. Kiểm chứng sau sửa
+
+Suite sau sửa **373/373 đạt**: Application 129, Architecture 37, Infrastructure 14, Unit 193; build solution thành công, còn warning NU1510 đã có. Thêm 6 bài hồi quy trong `tests/LegendsTeamVN.BadmintonClub.Application.Tests/Features/Sessions/SettlementRotationSafetyTests.cs`, gồm chặn đóng khi target Playing, không tự NO_SHOW, đóng hợp lệ/dọn proposal/phát event/lưu khoản thu mới, ghi nhận thanh toán không sửa version/pause, query dùng nhánh đọc và ghi bắt buộc transaction.
+
+Kiểm toán độc lập xác nhận architecture **37/37**, sáu bài hồi quy **6/6**, build 0 lỗi và `git diff --check` sạch. Bằng chứng tại `artifacts/uc15/audit-tests/architecture-audit.trx` và `settlement-audit.trx`.
+
+Đã chạy **17 kiểm chứng PostgreSQL** trên DB mới riêng `uc15_verify_1793198956674`, giữ DB/report để đối chiếu. Không sửa dữ liệu `BadmintonClub`, không chạy seed ứng dụng và không gửi FCM trong kiểm thử này.
+
+- Schema sau merge khớp model; ghi tài chính không có transaction bị từ chối.
+- UC15 giữ khóa thì tài chính thực sự chờ; tài chính giữ khóa thì UC15 thực sự chờ. Kiểm tra trạng thái chờ qua `pg_stat_activity`, không chỉ dựa vào độ trễ.
+- Sau chờ, bên ghi đọc đúng version/pause mới nhất; thanh toán không đánh dấu version/status để ghi lại. Khoản thu PAID và target tự nghỉ cùng được bảo toàn.
+- Đóng buổi khi target đang Playing bị chặn, không thay trạng thái/version/pause. Sau đó target vẫn finish được và tự hết lượt nghỉ.
+- Đóng buổi hợp lệ dọn proposal, dừng scheduler và có sự kiện cập nhật; lịch cá nhân chuyển Closed.
+
+Probe và báo cáo nằm tại `artifacts/uc15/postmerge-regression/`; đây là kiểm chứng PostgreSQL/Domain/EF, không phải nghiệm thu FE hoặc FCM trên thiết bị thật. Kết quả collection 281 request / 573 assertion ở mục 8.7 là lần chạy local trước bản sửa này, không dùng thay bằng chứng hồi quy sau sửa.
+
+Bản vá này không xác nhận toàn bộ UC16/UC17 hoàn chỉnh. Các vấn đề tài chính đã tồn tại trước bản vá như công thức chia tiền, đơn giá cầu của response, route quyết toán, quyền xem quyết toán, VietQR mặc định và thay khoản thu bằng remove/insert vẫn cần đợt rà/sửa tài chính riêng. Ba sửa đổi trên bảo vệ tương tác với UC15 và khôi phục kiểm tra kiến trúc; không thay migration hoặc áp dụng thay đổi vào DB ứng dụng.
