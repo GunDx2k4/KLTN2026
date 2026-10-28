@@ -390,7 +390,43 @@ public class BadmintonSession : AggregateRoot<Guid>
 
     public Result SetRotationPause(Guid userId, bool isPaused, long expectedRotationVersion,
         Guid? replacementUserId, DateTime now, bool generateProposals = true)
+        => SetRotationPauseCore(userId, isPaused, expectedRotationVersion, replacementUserId, now,
+            generateProposals, RotationPauseSource.Host);
+
+    public Result SetSelfRotationPause(Guid userId, bool isPaused, long expectedRotationVersion,
+        DateTime now, bool generateProposals = true)
     {
+        if (userId == Guid.Empty || expectedRotationVersion < 0)
+            return Result.Failure(Error.Validation("Rotation.InvalidPause", "Người chơi/version không hợp lệ."));
+        ValidateRotationPauseMetadata();
+        var allowed = ValidateRotation(now);
+        if (allowed.IsFailure) return allowed;
+        if (!RotationStartedAt.HasValue)
+            return Result.Failure(Error.Conflict("Rotation.NotInitialized", "Chưa bắt đầu điều phối."));
+        if (expectedRotationVersion != RotationVersion)
+            return Result.Failure(Error.Conflict("Rotation.VersionConflict", "Điều phối đã thay đổi. Hãy tải lại."));
+        var booking = Bookings.SingleOrDefault(b => b.SessionId == Id && b.UserId == userId && !b.IsDeleted);
+        if (booking is null || !MatchRotationEngine.IsCheckedInParticipant(booking) || booking.User is null ||
+            Matches.Any(m => !m.IsDeleted && m.Status == MatchStatus.PLAYING && m.Players.Any(p => p.UserId == userId)))
+            return Result.Failure(Error.Conflict("Rotation.CannotPause", "Chỉ thay đổi nghỉ khi đã điểm danh và chưa thi đấu."));
+        if (booking.IsRotationPaused && booking.RotationPauseSource != RotationPauseSource.Self)
+            return Result.Failure(Error.Conflict("Rotation.HostPauseRequiresHost", "Chỉ Host được bỏ trạng thái nghỉ này."));
+        return SetRotationPauseCore(userId, isPaused, expectedRotationVersion, null, now,
+            generateProposals, RotationPauseSource.Self);
+    }
+
+    public void ValidateRotationPauseMetadata()
+    {
+        foreach (var booking in Bookings)
+            if (!booking.HasValidPauseMetadata() || booking.SelfPauseTargetMatchId is Guid target &&
+                !Matches.Any(m => m.Id == target && m.SessionId == Id && !m.IsDeleted && m.Status == MatchStatus.PLAYING))
+                throw new InvalidRotationPauseMetadataException(Id, booking.UserId);
+    }
+
+    private Result SetRotationPauseCore(Guid userId, bool isPaused, long expectedRotationVersion,
+        Guid? replacementUserId, DateTime now, bool generateProposals, RotationPauseSource source)
+    {
+        ValidateRotationPauseMetadata();
         if (userId == Guid.Empty || expectedRotationVersion < 0 || replacementUserId == Guid.Empty ||
             replacementUserId == userId || (!isPaused && replacementUserId.HasValue))
             return Result.Failure(Error.Validation("Rotation.InvalidPause", "Thông tin tạm nghỉ/người thay không hợp lệ."));
@@ -408,7 +444,11 @@ public class BadmintonSession : AggregateRoot<Guid>
         var pending = Matches.Where(m => !m.IsDeleted && m.Status == MatchStatus.WAITING && m.Players.Any(p => p.UserId == userId)).ToList();
         if (pending.Count > 1 || (replacementUserId.HasValue && pending.Count != 1))
             return Result.Failure(Error.Conflict("Rotation.InvalidReplacement", "Người thay chỉ áp dụng cho một đề xuất đang giữ người này."));
-        if (booking.IsRotationPaused == isPaused && replacementUserId is null) return Result.Success();
+        var samePauseOwner = source == RotationPauseSource.Self
+            ? booking.RotationPauseSource == RotationPauseSource.Self
+            : booking.RotationPauseSource != RotationPauseSource.Self;
+        if (booking.IsRotationPaused == isPaused && replacementUserId is null && (!isPaused || samePauseOwner))
+            return Result.Success();
         var version = RotationVersion;
         if (isPaused && replacementUserId is Guid replacement)
         {
@@ -423,7 +463,7 @@ public class BadmintonSession : AggregateRoot<Guid>
         }
         else if (isPaused)
             foreach (var match in pending) match.SkipMatch(now);
-        booking.SetRotationPaused(isPaused);
+        booking.SetRotationPaused(isPaused, source);
         // Resume never fakes an end time/check-in or bypasses the existing rest period.
         if (ValidateRotation(now).IsSuccess) ReconcileRotation(now, generateProposals);
         else NextProposalCheckAt = null;
@@ -491,6 +531,9 @@ public class BadmintonSession : AggregateRoot<Guid>
                 (m.CourtNumber == match.CourtNumber || m.Players.Any(p => match.Players.Any(x => x.UserId == p.UserId)))))
             return Result.Failure(Error.Conflict("Rotation.StaleProposal", "Đội hình hoặc sân không còn hợp lệ. Hãy tải lại."));
         match.StartMatch(now);
+        foreach (var booking in Bookings.Where(b => !b.IsDeleted && b.IsRotationPaused &&
+            b.RotationPauseSource == RotationPauseSource.Self && b.SelfPauseTargetMatchId is null))
+            booking.BindSelfPauseTarget(match.Id);
         Status = SessionStatus.PLAYING;
         UpdateRotationSchedule(now, true);
         RecordRotationChange(now, match);
@@ -505,7 +548,11 @@ public class BadmintonSession : AggregateRoot<Guid>
         if (IsDeleted || Status is SessionStatus.CALCULATED or SessionStatus.COMPLETED ||
             match.Status != MatchStatus.PLAYING || !match.TimeStart.HasValue || now < match.TimeStart.Value)
             return Result.Failure(Error.Conflict("Match.NotPlaying", "Chỉ được kết thúc trận đang thi đấu."));
+        ValidateRotationPauseMetadata();
         match.EndMatch(now);
+        foreach (var booking in Bookings.Where(b => b.IsRotationPaused &&
+            b.RotationPauseSource == RotationPauseSource.Self && b.SelfPauseTargetMatchId == match.Id))
+            booking.SetRotationPaused(false, RotationPauseSource.Self);
         ReconcileRotation(now, generateProposals);
         RecordRotationChange(now);
         return Result.Success();
@@ -525,9 +572,13 @@ public class BadmintonSession : AggregateRoot<Guid>
         return Result.Success();
     }
 
-    private Result ValidateRotation(DateTime now) => !IsDeleted && StartTime <= now && now < EndTime &&
-        Status is SessionStatus.OPEN or SessionStatus.LOCKED or SessionStatus.PLAYING
-        ? Result.Success() : Result.Failure(Error.Conflict("Rotation.Closed", "Chỉ điều phối trong thời gian diễn ra buổi chưa đóng."));
+    private Result ValidateRotation(DateTime now)
+    {
+        ValidateRotationPauseMetadata();
+        return !IsDeleted && StartTime <= now && now < EndTime &&
+            Status is SessionStatus.OPEN or SessionStatus.LOCKED or SessionStatus.PLAYING
+            ? Result.Success() : Result.Failure(Error.Conflict("Rotation.Closed", "Chỉ điều phối trong thời gian diễn ra buổi chưa đóng."));
+    }
 
     private bool ValidProposal(SessionMatch match, DateTime now) => match.CourtNumber >= 1 && match.CourtNumber <= CourtCount &&
         match.Players.Count == 4 && match.Players.Select(p => p.UserId).Distinct().Count() == 4 &&

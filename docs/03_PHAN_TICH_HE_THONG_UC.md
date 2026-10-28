@@ -199,10 +199,28 @@ graph TD
 - Trận chỉ bắt đầu khi đủ 4 người hợp lệ, mỗi đội 2 người; start lấy giờ server và mời đúng đội hình cuối. Phần Flutter kéo thả không nằm trong đợt BE.
 
 ### UC15: Theo dõi lịch thi đấu cá nhân theo thời gian thực
-- **FR đáp ứng**: FR17 (F3.5) | **Tác nhân**: Hội viên, Khách tại sân.
-- **Tiền điều kiện**: Người chơi đã được điểm danh `CHECKED_IN`.
-- **Luồng chính**: Người chơi mở màn hình Live Match trên điện thoại ➔ Xem vị trí sân đang đấu, ai là bạn cùng chơi, ai là đối thủ ở lượt kế tiếp và thời gian nghỉ dự kiến mà không cần hỏi Host.
-- **Hậu điều kiện**: Người chơi chủ động chuẩn bị vào sân đúng giờ.
+- **FR đáp ứng**: FR17 (F3.5) | **Tác nhân**: Hội viên cố định, khách vãng lai tại sân.
+- **Trạng thái**: **BE A–E hoàn tất trên sandbox ngày 27/10/2026**: Domain/migration, API/delivery và hồi quy cuối/reconnect/tải đọc. FE người khác làm; DB đích/deploy/push thật chưa thực hiện.
+- **Tiền điều kiện**: JWT hợp lệ, booking của chính người gọi CHECKED_IN/chưa xóa, user/group hoạt động. Guest không cần membership; LEAVED xét booking như guest, BANNED bị chặn. Không cấp quyền điều phối cho người chơi.
+- **Luồng chính**:
+  1. Người chơi mở **Lịch thi đấu của tôi**; client kiểm tra mạng, gọi GET my-matches của buổi; BE xác minh participant và đọc snapshot nhất quán, không thay dữ liệu.
+  2. Trả Ready/Resting/Proposed/Playing/Paused, phase AwaitingRotation/Active/Closed, version và serverTime UTC.
+  3. Ngoài sân: hiển thị đoạn nghỉ hiện tại từ FINISHED gần nhất/check-in, mốc hết nghỉ tối thiểu 5 phút và rank trong tập Candidates. Không dùng QueueOrder booking; cooldown/Paused/Proposed/Playing không có rank khả dụng.
+  4. Đã có WAITING chứa self: trả nextMatch gồm sân/bạn cặp/hai đối thủ. Chưa có proposal thì chưa xác định đội hình; ETA không biết trả null/reason, không coi cooldown là giờ vào sân.
+  5. Người chơi tiếp tục sẵn sàng hoặc xin nghỉ lượt tới theo nhánh 6a.
+  6. BE nhận thay đổi từ UC13/14, phát MyMatchesChanged theo participant hiện hành; client GET lại. Giữ nguyên quyền/group JoinSession của Host.
+  7. Host start/confirm đội hình cuối: transaction ghi trận/bốn MATCH notifications/outbox; worker sau commit gửi MatchStarted/FCM tới bốn người, gồm sân, một bạn cặp và hai đối thủ. Không mời tại proposal hoặc chỉ tự hết nghỉ.
+  8. Người chơi nhận thông tin và chủ động di chuyển vào sân; không thêm bước BE xác nhận di chuyển.
+- **Ngoại lệ 2a — Mất mạng**: Client hiển thị cache có mốc cập nhật và “Đang kết nối lại”, không giả xác nhận xin nghỉ. Có mạng/reconnect luôn GET mới và lắng nghe; không tự replay command stale. BE cung cấp version/time; cache/banner/timer do FE làm.
+- **Nhánh 4a — Đang thi đấu**: currentMatch có sân/bạn/đối thủ/timeStart để client tính đồng hồ theo serverTime; nextMatch=null. Không tự nghỉ/resume giữa trận. Quá EndTime nhưng chưa FINISHED vẫn hiển thị Playing thực tế, không sinh lượt mới.
+- **Nhánh 6a — Xin nghỉ lượt tới**:
+  1. Người chưa Playing POST self-pause chỉ gửi expectedRotationVersion. BE khóa session và kiểm tra lại ownership/version/trạng thái, đặt nguồn Self/target=null. Nếu thuộc WAITING thì SKIPPED cả proposal rồi reconcile; CHECKED_IN/cooldown không đổi.
+  2. **Trận đầu tiên thực sự start sau yêu cầu, bất kỳ sân nào**, được lưu làm target. Trận đã Playing trước yêu cầu, WAITING/SKIPPED và retry start không tính; start đồng thời theo thứ tự row lock.
+  3. Khi đúng target FINISHED, BE tự bỏ Self pause trước reconcile trong cùng transaction, giữ cooldown của người xin nghỉ. Trận khác finish trước không tính; chưa có trận mới thì chưa có lượt để tính, không dùng timer giả.
+- **Nhánh 6b — Sẵn sàng trở lại sớm**: Self-resume chỉ bỏ Self pause và xóa target, vẫn đủ cooldown mới được chọn. Không bỏ Host/LegacyHost pause. Host tiếp quản Self đổi nguồn Host/xóa target/tăng version; target cũ không được bỏ pause Host hoặc pause mới.
+- **Ngoại lệ tranh chấp/đóng buổi**: Stale version, Playing, chưa initialize hoặc POST ngoài thời gian vận hành trả 409, không ghi một phần. GET không tự expiry; Host resume phục hồi theo UC14. Tắt tính năng UC15 không làm mất auto-expiry đã nhận.
+- **Hậu điều kiện**: Người chơi biết trạng thái/sân/đội hình của mình, khoảng nghỉ/rank và giới hạn ETA; không bị xếp khi pause. Self pause tự hết một lượt hoặc resume sớm, không vượt cooldown; Host pause không tự hết. Lời mời đúng người sau start/commit, retry không sinh thêm thông báo nghiệp vụ.
+- **Hợp đồng/kiểm chứng**: [UC15-BE.md](Detail%20Design/UC15-BE.md), [ma trận test](Detail%20Design/UC15-TEST-MATRIX.md), [handoff](Detail%20Design/UC15-BE.md). Suite cuối 347/347, D 48 check hai host/Redis/fake FCM, C 114 HTTP/PG, E 57 check. GET cố định 9 SQL, 480 mẫu p95 39,50–309,08 ms <500 ms trên sandbox đã công bố; không chứng minh SLA production hoặc FE/thiết bị thật. Hai cờ UC15 mặc định false.
 
 ---
 

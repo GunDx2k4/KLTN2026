@@ -26,7 +26,7 @@
 | **FR14** | Điểm danh nhanh danh sách người chơi thực tế có mặt tại sân | Vận hành Buổi chơi & Điều phối (F3) | ⏳ *Sẵn sàng DB, cần thêm Endpoint* | 0 API |
 | **FR15** | Giải thuật tự động đề xuất xoay tua sân (Nghỉ lâu + Trình độ) | Vận hành Buổi chơi & Điều phối (F3) | BE UC13 đã có engine/API; FE chưa triển khai | 5 API |
 | **FR16** | Host can thiệp điều chỉnh danh sách thi đấu thủ công | Vận hành Buổi chơi & Điều phối (F3) | BE A–G hoàn thành trên sandbox: chức năng, tranh chấp/rollback/SignalR hai instance/hồi quy đều đạt; FE và DB đích chưa triển khai | 4 API mới + mở rộng GET rotation |
-| **FR17** | Người chơi theo dõi lượt thi đấu cá nhân theo thời gian thực | Vận hành Buổi chơi & Điều phối (F3) | ⏳ *Sẵn sàng DB, cần thêm Endpoint* | 0 API |
+| **FR17** | Người chơi theo dõi lượt thi đấu cá nhân theo thời gian thực | Vận hành Buổi chơi & Điều phối (F3) | BE A–E hoàn tất sandbox 27/10/2026; FE/thiết bị/FCM thật và DB đích chưa triển khai | 3 API đã triển khai, cờ UC15 mặc định tắt |
 | **FR18** | Ghi nhận số quả cầu bóc mới và phụ phí phát sinh buổi chơi | Hạch toán Vật tư & Sổ quỹ (F4) | ⏳ *Sẵn sàng DB, cần thêm Endpoint* | 0 API |
 | **FR19** | Hạch toán chi phí đa hệ số tự động (Nam, Nữ, Tháng, Ngày) | Hạch toán Vật tư & Sổ quỹ (F4) | ⏳ *Sẵn sàng DB, cần thêm Engine* | 0 API |
 | **FR20** | Khởi tạo mã VietQR thanh toán nhúng sẵn tiền & mã duy nhất | Hạch toán Vật tư & Sổ quỹ (F4) | ⏳ *Sẵn sàng DB, cần thêm Engine* | 0 API |
@@ -198,7 +198,10 @@ Các phân hệ dưới đây đã có sẵn cấu trúc bảng và mô hình th
   - *Đã triển khai D*: POST `/api/v1/sessions/{sessionId}/matches/{matchId}/restore-proposal`, PUT `/api/v1/sessions/{sessionId}/rotation/players/{userId}/pause`. *Đã triển khai E*: POST `/api/v1/sessions/{sessionId}/matches/{matchId}/confirm-manual-start`; start UC13 cũ bị 409 với baseline, untouched giữ nguyên; retry Playing không thêm bản ghi. F/G đã đạt trên sandbox; bộ review SQL/backup/rollback chuẩn bị tại D:/KhoaLuan/PLan_agent/UC14-DB-REVIEW/. Chưa chạy DB đích hoặc deploy. Xem [UC14-BE.md](Detail%20Design/UC14-BE.md). Endpoint swap-players cũ được thay bằng contract này. DB đích chưa nâng cấp.
 - **FR17 - Theo dõi lịch thi đấu thời gian thực**:
   - *Mục tiêu*: Cung cấp màn hình hiển thị trực quan cho người chơi: sân sắp đánh, bạn cùng chơi/đối thủ ở lượt tiếp theo và thời gian nghỉ dự kiến.
-  - *Endpoint dự kiến*: `GET /api/v1/sessions/{sessionId}/my-matches`.
+  - *Đợt A–E (27/10/2026)*: **BE hoàn tất trên sandbox**, [hợp đồng UC15-BE](Detail%20Design/UC15-BE.md), [matrix](Detail%20Design/UC15-TEST-MATRIX.md) và [handoff](Detail%20Design/UC15-BE.md). Suite cuối 347/347; B 57 PG, C 114 HTTP/PG, D 48 hai host/Redis/fake FCM, E 57 tích hợp/reconnect/clock/guard/performance. GET 480 mẫu, cố định 9 SQL, p95 39,50–309,08 ms trên sandbox; không ghi FE/FCM thật/production hoàn tất hoặc coi đây là SLA production.
+  - *Ba route đã triển khai ở C*: GET `/api/v1/sessions/{sessionId}/my-matches`, POST `.../my-matches/pause`, POST `.../my-matches/resume`. JWT + CHECKED_IN của self, không đòi MatchManage cho guest; BANNED bị chặn. PersonalScheduleEnabled/SelfPauseEnabled mặc định false, chỉ bật trong probe sandbox để kiểm chứng.
+  - *Quy tắc*: Self nghỉ một lượt tự hết khi trận đầu tiên start sau yêu cầu FINISHED, bất kỳ sân; hỗ trợ resume sớm, không bỏ Host pause/cooldown 5 phút. Mời khi Host start/confirm; ETA không biết trả null/reason, rank chỉ Candidates.
+  - *Schema B*: thêm nguồn pause và target trận, backfill pause UC14 cũ thành Host; không đổi migration UC14 hoặc DB đích trong A. FE do người khác làm.
 
 ---
 

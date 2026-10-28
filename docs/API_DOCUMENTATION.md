@@ -5,6 +5,8 @@
 > **Ngày cập nhật**: 14/10/2026  
 > **Đối tượng sử dụng**: Đội ngũ Backend (.NET Core Minimal APIs) & Đội ngũ Mobile (Flutter App)
 
+> **FR17 cập nhật 27/10/2026 — BE A–E hoàn tất trên sandbox:** đã có GET `/api/v1/sessions/{sessionId}/my-matches`, POST `.../my-matches/pause` và POST `.../my-matches/resume`; hai POST chỉ nhận expectedRotationVersion. JWT + CHECKED_IN của self, member/guest/LEAVED hợp lệ, BANNED bị chặn. PersonalScheduleEnabled/SelfPauseEnabled mặc định false. MyMatchesChanged theo UserId; MatchStarted/push có teammate/opponents, kiểm chứng hai host/Redis với fake FCM. Suite cuối 347/347; E đo GET 9 SQL, p95 39,50–309,08 ms ở sandbox. [Contract](Detail%20Design/UC15-BE.md), [matrix](Detail%20Design/UC15-TEST-MATRIX.md), [handoff/runbook](Detail%20Design/UC15-BE.md). FE/thiết bị/FCM thật và DB đích/deploy chưa thực hiện; không coi số đo local là SLA production.
+
 ---
 
 ## 📌 1. Thông Tin Mạng & Quy Ước Kết Nối Toàn Hệ Thống

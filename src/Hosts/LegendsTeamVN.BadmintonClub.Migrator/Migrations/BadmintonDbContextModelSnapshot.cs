@@ -19,9 +19,6 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
 #pragma warning disable 612, 618
             modelBuilder
                 .HasAnnotation("ProductVersion", "10.0.10")
-                .HasAnnotation("Proxies:ChangeTracking", false)
-                .HasAnnotation("Proxies:CheckEquality", false)
-                .HasAnnotation("Proxies:LazyLoading", true)
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -1443,6 +1440,15 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id_recruitment");
 
+                    b.Property<string>("RotationPauseSource")
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("rotation_pause_source");
+
+                    b.Property<Guid?>("SelfPauseTargetMatchId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("self_pause_target_match_id");
+
                     b.Property<Guid>("SessionId")
                         .HasColumnType("uuid")
                         .HasColumnName("id_session");
@@ -1464,12 +1470,18 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
 
                     b.HasIndex("RecruitmentId");
 
+                    b.HasIndex("SelfPauseTargetMatchId")
+                        .HasFilter("self_pause_target_match_id IS NOT NULL");
+
                     b.HasIndex("UserId");
 
                     b.HasIndex("SessionId", "UserId")
                         .IsUnique();
 
-                    b.ToTable("session_booking", (string)null);
+                    b.ToTable("session_booking", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_session_booking_pause_source", "rotation_pause_source IS NULL OR rotation_pause_source IN ('SELF', 'HOST')");
+                        });
                 });
 
             modelBuilder.Entity("LegendsTeamVN.BadmintonClub.Domain.Entities.SessionFee", b =>
@@ -1954,6 +1966,11 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                         .WithMany("Bookings")
                         .HasForeignKey("RecruitmentId")
                         .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("LegendsTeamVN.BadmintonClub.Domain.Entities.SessionMatch", null)
+                        .WithMany()
+                        .HasForeignKey("SelfPauseTargetMatchId")
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.HasOne("LegendsTeamVN.BadmintonClub.Domain.Entities.BadmintonSession", "Session")
                         .WithMany("Bookings")

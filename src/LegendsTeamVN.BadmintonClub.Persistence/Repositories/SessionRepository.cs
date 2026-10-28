@@ -11,6 +11,49 @@ namespace LegendsTeamVN.BadmintonClub.Persistence.Repositories;
 public class SessionRepository(BadmintonDbContext dbContext) 
     : GenericRepository<BadmintonDbContext, BadmintonSession, Guid>(dbContext), ISessionRepository
 {
+    private IQueryable<SessionBooking> PersonalParticipants(Guid sessionId) => DbContext.SessionBookings.AsNoTracking()
+        .Where(b => b.SessionId == sessionId && !b.IsDeleted && b.Status == BookingStatus.CHECKED_IN &&
+            !b.Session.IsDeleted && b.User.IsActive && !b.User.IsDeleted && b.Session.Group.IsActive && !b.Session.Group.IsDeleted &&
+            !DbContext.GroupMembers.Any(m => m.GroupId == b.Session.GroupId && m.UserId == b.UserId && !m.IsDeleted && m.Status == ClubMemberStatus.BANNED));
+
+    public async Task<IReadOnlyList<Guid>> FindPersonalScheduleRecipientsAsync(Guid sessionId, CancellationToken ct) =>
+        await PersonalParticipants(sessionId).Select(b => b.UserId).ToListAsync(ct);
+
+    public Task<bool> CanAccessPersonalScheduleAsync(Guid sessionId, Guid userId, CancellationToken ct) =>
+        PersonalParticipants(sessionId).AnyAsync(b => b.UserId == userId, ct);
+
+    public async Task<Domain.Services.MatchInvitationRoster?> GetMatchInvitationRosterAsync(Guid sessionId, Guid matchId,
+        bool requirePlaying, CancellationToken ct)
+    {
+        // Before SaveChanges the start lives in the tracked aggregate; delivery only reads committed PLAYING rows.
+        var match = requirePlaying ? null : DbContext.SessionMatches.Local.FirstOrDefault(m => m.Id == matchId && m.SessionId == sessionId && !m.IsDeleted);
+        match ??= await DbContext.SessionMatches.AsNoTracking().Include(m => m.Players).SingleOrDefaultAsync(m =>
+            m.Id == matchId && m.SessionId == sessionId && !m.IsDeleted && !m.Session.IsDeleted &&
+            (!requirePlaying || m.Status == MatchStatus.PLAYING), ct);
+        if (match is null) return null;
+        var ids = match.Players.Select(p => p.UserId).ToArray();
+        var names = await DbContext.AppUsers.AsNoTracking().Where(u => ids.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.FullName, ct);
+        foreach (var user in DbContext.AppUsers.Local.Where(u => ids.Contains(u.Id))) names[user.Id] = user.FullName;
+        return new(sessionId, matchId, match.CourtNumber, match.TimeStart,
+            match.Players.Select(p => new Domain.Services.InvitationPlayer(p.UserId, names.GetValueOrDefault(p.UserId, ""), p.SideTeam)).ToArray());
+    }
+    public async Task<PersonalRotationSnapshot> GetPersonalRotationAsync(Guid sessionId, Guid userId,
+        bool forUpdate, CancellationToken ct = default)
+    {
+        // Reads authorize and load all children in one MVCC snapshot; commands already own their UoW.
+        await using var snapshot = forUpdate ? null :
+            await DbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, ct);
+        if (forUpdate && DbContext.Database.CurrentTransaction is null)
+            throw new InvalidOperationException("Personal rotation writes require an active transaction.");
+        var query = forUpdate ? DbContext.BadmintonSessions.FromSqlInterpolated(
+            $"SELECT * FROM badminton_session WHERE id_session = {sessionId} FOR UPDATE") : DbContext.BadmintonSessions.AsQueryable();
+        var session = await query.AsNoTracking().SingleOrDefaultAsync(s => s.Id == sessionId && !s.IsDeleted, ct);
+        var allowed = session is not null && await CanAccessPersonalScheduleAsync(sessionId, userId, ct);
+        // Do not materialize another participant's lineup/metadata before authorization succeeds.
+        if (allowed) session = await GetAttendanceAsync(sessionId, false, ct);
+        if (snapshot is not null) await snapshot.CommitAsync(ct);
+        return new(session, allowed);
+    }
     public async Task<IReadOnlyList<Guid>> FindDueRotationIdsAsync(DateTime now, int limit,
         IReadOnlyCollection<Guid> excluded, CancellationToken ct) => await DbContext.BadmintonSessions.AsNoTracking()
         .Where(s => !s.IsDeleted && s.RotationStartedAt != null && s.StartTime <= now && s.EndTime > now &&
@@ -56,8 +99,9 @@ public class SessionRepository(BadmintonDbContext dbContext)
             role.PermissionCount >= GroupPermissions.TotalCount);
     }
 
-    public Task<bool> CanReceiveMatchInvitationAsync(Guid sessionId, Guid matchId, Guid userId, CancellationToken ct) =>
-        DbContext.SessionMatches.AsNoTracking().AnyAsync(m => m.Id == matchId && m.SessionId == sessionId &&
+    public async Task<bool> CanReceiveMatchInvitationAsync(Guid sessionId, Guid matchId, Guid userId, CancellationToken ct) =>
+        await CanAccessPersonalScheduleAsync(sessionId, userId, ct) &&
+        await DbContext.SessionMatches.AsNoTracking().AnyAsync(m => m.Id == matchId && m.SessionId == sessionId &&
             !m.IsDeleted && !m.Session.IsDeleted && m.Status == MatchStatus.PLAYING &&
             m.Players.Any(p => p.UserId == userId && p.User.IsActive && !p.User.IsDeleted), ct);
     public async Task<BadmintonSession?> GetAttendanceAsync(Guid sessionId, bool forUpdate, CancellationToken cancellationToken = default)
@@ -93,6 +137,7 @@ public class SessionRepository(BadmintonDbContext dbContext)
                 throw new InvalidLineupSnapshotException(sessionId, match.Id);
             }
         }
+        session.ValidateRotationPauseMetadata();
         await DbContext.Entry(session).Collection(s => s.Recruitments).Query()
             .Where(r => !r.IsDeleted).LoadAsync(cancellationToken);
         return session;

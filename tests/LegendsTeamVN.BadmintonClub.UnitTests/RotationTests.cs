@@ -232,7 +232,9 @@ public sealed class RotationTests
         var started = s.DomainEvents.OfType<RotationChangedDomainEvent>().Single(e => e.StartedMatchId.HasValue);
         var outbox = new Mock<IOutboxRepository>();
         var notifications = new Mock<INotificationRepository>();
-        await new RotationChangedDomainEventHandler(outbox.Object, notifications.Object).Handle(started, default);
+        var flags = new Mock<Microsoft.Extensions.Options.IOptionsMonitor<LegendsTeamVN.BadmintonClub.Application.DependencyInjection.Options.SessionRotationOptions>>();
+        flags.SetupGet(o => o.CurrentValue).Returns(new LegendsTeamVN.BadmintonClub.Application.DependencyInjection.Options.SessionRotationOptions());
+        await new RotationChangedDomainEventHandler(outbox.Object, notifications.Object, Mock.Of<ISessionRepository>(), flags.Object).Handle(started, default);
         outbox.Verify(x => x.Add(It.IsAny<OutboxMessage>()), Times.Exactly(9));
         notifications.Verify(x => x.Add(It.IsAny<Notification>()), Times.Exactly(4));
     }

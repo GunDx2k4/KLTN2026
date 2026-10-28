@@ -16,6 +16,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<TimeProvider>(TimeProvider.System);
         services.AddScoped<AttendanceService>();
         services.AddScoped<RotationService>();
+        services.AddScoped<Features.Rotation.Personal.PersonalScheduleService>();
         services.AddOptions<SessionRotationOptions>()
             .BindConfiguration(SessionRotationOptions.SectionName);
 

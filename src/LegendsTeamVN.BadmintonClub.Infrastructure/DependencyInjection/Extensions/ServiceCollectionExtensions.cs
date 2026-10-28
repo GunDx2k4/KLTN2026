@@ -21,30 +21,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddCoreInfrastructure(configuration);
         // Session operations authentication, realtime and outbox worker.
-        var jwt = configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
-        services.AddAuthentication().AddJwtBearer("SessionOperationsBearer", options =>
-        {
-            options.MapInboundClaims = true;
-            options.TokenValidationParameters = new TokenValidationParameters
-            {
-                ValidateIssuer = true, ValidateAudience = true, ValidateLifetime = true,
-                ValidateIssuerSigningKey = true, RequireExpirationTime = true, RequireSignedTokens = true,
-                ValidIssuer = jwt.Issuer, ValidAudience = jwt.Audience,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.SecretKey)), ClockSkew = TimeSpan.Zero
-            };
-            options.Events = new JwtBearerEvents
-            {
-                OnMessageReceived = context =>
-                {
-                    if (context.Request.Path.StartsWithSegments("/hubs/sessions") &&
-                        context.Request.Query.TryGetValue("access_token", out var token))
-                        context.Token = token.ToString();
-                    return Task.CompletedTask;
-                }
-            };
-        });
-        services.AddAuthorization(options => options.AddPolicy("SessionOperations", policy =>
-            policy.AddAuthenticationSchemes("SessionOperationsBearer").RequireAuthenticatedUser()));
+        services.AddSessionOperationsAuthentication(configuration);
         var signalR = services.AddSignalR();
         var redis = configuration["ConnectionStrings:Redis"];
         if (!string.IsNullOrWhiteSpace(redis))
@@ -88,6 +65,35 @@ public static class ServiceCollectionExtensions
         // Đăng ký Service Notification
         services.AddScoped<INotificationService, FirebaseNotificationService>();
         services.AddScoped<IExternalAuthService, ExternalAuthService>();
+        return services;
+    }
+    // Shared by the API and isolated UC15 HTTP verification; no Firebase or workers are initialized here.
+    public static IServiceCollection AddSessionOperationsAuthentication(this IServiceCollection services, IConfiguration configuration)
+    {
+        var jwt = configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
+        services.AddAuthentication().AddJwtBearer("SessionOperationsBearer", options =>
+        {
+            options.MapInboundClaims = true;
+            options.TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuer = true, ValidateAudience = true, ValidateLifetime = true,
+                ValidateIssuerSigningKey = true, RequireExpirationTime = true, RequireSignedTokens = true,
+                ValidIssuer = jwt.Issuer, ValidAudience = jwt.Audience,
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.SecretKey)), ClockSkew = TimeSpan.Zero
+            };
+            options.Events = new JwtBearerEvents
+            {
+                OnMessageReceived = context =>
+                {
+                    if (context.Request.Path.StartsWithSegments("/hubs/sessions") &&
+                        context.Request.Query.TryGetValue("access_token", out var token))
+                        context.Token = token.ToString();
+                    return Task.CompletedTask;
+                }
+            };
+        });
+        services.AddAuthorization(options => options.AddPolicy("SessionOperations", policy =>
+            policy.AddAuthenticationSchemes("SessionOperationsBearer").RequireAuthenticatedUser()));
         return services;
     }
 }

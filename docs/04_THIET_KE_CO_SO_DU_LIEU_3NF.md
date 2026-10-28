@@ -354,6 +354,19 @@ Lưu danh sách người đăng ký tham gia buổi chơi và hàng đợi.
 
 *Ràng buộc*: Cặp `(id_session, id_user)` là duy nhất.
 
+**UC15 — đợt B hoàn tất trên sandbox (22/10/2026).** Entity/mapping và migration `20261021173243_AddRotationPauseSource` đã có hai cột sau; DB đích chưa nâng cấp. Không thêm bảng hoặc lượt chung toàn buổi:
+
+| Cột bổ sung B | Kiểu / mặc định | Ý nghĩa / ràng buộc |
+|---|---|---|
+| `rotation_pause_source` | VARCHAR(10), NULL mặc định | SELF/HOST, enum Domain Self/Host. CHECK SQL NULL hoặc SELF/HOST. Bool pause=true + nguồn null đọc LegacyHost, không cho self-resume. |
+| `self_pause_target_match_id` | UUID, NULL mặc định | Self chưa có trận tiếp theo start thì null; sau start gắn đúng MatchId; FINISHED đúng target tự bỏ Self pause. FK đơn tới session_match.id_match, ON DELETE NO ACTION; index khi khác null. |
+
+Domain giữ bool/source/target nhất quán, kiểm tra target cùng session và lịch sử hợp lệ; FK đơn không chứng minh cùng session. Metadata sai trả conflict, không tự bỏ pause. Không thêm CHECK bool↔source bắt buộc để tự phá compatibility legacy; writer mới xóa nguồn/target khi không pause, Host/LegacyHost không có auto-expiry target. Không chạy writer UC14 cũ song song khi bật C5.
+
+Backfill B: bool=true cũ thành HOST/target=null; false để nguồn/target null. Không sửa migration UC14, BookingStatus/QueueOrder/check-in/giờ trận/phí. Down migration UC15 mới chặn còn SELF hoặc target IS NOT NULL, không clear dữ liệu để ép Down; đủ điều kiện thì chỉ bỏ FK/index/check/hai cột UC15, giữ bool/schema UC14. Schema phải sẵn trước binary map cột. B đã kiểm chứng fresh/upgrade UC14, Up/Down/backfill, restart, ràng buộc và rollback trên DB sandbox riêng; không áp dụng DB đích. Chi tiết expiry/rollout tại [UC15-BE.md](Detail%20Design/UC15-BE.md).
+
+**Mốc cuối E, 27/10/2026:** BE A–E hoàn tất trên sandbox, C–E không bổ sung migration/schema. Probe E xác minh migration B hiện hành, giữ nguyên booking/queue/check-in và fee/payment/ledger trong chuỗi UC12–15, GET lặp không đổi digest chín bảng. DB đích chưa nâng cấp. [Handoff/rollback](Detail%20Design/UC15-BE.md).
+
 ---
 
 ### 3.17. Bảng `guest_recruitment` (Yêu Cầu Tìm Giao Lưu Lân Cận)
