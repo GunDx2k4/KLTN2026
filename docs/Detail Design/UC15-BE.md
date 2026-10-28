@@ -181,6 +181,8 @@ Probe D/E dùng hai WebApplication/Kestrel cùng process, clients A/worker B qua
 
 ### 8.2. API
 
+Ba route cá nhân được tổ chức tại nhóm FR17 trong `src/LegendsTeamVN.BadmintonClub.Presentation/Endpoints/SessionEndpoint.cs`, sau nhóm FR16 can thiệp đội hình. Các handler FR16/FR17 cũng được đặt theo thứ tự tương ứng với các FR khác. URL `/api/v1/sessions/{sessionId}/my-matches` và hai route pause/resume, tên endpoint, body/response cùng policy `SessionOperations` giữ nguyên; FE/Postman không cần đổi URL. FR16 vẫn yêu cầu quyền quản lý trận của Host; FR17 chỉ cho người đã điểm danh truy cập tài nguyên cá nhân theo kiểm tra Application. `UserEndpoint.cs` chỉ chứa các route hồ sơ/quản trị người dùng dưới `/api/v1/user`.
+
 Header: `Authorization: Bearer <accessToken>`; POST dùng `Content-Type: application/json`.
 
 | Method | Route | Body | Thành công |

@@ -1,3 +1,6 @@
+using LegendsTeamVN.BadmintonClub.Application.Features.Rotation.Personal.Resume;
+using LegendsTeamVN.BadmintonClub.Application.Features.Rotation.Personal.Pause;
+using LegendsTeamVN.BadmintonClub.Application.Features.Rotation.Personal.Get;
 using LegendsTeamVN.BadmintonClub.Application.Features.Sessions.Settlement;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Rotation.Responses;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Sessions.Requests;
@@ -61,30 +64,7 @@ public class SessionEndpoint : EndpointGroupBase
         var fr14Group = group.MapGroup("").WithTags("FR14 - Điểm danh tại sân");
         var fr15Group = group.MapGroup("").WithTags("FR15 - Điều phối xoay tua sân");
         var fr16Group = group.MapGroup("").WithTags("FR16 - Can thiệp đội hình thủ công");
-        fr16Group.MapPost("{sessionId:guid}/matches/{matchId:guid}/confirm-manual-start", ConfirmManualMatch)
-            .WithName("ConfirmManualMatch")
-            .WithSummary("Host xác nhận đội hình và bắt đầu trận kèm version (FR16)")
-            .Produces<RotationResponse>()
-            .RequireAuthorization("SessionOperations")
-            .RequireGroupPermission(GroupPermissions.Operations.MatchManage);
-        fr16Group.MapPut("{sessionId:guid}/rotation/players/{userId:guid}/pause", SetRotationPause)
-            .WithName("SetRotationPause")
-            .WithSummary("Host đặt tạm nghỉ hoặc sẵn sàng trở lại (FR16)")
-            .Produces<RotationResponse>()
-            .RequireAuthorization("SessionOperations")
-            .RequireGroupPermission(GroupPermissions.Operations.MatchManage);
-        fr16Group.MapPost("{sessionId:guid}/matches/{matchId:guid}/restore-proposal", RestoreManualLineup)
-            .WithName("RestoreManualLineup")
-            .WithSummary("Host khôi phục gợi ý đội hình ban đầu (FR16)")
-            .Produces<RotationResponse>()
-            .RequireAuthorization("SessionOperations")
-            .RequireGroupPermission(GroupPermissions.Operations.MatchManage);
-        fr16Group.MapPut("{sessionId:guid}/matches/{matchId:guid}/manual-lineup", UpdateManualLineup)
-            .WithName("UpdateManualLineup")
-            .WithSummary("Host điều chỉnh đội hình trước khi bắt đầu (FR16)")
-            .Produces<RotationResponse>()
-            .RequireAuthorization("SessionOperations")
-            .RequireGroupPermission(GroupPermissions.Operations.MatchManage);
+        var fr17Group = group.MapGroup("").WithTags("FR17 - Lịch thi đấu cá nhân");
 
         // ==========================================
         // --- FR13: KHỞI TẠO & CẤU HÌNH BUỔI CHƠI ---
@@ -253,6 +233,51 @@ public class SessionEndpoint : EndpointGroupBase
             .Produces<RotationResponse>()
             .RequireAuthorization("SessionOperations")
             .RequireGroupPermission(GroupPermissions.Operations.MatchManage);
+
+        // --- FR16: CAN THIỆP ĐỘI HÌNH THỦ CÔNG ---
+        fr16Group.MapPost("{sessionId:guid}/matches/{matchId:guid}/confirm-manual-start", ConfirmManualMatch)
+            .WithName("ConfirmManualMatch")
+            .WithSummary("Host xác nhận đội hình và bắt đầu trận kèm version (FR16)")
+            .Produces<RotationResponse>()
+            .RequireAuthorization("SessionOperations")
+            .RequireGroupPermission(GroupPermissions.Operations.MatchManage);
+
+        fr16Group.MapPut("{sessionId:guid}/rotation/players/{userId:guid}/pause", SetRotationPause)
+            .WithName("SetRotationPause")
+            .WithSummary("Host đặt tạm nghỉ hoặc sẵn sàng trở lại (FR16)")
+            .Produces<RotationResponse>()
+            .RequireAuthorization("SessionOperations")
+            .RequireGroupPermission(GroupPermissions.Operations.MatchManage);
+
+        fr16Group.MapPost("{sessionId:guid}/matches/{matchId:guid}/restore-proposal", RestoreManualLineup)
+            .WithName("RestoreManualLineup")
+            .WithSummary("Host khôi phục gợi ý đội hình ban đầu (FR16)")
+            .Produces<RotationResponse>()
+            .RequireAuthorization("SessionOperations")
+            .RequireGroupPermission(GroupPermissions.Operations.MatchManage);
+
+        fr16Group.MapPut("{sessionId:guid}/matches/{matchId:guid}/manual-lineup", UpdateManualLineup)
+            .WithName("UpdateManualLineup")
+            .WithSummary("Host điều chỉnh đội hình trước khi bắt đầu (FR16)")
+            .Produces<RotationResponse>()
+            .RequireAuthorization("SessionOperations")
+            .RequireGroupPermission(GroupPermissions.Operations.MatchManage);
+
+        // --- FR17: LỊCH THI ĐẤU CÁ NHÂN ---
+        fr17Group.MapGet("{sessionId:guid}/my-matches", GetMyMatches)
+            .WithName("GetMyMatches")
+            .Produces<MyMatchesResponse>()
+            .RequireAuthorization("SessionOperations");
+
+        fr17Group.MapPost("{sessionId:guid}/my-matches/pause", PauseMyMatches)
+            .WithName("PauseMyMatches")
+            .Produces<MyMatchesResponse>()
+            .RequireAuthorization("SessionOperations");
+
+        fr17Group.MapPost("{sessionId:guid}/my-matches/resume", ResumeMyMatches)
+            .WithName("ResumeMyMatches")
+            .Produces<MyMatchesResponse>()
+            .RequireAuthorization("SessionOperations");
 
         // ======================================
         // FR18 - FR20: Hạch toán & Quyết toán chi phí đa hệ số (Settlement)
@@ -529,36 +554,6 @@ public class SessionEndpoint : EndpointGroupBase
         return result.Match(Results.Ok);
     }
 
-    private static async Task<IResult> ConfirmManualMatch(Guid sessionId, Guid matchId,
-        [FromBody] ConfirmManualMatchRequest request, ISender sender, CancellationToken cancellationToken)
-    {
-        var result = await sender.Send(new ConfirmManualMatchCommand(sessionId, matchId, request.ExpectedRotationVersion), cancellationToken);
-        return result.Match(onSuccess: data => Results.Ok(data));
-    }
-
-    private static async Task<IResult> SetRotationPause(Guid sessionId, Guid userId,
-        [FromBody] SetRotationPauseRequest request, ISender sender, CancellationToken cancellationToken)
-    {
-        var result = await sender.Send(new SetRotationPauseCommand(sessionId, userId, request.IsPaused,
-            request.ExpectedRotationVersion, request.ReplacementUserId), cancellationToken);
-        return result.Match(onSuccess: data => Results.Ok(data));
-    }
-
-    private static async Task<IResult> RestoreManualLineup(Guid sessionId, Guid matchId,
-        [FromBody] RestoreManualLineupRequest request, ISender sender, CancellationToken cancellationToken)
-    {
-        var result = await sender.Send(new RestoreManualLineupCommand(sessionId, matchId, request.ExpectedRotationVersion), cancellationToken);
-        return result.Match(onSuccess: data => Results.Ok(data));
-    }
-
-    private static async Task<IResult> UpdateManualLineup(Guid sessionId, Guid matchId,
-        [FromBody] UpdateManualLineupRequest request, ISender sender, CancellationToken cancellationToken)
-    {
-        var result = await sender.Send(new UpdateManualLineupCommand(sessionId, matchId, request.TeamA,
-            request.TeamB, request.ExpectedRotationVersion), cancellationToken);
-        return result.Match(onSuccess: data => Results.Ok(data));
-    }
-
     private static async Task<IResult> StartRotationMatch(
         [FromRoute] Guid sessionId,
         [FromRoute] Guid matchId,
@@ -579,6 +574,90 @@ public class SessionEndpoint : EndpointGroupBase
         var command = new FinishRotationMatchCommand(sessionId, matchId);
         var result = await sender.Send(command, cancellationToken);
         return result.Match(Results.Ok);
+    }
+
+    // --- FR16 Handlers ---
+    private static async Task<IResult> ConfirmManualMatch(
+        [FromRoute] Guid sessionId,
+        [FromRoute] Guid matchId,
+        [FromBody] ConfirmManualMatchRequest request,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var command = new ConfirmManualMatchCommand(sessionId, matchId, request.ExpectedRotationVersion);
+        var result = await sender.Send(command, cancellationToken);
+        return result.Match(onSuccess: data => Results.Ok(data));
+    }
+
+    private static async Task<IResult> SetRotationPause(
+        [FromRoute] Guid sessionId,
+        [FromRoute] Guid userId,
+        [FromBody] SetRotationPauseRequest request,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var command = new SetRotationPauseCommand(sessionId, userId, request.IsPaused,
+            request.ExpectedRotationVersion, request.ReplacementUserId);
+        var result = await sender.Send(command, cancellationToken);
+        return result.Match(onSuccess: data => Results.Ok(data));
+    }
+
+    private static async Task<IResult> RestoreManualLineup(
+        [FromRoute] Guid sessionId,
+        [FromRoute] Guid matchId,
+        [FromBody] RestoreManualLineupRequest request,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var command = new RestoreManualLineupCommand(sessionId, matchId, request.ExpectedRotationVersion);
+        var result = await sender.Send(command, cancellationToken);
+        return result.Match(onSuccess: data => Results.Ok(data));
+    }
+
+    private static async Task<IResult> UpdateManualLineup(
+        [FromRoute] Guid sessionId,
+        [FromRoute] Guid matchId,
+        [FromBody] UpdateManualLineupRequest request,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var command = new UpdateManualLineupCommand(sessionId, matchId, request.TeamA,
+            request.TeamB, request.ExpectedRotationVersion);
+        var result = await sender.Send(command, cancellationToken);
+        return result.Match(onSuccess: data => Results.Ok(data));
+    }
+
+    // --- FR17 Handlers ---
+    private static async Task<IResult> GetMyMatches(
+        [FromRoute] Guid sessionId,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var query = new GetMyMatchesQuery(sessionId);
+        var result = await sender.Send(query, cancellationToken);
+        return result.Match(onSuccess: data => Results.Ok(data));
+    }
+
+    private static async Task<IResult> PauseMyMatches(
+        [FromRoute] Guid sessionId,
+        [FromBody] PauseMyMatchesRequest request,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var command = new PauseMyMatchesCommand(sessionId, request.ExpectedRotationVersion);
+        var result = await sender.Send(command, cancellationToken);
+        return result.Match(onSuccess: data => Results.Ok(data));
+    }
+
+    private static async Task<IResult> ResumeMyMatches(
+        [FromRoute] Guid sessionId,
+        [FromBody] ResumeMyMatchesRequest request,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var command = new ResumeMyMatchesCommand(sessionId, request.ExpectedRotationVersion);
+        var result = await sender.Send(command, cancellationToken);
+        return result.Match(onSuccess: data => Results.Ok(data));
     }
 
     // --- FR18 - FR20 Handlers ---
