@@ -236,4 +236,90 @@ public class ClubGroup : AggregateRoot<Guid>
     public GroupRole? FindRole(Guid roleId) => Roles.FirstOrDefault(r => r.Id == roleId);
 
     public GroupRole? GetDefaultRole() => Roles.FirstOrDefault(r => r.IsDefault) ?? Roles.FirstOrDefault(r => !r.IsHostRole);
+
+    /// <summary>
+    /// Khởi tạo buổi chơi định kỳ từ khung giờ lịch cố định của câu lạc bộ.
+    /// </summary>
+    public BadmintonSession CreateRecurringSession(
+        GroupSchedule schedule,
+        DateTime startTimeUtc,
+        DateTime endTimeUtc,
+        string? customTitle = null)
+    {
+        var dayName = schedule.DayOfWeek switch
+        {
+            0 => "Chủ nhật",
+            1 => "Thứ 2",
+            2 => "Thứ 3",
+            3 => "Thứ 4",
+            4 => "Thứ 5",
+            5 => "Thứ 6",
+            6 => "Thứ 7",
+            _ => $"Thứ {schedule.DayOfWeek + 1}"
+        };
+
+        var title = customTitle ?? $"Buổi sinh hoạt {dayName} ({schedule.StartTime:HH\\:mm} - {schedule.EndTime:HH\\:mm})";
+
+        var location = !string.IsNullOrWhiteSpace(FixedVenueName)
+            ? (!string.IsNullOrWhiteSpace(FixedAddress) ? $"{FixedVenueName}, {FixedAddress}" : FixedVenueName)
+            : (!string.IsNullOrWhiteSpace(FixedAddress) ? FixedAddress : $"Sân CLB {GroupName}");
+
+        var session = new BadmintonSession(
+            groupId: Id,
+            title: title,
+            startTime: startTimeUtc,
+            endTime: endTimeUtc,
+            courtLocation: location,
+            courtCount: 1,
+            targetPlayerPerCourt: 6,
+            maxPlayers: 6,
+            deadlineBooking: startTimeUtc.AddHours(-2),
+            courtRentalCost: 0,
+            status: SessionStatus.OPEN
+        );
+
+        Sessions.Add(session);
+        return session;
+    }
+
+    public GroupFeeRule UpdateFeeRule(
+        FeeMode feeMode,
+        decimal monthlyFee,
+        decimal dailyMemberFee,
+        decimal guestFee,
+        decimal femaleDiscountMonthly,
+        decimal femaleDiscountDaily,
+        decimal femaleDiscountGuest,
+        int roundRule = 1000)
+    {
+        var rule = FeeRules.OrderByDescending(f => f.AppliedAt).FirstOrDefault();
+        if (rule is null)
+        {
+            rule = new GroupFeeRule(
+                Id,
+                feeMode,
+                monthlyFee,
+                dailyMemberFee,
+                guestFee,
+                femaleDiscountMonthly,
+                femaleDiscountDaily,
+                femaleDiscountGuest,
+                roundRule);
+            FeeRules.Add(rule);
+        }
+        else
+        {
+            rule.UpdateFees(
+                feeMode,
+                monthlyFee,
+                dailyMemberFee,
+                guestFee,
+                femaleDiscountMonthly,
+                femaleDiscountDaily,
+                femaleDiscountGuest,
+                roundRule);
+        }
+
+        return rule;
+    }
 }

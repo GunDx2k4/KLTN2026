@@ -1,3 +1,4 @@
+using LegendsTeamVN.BadmintonClub.Application.Features.Sessions.Settlement;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Rotation.Responses;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Sessions.Requests;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Sessions.Responses;
@@ -20,6 +21,7 @@ using LegendsTeamVN.BadmintonClub.Application.Features.Bookings.GetList;
 using LegendsTeamVN.BadmintonClub.Application.Features.Bookings.GetMyBooking;
 using LegendsTeamVN.BadmintonClub.Application.Features.Bookings.GetMyBookings;
 using LegendsTeamVN.BadmintonClub.Application.Features.Bookings.Vote;
+using LegendsTeamVN.BadmintonClub.Application.Features.Bookings.Confirm;
 using LegendsTeamVN.BadmintonClub.Application.Features.Recruitments.Cancel;
 using LegendsTeamVN.BadmintonClub.Application.Features.Recruitments.Create;
 using LegendsTeamVN.BadmintonClub.Application.Features.Recruitments.Delete;
@@ -53,7 +55,7 @@ public class SessionEndpoint : EndpointGroupBase
     protected override void Map(RouteGroupBuilder group)
     {
         var fr13Group = group.MapGroup("").WithTags("FR13 - Khởi tạo buổi chơi");
-        var fr08fr10Group = group.MapGroup("").WithTags("FR08-FR10 - Biểu quyết giữ chỗ & Hàng đợi");
+        var fr08fr10Group = group.MapGroup("").WithTags("FR08-FR10 - Đăng ký giữ chỗ & Hàng đợi");
         var fr11Group = group.MapGroup("").WithTags("FR11 - Phát tín hiệu tìm khách giao lưu");
         var fr12Group = group.MapGroup("").WithTags("FR12 - Khách vãng lai đăng ký tham gia");
         var fr14Group = group.MapGroup("").WithTags("FR14 - Điểm danh tại sân");
@@ -118,11 +120,11 @@ public class SessionEndpoint : EndpointGroupBase
             .RequireGroupPermission(GroupPermissions.Operations.SessionDelete);
 
         // ==============================================================
-        // --- FR08, FR09, FR10: BIỂU QUYẾT GIỮ CHỖ & HÀNG ĐỢI TỰ ĐỘNG ---
+        // --- FR08, FR09, FR10: ĐĂNG KÝ GIỮ CHỖ & HÀNG ĐỢI TỰ ĐỘNG ---
         // ==============================================================
         fr08fr10Group.MapPost("{sessionId:guid}/bookings", VoteBooking)
             .WithName("VoteBooking")
-            .WithSummary("Biểu quyết giữ chỗ tham gia buổi chơi (Tự động vào hàng đợi nếu đầy) (FR08, FR09)")
+            .WithSummary("Đăng ký giữ chỗ tham gia buổi chơi (Tự động vào hàng đợi nếu đầy) (FR08, FR09)")
             .RequireAuthorization();
 
         fr08fr10Group.MapDelete("{sessionId:guid}/bookings/me", CancelBooking)
@@ -137,13 +139,18 @@ public class SessionEndpoint : EndpointGroupBase
 
         fr08fr10Group.MapGet("{sessionId:guid}/bookings", GetSessionBookings)
             .WithName("GetSessionBookings")
-            .WithSummary("Xem danh sách thành viên đã biểu quyết giữ chỗ và hàng đợi chờ (FR08, FR09)")
+            .WithSummary("Xem danh sách thành viên đã đăng ký giữ chỗ và hàng đợi chờ (FR08, FR09)")
             .RequireAuthorization();
 
         fr08fr10Group.MapGet("{sessionId:guid}/bookings/me", GetMyBooking)
             .WithName("GetMyBooking")
-            .WithSummary("Kiểm tra trạng thái vé biểu quyết giữ chỗ của cá nhân (FR08)")
+            .WithSummary("Kiểm tra trạng thái đăng ký giữ chỗ của cá nhân (FR08)")
             .RequireAuthorization();
+
+        fr08fr10Group.MapPost("{sessionId:guid}/bookings/{bookingId:guid}/confirm", ConfirmBooking)
+            .WithName("ConfirmBooking")
+            .WithSummary("Host duyệt người chơi từ hàng đợi vào danh sách chính thức (FR09)")
+            .RequireGroupPermission(GroupPermissions.Operations.BookingManage);
 
         // =======================================================
         // --- FR11: HOST PHÁT TÍN HIỆU TÌM KHÁCH GIAO LƯU LÂN CẬN ---
@@ -168,7 +175,7 @@ public class SessionEndpoint : EndpointGroupBase
         // ==============================================================
         fr12Group.MapGet("recruitments/explore", ExploreRecruitments)
             .WithName("ExploreRecruitments")
-            .WithSummary("Khách vãng lai quét tìm các kèo giao lưu quanh tọa độ GPS (FR12)")
+            .WithSummary("Khách vãng lai quét tìm các buổi giao lưu quanh tọa độ GPS (FR12)")
             .RequireAuthorization();
 
         fr12Group.MapPost("recruitments/{recruitmentId:guid}/join", JoinRecruitment)
@@ -246,6 +253,30 @@ public class SessionEndpoint : EndpointGroupBase
             .Produces<RotationResponse>()
             .RequireAuthorization("SessionOperations")
             .RequireGroupPermission(GroupPermissions.Operations.MatchManage);
+
+        // ======================================
+        // FR18 - FR20: Hạch toán & Quyết toán chi phí đa hệ số (Settlement)
+        // ======================================
+        var fr18Group = group.MapGroup("api/v1/sessions")
+            .WithTags("Session Operations - FR18-FR20 Settlement")
+            .RequireAuthorization();
+
+        fr18Group.MapPost("{sessionId:guid}/settlement", CalculateSessionSettlement)
+            .WithName("CalculateSessionSettlement")
+            .WithSummary("Hạch toán chi phí đa hệ số và chốt quyết toán buổi chơi (FR18-FR20)")
+            .Produces<SessionSettlementResponse>()
+            .RequireGroupPermission(GroupPermissions.Finance.FeeManage);
+
+        fr18Group.MapGet("{sessionId:guid}/settlement", GetSessionSettlement)
+            .WithName("GetSessionSettlement")
+            .WithSummary("Xem thông tin quyết toán chi phí buổi chơi (FR18-FR20)")
+            .Produces<SessionSettlementResponse>();
+
+        fr18Group.MapPost("{sessionId:guid}/settlement/members/{userId:guid}/pay", MarkMemberSettlementPaid)
+            .WithName("MarkMemberSettlementPaid")
+            .WithSummary("Đánh dấu thành viên đã thanh toán tiền mặt (FR18-FR20)")
+            .Produces<SessionSettlementResponse>()
+            .RequireGroupPermission(GroupPermissions.Finance.FeeManage);
     }
 
     // --- FR13 Handlers ---
@@ -350,6 +381,17 @@ public class SessionEndpoint : EndpointGroupBase
         var query = new GetMyBookingQuery(sessionId);
         var result = await sender.Send(query);
         return result.Match(booking => booking != null ? Results.Ok(booking) : Results.NotFound());
+    }
+
+    private static async Task<IResult> ConfirmBooking(
+        [FromRoute] Guid sessionId,
+        [FromRoute] Guid bookingId,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var command = new ConfirmBookingCommand(sessionId, bookingId);
+        var result = await sender.Send(command, cancellationToken);
+        return result.Match(onSuccess: booking => Results.Ok(booking));
     }
 
     // --- FR11 Handlers ---
@@ -535,6 +577,45 @@ public class SessionEndpoint : EndpointGroupBase
         CancellationToken cancellationToken)
     {
         var command = new FinishRotationMatchCommand(sessionId, matchId);
+        var result = await sender.Send(command, cancellationToken);
+        return result.Match(Results.Ok);
+    }
+
+    // --- FR18 - FR20 Handlers ---
+    private static async Task<IResult> CalculateSessionSettlement(
+        [FromRoute] Guid sessionId,
+        [FromBody] CalculateSettlementRequest request,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var command = new CalculateSessionSettlementCommand(
+            sessionId,
+            request.ShuttlecockUsed,
+            request.ShuttlecockPrice,
+            request.ExtraFee,
+            request.CourtFee
+        );
+        var result = await sender.Send(command, cancellationToken);
+        return result.Match(Results.Ok);
+    }
+
+    private static async Task<IResult> GetSessionSettlement(
+        [FromRoute] Guid sessionId,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var query = new GetSessionSettlementQuery(sessionId);
+        var result = await sender.Send(query, cancellationToken);
+        return result.Match(Results.Ok);
+    }
+
+    private static async Task<IResult> MarkMemberSettlementPaid(
+        [FromRoute] Guid sessionId,
+        [FromRoute] Guid userId,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var command = new MarkMemberPaidCommand(sessionId, userId);
         var result = await sender.Send(command, cancellationToken);
         return result.Match(Results.Ok);
     }

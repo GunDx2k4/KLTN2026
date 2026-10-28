@@ -1,4 +1,4 @@
-# 🏸 ĐẶC TẢ KỸ THUẬT CHI TIẾT: PHÂN HỆ 1 - HỒ SƠ CÁ NHÂN & TÌM KIẾM CLB QUANH ĐÂY (FR05 - FR06 - FR07)
+#  ĐẶC TẢ KỸ THUẬT CHI TIẾT: PHÂN HỆ 1 - HỒ SƠ CÁ NHÂN & TÌM KIẾM CLB QUANH ĐÂY (FR05 - FR06 - FR07)
 
 > **Dự án**: Hệ thống Quản lý Nhóm Cầu Lông Phong Trào (**LegendsTeamVN.BadmintonClub**)  
 > **Tài liệu độc lập dành cho Mobile**: Flutter Team (`c:\code\base_fe\KLTN2026-2027\KLTN2026-2027`)  
@@ -8,7 +8,7 @@
 
 ---
 
-## 📑 MỤC LỤC PHÂN HỆ
+##  MỤC LỤC PHÂN HỆ
 1. [Tổng Quan Nghiệp Vụ & Sơ Đồ Luồng Hoạt Động (User Journey)](#1-tổng-quan-nghiệp-vụ--sơ-đồ-luồng-hoạt-động)
 2. [Bảng Tra Cứu Nhanh 5 Đầu API Mới](#2-bảng-tra-cứu-nhanh-5-đầu-api-mới)
 3. [Đặc Tả Chi Tiết Cách Dùng Thông Tin Từng API Vào Luồng Chức Năng Mobile](#3-đặc-tả-chi-tiết-cách-dùng-thông-tin-từng-api-vào-luồng-chức-năng-mobile)
@@ -101,7 +101,7 @@ sequenceDiagram
   }
   ```
 
-#### 📊 Bảng Ánh Xạ Dữ Liệu Lên Giao Diện Mobile (UI Binding Table):
+####  Bảng Ánh Xạ Dữ Liệu Lên Giao Diện Mobile (UI Binding Table):
 | Trường Dữ Liệu | Kiểu Dữ Liệu | Widget Mobile Sử Dụng | Cách Dùng & Logic Nghiệp Vụ |
 | :--- | :--- | :--- | :--- |
 | `fullName` | `string` | `Text(fullName, style: textHeader1)` | Hiển thị họ tên lớn ở đầu trang; fill vào `nameController.text` khi bấm sửa. |
@@ -109,10 +109,10 @@ sequenceDiagram
 | `gender` | `short` | `RadioListTile` / `Chip` | `0`: Khác, `1`: Nam, `2`: Nữ; render icon giới tính tương ứng (♂ / ♀). |
 | `skillLevel` | `string` | `SkillBadge(level: skillLevel)` | Mã trình độ (`NB`..`G`); render huy hiệu trình độ với màu tương ứng (ví dụ: `TB` màu xanh dương). |
 | `skillLevelName` | `string` | `Text(skillLevelName)` | Tên tiếng Việt thân thiện (ví dụ: *"Trung bình"*). |
-| `isOpenForGuest` | `bool` | `SwitchListTile(value: ...)` | Toggle switch *"Sẵn sàng nhận kèo giao lưu"*. Khi người dùng bật, hồ sơ sẽ xuất hiện trên radar tìm khách vãng lai. |
+| `isOpenForGuest` | `bool` | `SwitchListTile(value: ...)` | Toggle switch *"Sẵn sàng tham gia giao lưu"*. Khi người dùng bật, hồ sơ sẽ xuất hiện trên radar tìm khách vãng lai. |
 | `reputationScore` | `double` | `Chip(avatar: Icon(Icons.star), ...)` | Điểm uy tín tín nhiệm (mặc định 100.0 điểm). Nếu < 80 đổi sang màu vàng cảnh báo. |
 
-#### 🔄 Luồng Dữ Liệu Kế Tiếp (Next Steps Flow):
+####  Luồng Dữ Liệu Kế Tiếp (Next Steps Flow):
 1. **Lưu State Toàn Cục**: Phía Mobile lưu `skillLevel` vào `currentUserSkillLevelProvider`.
 2. **Tự Động Gợi Ý CLB (FR06)**: Khi người dùng chuyển sang Tab "Khám phá", Mobile tự động truyền `skillLevel={profile.skillLevel}` vào API `/api/v1/clubs/explore` để ưu tiên các CLB vừa tầm trình độ.
 3. **Mở Màn Hình Sửa Hồ Sơ**: Khi bấm nút "Chỉnh sửa", truyền đối tượng `UserProfileResponseDto` sang `EditProfileScreen` để khởi tạo giá trị ban đầu cho các Controller mà không cần gọi API lần 2.
@@ -142,14 +142,14 @@ sequenceDiagram
   }
   ```
 
-#### 🛡️ Kiểm Tra Dữ Liệu Phía Mobile Trước Khi Gửi (Client Validation):
+#### ️ Kiểm Tra Dữ Liệu Phía Mobile Trước Khi Gửi (Client Validation):
 - `fullName`: Không được để trống, độ dài từ 1 đến 100 ký tự.
 - `gender`: Giá trị thuộc tập `[0, 1, 2]`.
 - `skillLevel`: Bắt buộc chọn từ Dropdown (1 trong 7 mã: `NB, Y, TBY, TB, TBK, K, G`).
 - `avatarUrl`: Nếu người dùng vừa chọn ảnh mới từ thư viện máy -> Gọi API Upload ảnh trước để lấy URL -> gán URL vào trường này.
 
-#### 🔄 Luồng Xử Lý Sau Khi Lưu Thành Công (`204 NoContent`):
-1. Mobile hiển thị `SnackBar` xanh lá thông báo: *"Cập nhật hồ sơ và trình độ thành công! 🎉"*.
+####  Luồng Xử Lý Sau Khi Lưu Thành Công (`204 NoContent`):
+1. Mobile hiển thị `SnackBar` xanh lá thông báo: *"Cập nhật hồ sơ và trình độ thành công! "*.
 2. Gọi `ref.invalidate(userProfileViewModelProvider)` để trigger lại `GET /api/v1/user/profile`, đồng bộ hóa dữ liệu mới toàn ứng dụng.
 3. Gọi `Navigator.pop(context)` quay về màn hình `ProfileScreen`, toàn bộ Tên, Badge trình độ và Switch trạng thái được vẽ lại tức thì.
 
@@ -192,7 +192,7 @@ sequenceDiagram
   | `isRecruiting` | `bool?` | Không | `null` | Lọc nhóm đang mở tuyển thêm thành viên (`true`/`false`) |
   | `searchTerm` | `string?` | Không | `null` | Tìm kiếm tự do theo tên CLB, tên sân, hoặc địa chỉ quận/huyện |
 
-#### 🛰️ Quy Trình Lấy Tọa Độ GPS & Xử Lý Fallback Trên Mobile:
+#### ️ Quy Trình Lấy Tọa Độ GPS & Xử Lý Fallback Trên Mobile:
 ```mermaid
 graph TD
     A[Mở ExploreClubsScreen] --> B{Kiểm tra quyền GPS?}
@@ -207,18 +207,18 @@ graph TD
     H --> I
 ```
 
-#### 📊 Bảng Ánh Xạ Dữ Liệu Vào Thẻ CLB (`ClubCardWidget`):
+####  Bảng Ánh Xạ Dữ Liệu Vào Thẻ CLB (`ClubCardWidget`):
 | Trường Dữ Liệu | Kiểu Dữ Liệu | Widget Mobile Sử Dụng | Cách Dùng & Logic Nghiệp Vụ |
 | :--- | :--- | :--- | :--- |
 | `id` | `Guid` | `onTap: () => context.push('/clubs/$id')` | **Khóa chính**: Bắt sự kiện người dùng bấm vào Card để điều hướng sang `ClubDetailScreen(clubId: id)`. |
 | `groupName` | `string` | `Text(groupName, style: textTitle)` | Tên câu lạc bộ cầu lông. |
 | `avatarUrl` | `string?` | `ClipRRect(child: Image.network(...))` | Ảnh đại diện/logo CLB; nếu null render ảnh sân cầu lông mặc định. |
-| `distanceKm` | `double?` | `Chip(label: Text('📍 ${distanceKm.toStringAsFixed(1)} km'))` | Cự ly thực tế tính theo giải thuật Haversine. Nếu `null` (do user tắt GPS) thì ẩn Chip này đi. |
+| `distanceKm` | `double?` | `Chip(label: Text(' ${distanceKm.toStringAsFixed(1)} km'))` | Cự ly thực tế tính theo giải thuật Haversine. Nếu `null` (do user tắt GPS) thì ẩn Chip này đi. |
 | `fixedVenueName` & `fixedAddress` | `string?` | `Text(fixedVenueName)` & `Text(fixedAddress)` | Tên sân và địa chỉ cụ thể nơi nhóm sinh hoạt cố định. |
 | `schedulesSummary` | `string?` | `Row(children: [Icon(Icons.calendar_today), Text(schedulesSummary)])` | Chuỗi tóm tắt lịch cố định tuần (ví dụ: *"T3, T5, T7 (18:00 - 21:00)"*). |
-| `minSkillLevel` - `maxSkillLevel` | `string?` | `Text('Trình độ: $minSkillLevel - $maxSkillLevel')` | Khoảng trình độ của CLB. So sánh với `profile.skillLevel` của người dùng: Nếu người dùng yếu hơn `minSkillLevel`, hiển thị icon cảnh báo nhẹ: *"Kèo có thể hơi nặng so với bạn"*. |
-| `isRecruiting` | `bool` | `Badge(label: Text(isRecruiting ? 'Đang tuyển' : 'Đủ quân'))` | `true` = Badge xanh lá; `false` = Badge xám. |
-| `memberCount` | `int` | `Text('👥 $memberCount thành viên')` | Tổng số thành viên hiện tại của CLB. |
+| `minSkillLevel` - `maxSkillLevel` | `string?` | `Text('Trình độ: $minSkillLevel - $maxSkillLevel')` | Khoảng trình độ của CLB. So sánh với `profile.skillLevel` của người dùng: Nếu người dùng yếu hơn `minSkillLevel`, hiển thị icon cảnh báo nhẹ: *"Trình độ buổi chơi có thể cao hơn so với bạn"*. |
+| `isRecruiting` | `bool` | `Badge(label: Text(isRecruiting ? 'Đang tuyển' : 'Đã đủ người'))` | `true` = Badge xanh lá; `false` = Badge xám. |
+| `memberCount` | `int` | `Text(' $memberCount thành viên')` | Tổng số thành viên hiện tại của CLB. |
 
 - **Lệnh cURL kiểm thử nhanh**:
   ```bash
@@ -276,7 +276,7 @@ graph TD
   }
   ```
 
-#### 🚦 Logic Rẽ Nhánh Nút Thao Tác Đáy Màn Hình (`Bottom Action Bar`):
+####  Logic Rẽ Nhánh Nút Thao Tác Đáy Màn Hình (`Bottom Action Bar`):
 Đối tượng **`currentUserStatus`** là thông tin sống còn để Mobile quyết định giao diện tương tác:
 
 ```mermaid
@@ -296,7 +296,7 @@ graph TD
     K --> L[Bấm nút: Mở Dialog nhập tin nhắn & gọi join-requests]
 ```
 
-#### 🎯 Cách Sử Dụng Các Trường Thông Tin Khác Trong Màn Hình:
+####  Cách Sử Dụng Các Trường Thông Tin Khác Trong Màn Hình:
 - **`code`**: Hiển thị kèm `IconButton(Icons.copy)` cho phép sao chép mã nhóm chia sẻ qua Zalo/Facebook.
 - **`lat`, `lng`**: Nút *"Chỉ đường tới sân"* -> Gọi `url_launcher` mở ứng dụng Google Maps trực tiếp:
   ```dart
@@ -310,7 +310,7 @@ graph TD
 - **`schedules`**: Render danh sách `Card` thể hiện các ngày cố định tuần: Icon bóng cầu, Tên thứ (`dayName`), Khung giờ sinh hoạt (`startTime` - `endTime`).
 - **Phân Quyền Nút Quản Trị Trên AppBar**:
   - Nếu `currentUserStatus.isMember == true` VÀ trong Token có quyền `MEMBER.INFO.UPDATE`: Hiển thị icon ⚙️ "Cài đặt nhóm" (mở màn hình `ClubSettingsScreen`).
-  - Nếu có quyền `OPERATIONS.SCHEDULE.MANAGE`: Hiển thị icon 📅 "Sửa lịch tuần" (mở `ManageClubSchedulesScreen`).
+  - Nếu có quyền `OPERATIONS.SCHEDULE.MANAGE`: Hiển thị icon  "Sửa lịch tuần" (mở `ManageClubSchedulesScreen`).
 
 - **Lệnh cURL kiểm thử nhanh**:
   ```bash
@@ -343,7 +343,7 @@ graph TD
   }
   ```
 
-#### 🗺️ Tích Hợp Bản Đồ Chọn Tọa Độ Sân:
+#### ️ Tích Hợp Bản Đồ Chọn Tọa Độ Sân:
 1. Trên giao diện Mobile, cạnh ô nhập `lat` và `lng` có nút **"Chọn vị trí trên bản đồ"**.
 2. Mở màn hình Google Maps / OpenStreetMap cho Host kéo ghim thả vào vị trí sân cầu lông.
 3. Khi Host bấm "Xác nhận vị trí", tự động gán tọa độ vào `lat` và `lng` của Form.
@@ -809,11 +809,11 @@ Future<void> updateClubSchedules(String clubId, UpdateClubSchedulesRequestDto re
 
 | STT | Luồng Thử Nghiệm (Test Scenario) | Các Bước Thao Tác | Kết Quả Kỳ Vọng | Trạng Thái |
 | :---: | :--- | :--- | :--- | :---: |
-| 1 | **Tải hồ sơ cá nhân lần đầu (FR05)** | Đăng nhập tài khoản mới -> Mở màn hình Profile | Backend tự khởi tạo bản ghi Domain nếu chưa có, trả về `SkillLevel: "NB"`, Điểm uy tín `100.0`. | 🟢 PASS |
-| 2 | **Cập nhật trình độ & bật nhận khách (FR05)** | Chọn trình độ `TBK` (Trung bình khá), bật `isOpenForGuest = true` -> Nhấn Lưu | Nhận `204 NoContent`. Tải lại hồ sơ thấy badge chuyển sang `TBK` và switch bật xanh. | 🟢 PASS |
-| 3 | **Quét radar vị trí GPS (FR06)** | Cấp quyền GPS cho app -> Quét trong bán kính 10km | Nhận danh sách các CLB sắp xếp theo `distanceKm ASC`, hiển thị rõ khoảng cách và tóm tắt lịch tuần. | 🟢 PASS |
-| 4 | **Xem chi tiết CLB & Lịch tuần (FR07)** | Bấm vào Card CLB từ danh sách Explore | Hiển thị đầy đủ thông tin: Host (tên, avatar, phone), Lịch sinh hoạt T3-T5-T7 (18h-21h), nút "Xin gia nhập". | 🟢 PASS |
-| 5 | **Host cấu hình sân & Lịch tuần (FR07)** | Đăng nhập tài khoản Host -> Cập nhật tên sân "Sân Kỳ Hòa", ghim GPS, đặt lịch tuần | Nhận `204 NoContent`. Người ngoài quét radar lập tức tìm thấy sân tại vị trí vừa cập nhật. | 🟢 PASS |
+| 1 | **Tải hồ sơ cá nhân lần đầu (FR05)** | Đăng nhập tài khoản mới -> Mở màn hình Profile | Backend tự khởi tạo bản ghi Domain nếu chưa có, trả về `SkillLevel: "NB"`, Điểm uy tín `100.0`. |  PASS |
+| 2 | **Cập nhật trình độ & bật nhận khách (FR05)** | Chọn trình độ `TBK` (Trung bình khá), bật `isOpenForGuest = true` -> Nhấn Lưu | Nhận `204 NoContent`. Tải lại hồ sơ thấy badge chuyển sang `TBK` và switch bật xanh. |  PASS |
+| 3 | **Quét radar vị trí GPS (FR06)** | Cấp quyền GPS cho app -> Quét trong bán kính 10km | Nhận danh sách các CLB sắp xếp theo `distanceKm ASC`, hiển thị rõ khoảng cách và tóm tắt lịch tuần. |  PASS |
+| 4 | **Xem chi tiết CLB & Lịch tuần (FR07)** | Bấm vào Card CLB từ danh sách Explore | Hiển thị đầy đủ thông tin: Host (tên, avatar, phone), Lịch sinh hoạt T3-T5-T7 (18h-21h), nút "Xin gia nhập". |  PASS |
+| 5 | **Host cấu hình sân & Lịch tuần (FR07)** | Đăng nhập tài khoản Host -> Cập nhật tên sân "Sân Kỳ Hòa", ghim GPS, đặt lịch tuần | Nhận `204 NoContent`. Người ngoài quét radar lập tức tìm thấy sân tại vị trí vừa cập nhật. |  PASS |
 
 ---
 *(Tài liệu đặc tả kỹ thuật chi tiết Phân hệ 1 - LegendsTeamVN.BadmintonClub - Cập nhật 14/10/2026).*

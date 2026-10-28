@@ -1,4 +1,4 @@
-# 🏸 BỘ TÀI LIỆU KỸ THUẬT & BÁO CÁO KHÓA LUẬN TỐT NGHIỆP
+#  BỘ TÀI LIỆU KỸ THUẬT & BÁO CÁO KHÓA LUẬN TỐT NGHIỆP
 ## HỆ THỐNG HỖ TRỢ QUẢN LÝ HỘI NHÓM CẦU LÔNG PHONG TRÀO
 
 > **Đơn vị đào tạo**: Trường Đại học Mở Hà Nội — Khoa Công nghệ Thông tin  
@@ -13,7 +13,7 @@
 
 ---
 
-## 📚 DANH MỤC HỆ THỐNG TÀI LIỆU TOÀN DỰ ÁN
+##  DANH MỤC HỆ THỐNG TÀI LIỆU TOÀN DỰ ÁN
 
 Toàn bộ báo cáo khóa luận và tài liệu kỹ thuật của dự án được biên soạn và phân rã thành các tập tài liệu chuẩn hóa trong thư mục `docs/`:
 
@@ -33,33 +33,33 @@ docs/
 
 ---
 
-## 📑 TÓM TẮT NỘI DUNG TỪNG CHƯƠNG
+##  TÓM TẮT NỘI DUNG TỪNG CHƯƠNG
 
-### 📘 [Chương I: Tổng Quan Về Đề Tài](01_TONG_QUAN_DE_TAI.md)
+###  [Chương I: Tổng Quan Về Đề Tài](01_TONG_QUAN_DE_TAI.md)
 - **Bối cảnh thực tế**: Đánh giá sự bùng nổ của bộ môn cầu lông phong trào tại Việt Nam và những điểm đau nhức nhối khi quản lý thủ công qua nhóm chat Zalo/Facebook.
-- **Mục đích & Mục tiêu**: Số hóa toàn diện vòng đời sinh hoạt của hội nhóm, giải quyết triệt để 4 bài toán: Giữ chỗ - Xoay tua sân - Hạch toán cầu bóc mới - Tự động gạch nợ qua VietQR.
+- **Mục đích & Mục tiêu**: Số hóa toàn diện vòng đời sinh hoạt của hội nhóm, giải quyết triệt để 4 bài toán: Giữ chỗ - Xoay tua sân - Hạch toán cầu bóc mới - Tự động xác nhận thanh toán qua VietQR.
 - **Đối tượng & Phạm vi nghiên cứu**: Giới hạn phân hệ nghiệp vụ, đối tượng người dùng (Host, Thủ quỹ, Thành viên, Khách vãng lai) và công nghệ sử dụng.
 
-### 📗 [Chương II: Khảo Sát Hiện Trạng & Đặc Tả Yêu Cầu](02_KHAO_SAT_VA_YEU_CAU.md)
+###  [Chương II: Khảo Sát Hiện Trạng & Đặc Tả Yêu Cầu](02_KHAO_SAT_VA_YEU_CAU.md)
 - **Khảo sát giải pháp tương tự**: Đặt lên bàn cân so sánh chi tiết giữa **Spond** (Mỹ), **Reclub** (Quốc tế), **Nhóm chat truyền thống** và **Hệ thống đề tài**.
-- **Khảo sát người dùng thực tế**: Phân tích số liệu từ 50 mẫu khảo sát (68% người dùng sinh hoạt đa nhóm, 82% từng gặp sự cố bùng kèo lẻ sân, 78% thủ quỹ ngán ngẩm khâu đối soát sao kê).
+- **Khảo sát người dùng thực tế**: Phân tích số liệu từ 50 mẫu khảo sát (68% người dùng sinh hoạt đa nhóm, 82% từng gặp sự cố hủy hẹn sát giờ gây lẻ sân, 78% thủ quỹ gặp khó khăn trong khâu đối soát sao kê).
 - **Đặc tả yêu cầu**:
   - **23 Yêu cầu chức năng (FR01 → FR23)** chia theo 5 phân hệ cốt lõi.
   - **Các yêu cầu phi chức năng (NFR)**: Phân quyền theo ngữ cảnh đa nhóm động (Dynamic Contextual Multi-Group RBAC), Khóa phân tán chống vượt trần sĩ số (Redis Lock), Hiệu năng phản hồi < 300ms.
 
-### 📙 [Chương III: Phân Tích Hệ Thống & Đặc Tả 20 Ca Sử Dụng](03_PHAN_TICH_HE_THONG_UC.md)
+###  [Chương III: Phân Tích Hệ Thống & Đặc Tả 20 Ca Sử Dụng](03_PHAN_TICH_HE_THONG_UC.md)
 - **Phân rã chức năng**: Ma trận 5 phân hệ lớn (F1 đến F5) thành 23 chức năng con chi tiết.
 - **Sơ đồ luồng dữ liệu (DFD)**: Sơ đồ mức ngữ cảnh (Context Diagram) tương tác giữa Người chơi, Host, Cổng ngân hàng SePay và Bản đồ.
 - **Đặc tả chi tiết 20 Ca sử dụng (UC01 → UC20)**:
   - Cung cấp đầy đủ: Tác nhân, Tiền điều kiện, Hậu điều kiện, Luồng sự kiện chính, Luồng rẽ nhánh, Luồng ngoại lệ và Quy tắc nghiệp vụ.
-  - Đặc biệt làm rõ: **UC04** (Khởi tạo CLB), **UC05** (Chuyển đổi ngữ cảnh nhóm), **UC09** (Giữ chỗ & Hàng đợi), **UC13** (Xoay tua sân tự động theo giờ nghỉ), **UC16** (Chốt sổ chi phí đa hệ số), **UC18** (Đối soát Webhook gạch nợ tự động).
+  - Đặc biệt làm rõ: **UC04** (Khởi tạo CLB), **UC05** (Chuyển đổi ngữ cảnh nhóm), **UC09** (Giữ chỗ & Hàng đợi), **UC13** (Xoay tua sân tự động theo giờ nghỉ), **UC16** (Chốt sổ chi phí đa hệ số), **UC18** (Đối soát Webhook tự động xác nhận thanh toán).
 
-### 📕 [Chương IV.1: Thiết Kế Cơ Sở Dữ Liệu Chuẩn Hóa 3NF](04_THIET_KE_CO_SO_DU_LIEU_3NF.md)
+###  [Chương IV.1: Thiết Kế Cơ Sở Dữ Liệu Chuẩn Hóa 3NF](04_THIET_KE_CO_SO_DU_LIEU_3NF.md)
 - **Mô hình thực thể**: Sơ đồ ERD quan hệ giữa 22 bảng thực thể.
 - **Đặc tả 22 Bảng CSDL**: Chi tiết từng cột, kiểu dữ liệu, khóa chính (UUID), khóa ngoại, ràng buộc duy nhất, giá trị mặc định và ý nghĩa nghiệp vụ.
 - **Ánh xạ 1:1**: Bảng đối chiếu giữa các bảng PostgreSQL và các class C# Entity Framework Core 10.
 
-### 📓 [Chương IV.2 & IV.3: Kiến Trúc Hệ Thống & Mã Nguồn Clean Architecture](05_KIEN_TRUC_HE_THONG_VA_MA_NGUON.md)
+###  [Chương IV.2 & IV.3: Kiến Trúc Hệ Thống & Mã Nguồn Clean Architecture](05_KIEN_TRUC_HE_THONG_VA_MA_NGUON.md)
 - **Mô hình Client-Server phân tán**: Giao tiếp giữa Mobile Flutter và Backend .NET 10 qua RESTful JSON APIs và SignalR WebSocket.
 - **Cơ chế Phân quyền Đa Nhóm Động (Dynamic Contextual Multi-Group RBAC)**: Một tài khoản người dùng tham gia nhiều CLB với các vai trò độc lập, thẩm tra quyền động theo cặp `(UserId, GroupId)`, tối ưu qua Redis Cache.
 - **Kiến trúc Clean Architecture 4 tầng**:
@@ -68,7 +68,7 @@ docs/
   - `Presentation`: Cổng Minimal APIs chuẩn hóa mã lỗi **RFC 7807 ProblemDetails**.
   - `Persistence` & `Infrastructure`: Kết nối PostgreSQL 16+, Redis Lock, Webhook SePay, FCM.
 
-### 📒 [Chương V: Quy Trình Kiểm Thử Hệ Thống (V-Model)](06_QUY_TRINH_KIEM_THU_VMODEL.md)
+###  [Chương V: Quy Trình Kiểm Thử Hệ Thống (V-Model)](06_QUY_TRINH_KIEM_THU_VMODEL.md)
 - **Chiến lược QA/QC**: Áp dụng mô hình chữ V song song từ khâu phân tích, thiết kế đến cài đặt.
 - **Kiểm thử tự động hoàn tất**:
   - **37 / 37 Architecture Tests (NetArchTest)**: Bảo đảm 100% không vi phạm quy tắc phân tầng.
@@ -78,7 +78,7 @@ docs/
 
 ---
 
-## 🛠️ HƯỚNG DẪN THỰC THI & KIỂM THỬ DỰ ÁN
+## ️ HƯỚNG DẪN THỰC THI & KIỂM THỬ DỰ ÁN
 
 ### 1. Kiểm tra toàn bộ bài kiểm thử kiến trúc (Architecture Tests)
 ```bash

@@ -17,9 +17,10 @@ using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.Roles.Delete;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.Roles.GetList;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.Roles.UpdatePermissions;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.Schedules.Update;
-using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.SwitchContext;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.UpdateInfo;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.UpdateMemberRole;
+using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.FeeRule.Get;
+using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.FeeRule.Update;
 using LegendsTeamVN.BadmintonClub.Domain.Enums;
 using LegendsTeamVN.BadmintonClub.Presentation.Security;
 using LegendsTeamVN.Core.Presentation.Abstractions;
@@ -48,11 +49,6 @@ public class ClubEndpoint : EndpointGroupBase
         generalGroup.MapPost("", CreateClub)
             .WithName("CreateClub")
             .WithSummary("Tạo một câu lạc bộ mới (Người tạo tự động thành Host)")
-            .RequireAuthorization();
-
-        generalGroup.MapPost("{id:guid}/switch-context", SwitchContext)
-            .WithName("SwitchClubContext")
-            .WithSummary("Chuyển đổi câu lạc bộ đang hoạt động, trả về Token đồng bộ vai trò & quyền hạn (FR04)")
             .RequireAuthorization();
 
         // --- FR03: MEMBERSHIP & ROLES MANAGEMENT ---
@@ -153,6 +149,21 @@ public class ClubEndpoint : EndpointGroupBase
             .WithSummary("Host thiết lập lịch sinh hoạt định kỳ lặp lại hàng tuần của nhóm (FR07)")
             .WithDescription("Thiết lập các khung giờ sinh hoạt cố định trong tuần của CLB.")
             .RequireGroupPermission(Domain.Constants.GroupPermissions.Operations.ScheduleManage);
+
+        // --- FR19: CẤU HÌNH BIỂU PHÍ & QUY TẮC CHIA TIỀN ---
+        var fr19Group = group.MapGroup("").WithTags("FR19 - Hạch toán biểu phí và Quỹ nhóm");
+
+        fr19Group.MapGet("{id:guid}/fee-rule", GetClubFeeRule)
+            .WithName("GetClubFeeRule")
+            .WithSummary("Xem cấu hình biểu phí và mức ưu đãi của câu lạc bộ (FR19)")
+            .WithDescription("Trả về quy tắc tính phí hội viên tháng, hội viên ngày, khách vãng lai và các mức ưu đãi Nữ.")
+            .RequireAuthorization();
+
+        fr19Group.MapPut("{id:guid}/fee-rule", UpdateClubFeeRule)
+            .WithName("UpdateClubFeeRule")
+            .WithSummary("Host/Thủ quỹ cập nhật cấu hình biểu phí và ưu đãi của câu lạc bộ (FR19)")
+            .WithDescription("Cập nhật chế độ tính phí, tiền tháng, tiền ngày, tiền khách vãng lai, ưu đãi Nữ và quy tắc làm tròn.")
+            .RequireGroupPermission(Domain.Constants.GroupPermissions.Finance.BankManage);
     }
 
     // --- FR06 Handlers ---
@@ -277,16 +288,6 @@ public class ClubEndpoint : EndpointGroupBase
         return result.Match(onSuccess: success => Results.Ok(new { Success = success }));
     }
 
-    private static async Task<IResult> SwitchContext(
-        [FromRoute] Guid id,
-        ISender sender,
-        CancellationToken cancellationToken)
-    {
-        var command = new SwitchClubContextCommand(id);
-        var result = await sender.Send(command, cancellationToken);
-        return result.Match(onSuccess: response => Results.Ok(response));
-    }
-
     private static async Task<IResult> GetAllClubPermissions(
         IClubRepository clubRepository,
         CancellationToken cancellationToken)
@@ -388,5 +389,27 @@ public class ClubEndpoint : EndpointGroupBase
         var command = new RejectJoinRequestCommand(id, requestId);
         var result = await sender.Send(command, cancellationToken);
         return result.Match(onSuccess: success => Results.Ok(new { Success = success }));
+    }
+
+    // --- FR19 Handlers ---
+    private static async Task<IResult> GetClubFeeRule(
+        [FromRoute] Guid id,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var query = new GetClubFeeRuleQuery(id);
+        var result = await sender.Send(query, cancellationToken);
+        return result.Match(onSuccess: data => Results.Ok(data));
+    }
+
+    private static async Task<IResult> UpdateClubFeeRule(
+        [FromRoute] Guid id,
+        [FromBody] UpdateClubFeeRuleRequest request,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var command = new UpdateClubFeeRuleCommand(id, request);
+        var result = await sender.Send(command, cancellationToken);
+        return result.Match(onSuccess: data => Results.Ok(data));
     }
 }

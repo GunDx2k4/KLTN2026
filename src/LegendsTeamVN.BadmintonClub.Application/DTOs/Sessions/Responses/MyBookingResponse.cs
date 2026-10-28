@@ -17,5 +17,6 @@ public sealed record MyBookingResponse(
     int QueueOrder,
     decimal FeePerMember,
     DateTime BookedAt,
-    DateTime? CheckinAt
+    DateTime? CheckinAt,
+    bool IsGuest = false
 );

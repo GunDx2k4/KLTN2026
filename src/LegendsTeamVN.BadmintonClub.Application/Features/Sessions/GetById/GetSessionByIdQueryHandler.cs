@@ -47,7 +47,8 @@ public sealed class GetSessionByIdQueryHandler(
                 b.QueueOrder,
                 b.BookedAt,
                 b.CheckinAt,
-                b.RecruitmentId
+                b.RecruitmentId,
+                b.User != null ? b.User.Gender : (short)1
             ))
             .ToList();
 
@@ -66,7 +67,8 @@ public sealed class GetSessionByIdQueryHandler(
                 b.QueueOrder,
                 b.BookedAt,
                 b.CheckinAt,
-                b.RecruitmentId
+                b.RecruitmentId,
+                b.User != null ? b.User.Gender : (short)1
             ))
             .ToList();
 

@@ -12,5 +12,6 @@ public sealed record MyClubResponse(
     string? RoleName,
     ClubMemberStatus Status,
     DateTime JoinedAt,
-    int Role = 1
+    int Role = 1,
+    IReadOnlyList<string>? Permissions = null
 );

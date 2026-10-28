@@ -1,80 +1,70 @@
 ---
-trigger: glob
-globs: "src/**/Finance/**, src/**/Session**, src/**/Entities/**Fee**, src/**/Entities/**Booking**"
-description: "Redis distributed locks, decimal currency safety, VietQR generation, SePay webhook idempotency, and ACID ledger transactions."
+trigger: "src/**/Finance/**, src/**/Session**, src/**/Entities/**Fee**, src/**/Entities/**Booking**"
+description: "Redis distributed locks, decimal currency safety, VietQR generation, SePay webhook idempotency, và giao dịch sổ quỹ ACID."
 ---
 
-# Quy Tac Xu Ly Tranh Chap Dong Thoi & Hach Toan Tai Chinh (Concurrency & Finance Rules)
+# Quy Tắc Xử Lý Tranh Chấp Đồng Thời & Hạch Toán Tài Chính (Concurrency & Finance Rules)
 
-> [!IMPORTANT]
-> Dam bao tinh toan ven tuyet doi ve so du tien bac, ngan ngua triet de Race Condition (tranh chap slot gio chot) va xu ly doi soat ngan hang khong bao gio bi ghi dup (Idempotent Webhook Processing).
-
----
-
-## 1. Quy Tac Khoa Phan Tan (Redis Distributed Lock)
-
-### 1.1. Boi canh bat buoc su dung
-1. **Bieu quyet giu slot buoi choi (`BookSlotCommand`):** Khi nhieu nguoi cung an giu slot tai giay cuoi, tranh truong hop tong so nguoi `CONFIRMED` vuot qua tran `MaxPlayers` cua cum san.
-2. **Tiep nhan slot giao luu (`AcceptRecruitmentSlotCommand`):** Tranh 2 khach cung chiem 1 suat tuyen duy nhat con lai.
-3. **Quyet toan chi phi buoi choi (`CalculateSessionFeeCommand`):** Tranh truong hop 2 Host cung bam tinh tien dong thoi gay tao 2 bo hoa don trung lap.
-4. **Tiep nhan Webhook SePay (`ProcessSepayWebhookCommand`):** Ngan chan 2 request webhook cung xu ly mot ma giao dich ngan hang cung luc.
-
-### 1.2. Chuan muc khoa phan tan:
-- **Cau truc Key dinh danh:**
-  - Dat cho buoi choi: `lock:session:{sessionId}:booking`
-  - Dang ky suat tuyen: `lock:recruitment:{recruitmentId}:slot`
-  - Quyet toan buoi choi: `lock:session:{sessionId}:settlement`
-  - Webhook giao dich: `lock:sepay:transaction:{transactionId}`
-- **Thoi gian cho lay khoa (Wait Time):** Toi da **3 giay**.
-- **Thoi gian tu dong giai phong (Lease Time):** Toi da **5 giay** (chong Deadlock khi node bi crash).
-- **Luong xu ly trong pham vi khoa:**
-  1. Nap so luong nguoi da co ve `CONFIRMED`.
-  2. Neu `count < maxPlayers` -> Gan `status = CONFIRMED`, `queue_order = 0`.
-  3. Neu `count >= maxPlayers` -> Gan `status = WAITING`, `queue_order = maxOrder + 1`.
-  4. Luu thay doi qua Repository va giai phong khoa.
+Tài liệu định nghĩa các quy tắc xử lý tranh chấp và an toàn tài chính: Đảm bảo tính toàn vẹn số dư, loại trừ Race Condition và đối soát ngân hàng không bao giờ bị ghi đúp (Idempotent Webhooks).
 
 ---
 
-## 2. Quy Tac Hach Toan Chi Phi Da Yeu To (FR19)
+## 1. Quy Tắc Khóa Phân Tán (Redis Distributed Lock)
 
-### 2.1. Kieu du lieu tien te bat buoc:
-- **BAT BUOC DUNG `decimal`** cho toan bo cac thuoc tinh tien te: `decimal Amount`, `decimal UnitPrice`, `decimal DiscountPercentage`, `decimal RentalCost`.
-- **CAM TUYET DOI** dung `float` hay `double` do dac tinh sai so bieu dien nhi phan lam lech so du tai chinh.
+### 1.1. Bối cảnh bắt buộc sử dụng:
+1. **Đăng ký giữ chỗ buổi chơi (`VoteBookingCommand`):** Khi nhiều người cùng ấn giữ slot tại giây cuối, tránh trường hợp tổng số người `CONFIRMED` vượt quá trần `MaxPlayers` của sân.
+2. **Tiếp nhận slot giao lưu (`AcceptRecruitmentSlotCommand`):** Tránh 2 khách cùng chiếm 1 suất tuyển duy nhất còn lại.
+3. **Quyết toán chi phí buổi chơi (`CalculateSessionFeeCommand`):** Tránh trường hợp 2 Host cùng bấm tính tiền đồng thời gây tạo 2 bộ hóa đơn trùng lặp.
+4. **Tiếp nhận Webhook SePay (`ProcessSepayWebhookCommand`):** Ngăn chặn 2 request webhook cùng xử lý một mã giao dịch ngân hàng cùng lúc.
 
-### 2.2. Cong thuc quyet toan buoi choi chuan:
-$$\text{Tong chi phi buoi choi} = \text{Tien thue san co dinh} + (\text{So qua cau boc moi} \times \text{Don gia qua cau}) + \text{Phu phi phat sinh}$$
-
-### 2.3. Phan bo theo loai hinh nguoi choi:
-1. **Hoi vien goi thang (`MONTHLY`):**
-   - Tien san va cau dinh ky duoc tru tu tien quy dong thang.
-   - Khoan thu buoi cua hoi vien thang gan = `0d` hoac trang thai `EXEMPT` (tru khi co phu phi lien hoan dot xuat).
-2. **Hoi vien ngay (`DAILY`):**
-   - Dong theo muc `DailyMemberFee` hoac chia deu chi phi thuc te.
-   - Nu: Tu dong tru di `FemaleDiscountDaily`.
-3. **Khach vang lai (`GUEST`):**
-   - Dong theo muc `GuestFee` (chi phi chia deu + phu phi vang lai).
-4. **Quy tac lam tron tien (`RoundRule`):**
-   - Lam tron so tien cuoi cung den hang nghin dong gan nhat ($\text{Round}(\dots, -3)$) de tao so tien chuyen khoan thuan tien (vi du: 53.400d -> 53.000d hoac 54.000d theo cau hinh CLB).
-
----
-
-## 3. Quy Tac Doi Soat Ngan Hang Webhook (FR21 & Idempotency)
-
-1. **Cu phap chuyen khoan dinh danh bat buoc (`TransferSyntax`):**
-   - Chuoi thanh toan VietQR bat buoc chua noi dung: `CLB {SessionIdShort} {UserIdShort}` (vi du: `CLB 8A2F E412`).
-   - Giup he thong tu dong boc tach va doi soat 100% khong nham lan.
-2. **Tinh Idempotency (Chong xu ly lap lai Webhook):**
-   - Cong thanh toan co the gui lai Webhook nhieu lan cho cung 1 giao dich thanh cong.
-   - Khi tiep nhan Webhook:
-     - Kiem tra `reference_code` tu ngan hang:
-       - Neu da ton tai trong `bank_transaction` va `session_fee.status == PAID`: Bo qua va tra ve HTTP `200 OK` ngay lap tuc.
-       - Neu chua xu ly: Doi trang thai sang `PAID`, gan `paid_at = now()`, luu log `bank_transaction`, va ghi 1 dong thu `INCOME` vao `group_ledger`.
-3. **Xac thuc Chu ky Webhook (Security):**
-   - Bat buoc kiem tra ma bi mat `webhook_secret_key` trong HTTP Header truoc khi xu ly payload.
+### 1.2. Chuẩn mực khóa phân tán:
+- **Cấu trúc Key định danh:**
+  - Đặt chỗ buổi chơi: `lock:session:{sessionId}:booking`
+  - Đăng ký suất tuyển: `lock:recruitment:{recruitmentId}:slot`
+  - Quyết toán buổi chơi: `lock:session:{sessionId}:settlement`
+  - Webhook giao dịch: `lock:sepay:transaction:{transactionId}`
+- **Thời gian chờ lấy khóa (Wait Time):** Tối đa **3 giây**.
+- **Thời gian tự động giải phóng (Lease Time):** Tối đa **5 giây** (chống Deadlock khi node bị crash).
+- **Luồng xử lý trong phạm vi khóa:**
+  1. Nạp số lượng người đã có vé `CONFIRMED`.
+  2. Nếu `count < maxPlayers` $\rightarrow$ Gán `status = CONFIRMED`, `queue_order = 0`.
+  3. Nếu `count >= maxPlayers` $\rightarrow$ Gán `status = WAITING`, `queue_order = maxOrder + 1`.
+  4. Lưu thay đổi qua Repository và giải phóng khóa.
 
 ---
 
-## 4. Tinh Toan Ven Giao Dich Tai Chinh (ACID & Unit of Work)
+## 2. Quy Tắc Hạch Toán Chi Phí Đa Yếu Tố (FR19)
 
-- Moi thao tac lam thay doi so du quy nhom (`GroupLedgerEntry`) hoac chot so buoi choi (`SessionFee`) bat buoc phai duoc boc trong mot **Database Transaction** (`UnitOfWorkBehavior`).
-- Tuyet doi khong de xay ra tinh trang: Hoa don `SessionFee` da chuyen `PAID` nhung So quy `GroupLedgerEntry` chua ghi nhan dong tien vao. Neu mot trong hai thao tac that bai, toan bo giao dich phai duoc `Rollback`.
+### 2.1. Kiểu dữ liệu tiền tệ bắt buộc:
+- **BẮT BUỘC DÙNG `decimal`** cho toàn bộ các thuộc tính tiền tệ: `decimal Amount`, `decimal UnitPrice`, `decimal DiscountPercentage`, `decimal RentalCost`.
+- **CẤM TUYỆT ĐỐI** dùng `float` hay `double` do đặc tính sai số biểu diễn nhị phân làm lệch số dư tài chính.
+
+### 2.2. Công thức quyết toán buổi chơi chuẩn:
+$$\text{Tổng chi phí buổi chơi} = \text{Tiền thuê sân cố định} + (\text{Số quả cầu bóc mới} \times \text{Đơn giá quả cầu}) + \text{Phụ phí phát sinh}$$
+
+### 2.3. Phân bổ theo loại hình người chơi:
+1. **Hội viên gói tháng (`MONTHLY`):**
+   - Tiền sân và cầu định kỳ được trừ từ tiền quỹ đóng tháng.
+   - Khoản thu buổi của hội viên tháng gán = `0m` hoặc trạng thái `EXEMPT` (trừ khi có phụ phí liên hoan đột xuất).
+2. **Hội viên ngày (`DAILY`):**
+   - Đóng theo mức `DailyMemberFee` hoặc chia đều chi phí thực tế.
+   - Nữ: Tự động trừ đi `FemaleDiscountDaily`.
+3. **Khách vãng lai (`GUEST`):**
+   - Đóng theo mức `GuestFee` (chi phí chia đều + phụ phí vãng lai).
+   - Nữ: Tự động trừ đi `FemaleDiscountGuest`.
+4. **Quy tắc làm tròn tiền (`RoundRule`):**
+   - Làm tròn số tiền cuối cùng đến hàng nghìn đồng gần nhất ($\text{Round}(\dots, -3)$) để tạo số tiền chuyển khoản thuận tiện (ví dụ: 53.400đ $\rightarrow$ 53.000đ hoặc 54.000đ theo cấu hình CLB).
+
+---
+
+## 3. Quy Tắc Đối Soát Ngân Hàng Webhook (FR21 & Idempotency)
+
+1. **Cú pháp chuyển khoản định danh bắt buộc (`TransferSyntax`):**
+   - Chuỗi thanh toán VietQR bắt buộc chứa nội dung: `CLB {SessionIdShort} {UserIdShort}` (ví dụ: `CLB 8A2F E412`).
+   - Giúp hệ thống tự động bóc tách và đối soát 100% không nhầm lẫn.
+2. **Tính Idempotency (Chống xử lý lặp lại Webhook):**
+   - Cổng thanh toán có thể gửi lại Webhook nhiều lần cho cùng 1 giao dịch thành công.
+   - Khi tiếp nhận Webhook:
+     - Kiểm tra `reference_code` từ ngân hàng:
+       - Nếu đã tồn tại trong `bank_transaction` và `session_fee.status == PAID`: Bỏ qua và trả về HTTP `200 OK` ngay lập tức.
+       - Nếu chưa tồn tại: Bắt đầu Database Transaction, tạo bản ghi `bank_transaction`, chuyển `session_fee.status = PAID`, ghi dòng thu `INCOME` vào `group_ledger`, và commit transaction.

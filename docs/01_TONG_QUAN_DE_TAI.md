@@ -36,7 +36,7 @@ Mặc dù thị trường đã có các giải pháp phần mềm quản lý sâ
 3. **Phiền toái trong khâu thanh toán**: Sau khi thi đấu mệt mỏi, người chơi phải chờ thủ quỹ tính tiền lẻ, tự mở app ngân hàng, gõ STK, nhập số tiền và nội dung chuyển khoản thủ công. Sai sót số tiền hoặc cú pháp dẫn đến việc đối soát kéo dài.
 
 #### b. Từ góc độ Ban điều hành nhóm (Host & Thủ quỹ):
-1. **Bất ổn định nhân sự và nguy cơ lẻ sân (Bùng kèo)**: Tình trạng thành viên hủy hẹn sát giờ khiến sân đôi bị lẻ người và gây lãng phí chi phí thuê sân cố định. Trưởng nhóm buộc phải tự bù tiền túi hoặc đăng bài tìm người trám chỗ gấp trong vô vọng.
+1. **Bất ổn định nhân sự và nguy cơ lẻ sân do hủy hẹn sát giờ**: Tình trạng thành viên hủy hẹn cận giờ khiến sân đôi bị lẻ người và gây lãng phí chi phí thuê sân cố định. Trưởng nhóm buộc phải tự bù tiền túi hoặc đăng bài tìm người trám chỗ gấp trong vô vọng.
 2. **Gánh nặng hạch toán chi phí và vật tư tiêu hao**: Quả cầu lông là vật tư tiêu hao đắt đỏ và hao mòn nhanh. Việc kiểm soát số lượng quả/ống cầu thực tế kết hợp với công thức chia tiền đa hệ số (nam, nữ, hội viên cố định đóng tháng, khách vãng lai đóng buổi) khiến thủ quỹ mất 30–60 phút đối soát sao kê ngân hàng và chịu rủi ro nợ đọng kéo dài sau mỗi buổi chơi.
 3. **Hạn chế của phần mềm hiện tại**: Các app đặt sân chỉ phục vụ chủ sân; các app xoay sân nước ngoài (Spond, Reclub) không hỗ trợ hạch toán quả cầu bóc lẻ và không có cổng thanh toán VietQR ngân hàng nội địa.
 
@@ -44,15 +44,15 @@ Mặc dù thị trường đã có các giải pháp phần mềm quản lý sâ
 Hệ thống mang lại 4 giá trị cốt lõi giải quyết triệt để các vấn đề trên:
 1. **Kết nối và ghép nối thông minh hai chiều**: Giúp người chơi tìm kiếm nhóm quanh tọa độ GPS; hỗ trợ tính năng "Tìm người giao lưu" phát tín hiệu theo bán kính để lấp chỗ trống tức thì khi có người bận đột xuất.
 2. **Chuẩn hóa điều phối thi đấu công bằng**: Giải thuật xoay tua tự động ưu tiên người có thời gian nghỉ lâu nhất, đảm bảo 100% không ai bị ngồi ngoài liên tiếp 2 trận, đồng thời hỗ trợ cân bằng trình độ giữa hai cặp đấu.
-3. **Tự động hóa hạch toán và minh bạch tài chính**: Tự động áp dụng công thức chia tiền đa hệ số theo lượng cầu bóc mới thực tế; sinh mã VietQR nhúng sẵn số tiền; tiếp nhận Webhook ngân hàng để tự động gạch nợ và công khai Sổ quỹ mở.
-4. **Xây dựng môi trường sinh hoạt văn minh**: Cơ chế đánh giá tín nhiệm hai chiều (Điểm uy tín thành viên & Điểm chất lượng hội nhóm) giúp giảm thiểu tối đa tình trạng bùng kèo và gian lận tài chính.
+3. **Tự động hóa hạch toán và minh bạch tài chính**: Tự động áp dụng công thức chia tiền đa hệ số theo lượng cầu bóc mới thực tế; sinh mã VietQR nhúng sẵn số tiền; tiếp nhận Webhook ngân hàng để tự động xác nhận thanh toán và công khai Sổ quỹ mở.
+4. **Xây dựng môi trường sinh hoạt văn minh**: Cơ chế đánh giá tín nhiệm hai chiều (Điểm uy tín thành viên & Điểm chất lượng hội nhóm) giúp giảm thiểu tối đa tình trạng hủy hẹn sát giờ và chậm trễ tài chính.
 
 ---
 
 ## 3. MỤC ĐÍCH & MỤC TIÊU NGHIÊN CỨU
 
 ### 3.1. Mục đích nghiên cứu
-Mục đích của đề tài là xây dựng một hệ thống quản lý hội nhóm và kết nối cộng đồng toàn diện cho bộ môn cầu lông phong trào trên nền tảng **Mobile App (Flutter)** kết hợp **Backend API (.NET 10 Clean Architecture)**. Hệ thống số hóa trọn vẹn vòng đời một buổi sinh hoạt: từ chuẩn bị (giữ chỗ, hàng đợi, tìm khách lân cận), tổ chức tại sân (điểm danh, xoay sân tự động) đến kết thúc (hạch toán chi phí, VietQR, gạch nợ tự động và sổ quỹ mở).
+Mục đích của đề tài là xây dựng một hệ thống quản lý hội nhóm và kết nối cộng đồng toàn diện cho bộ môn cầu lông phong trào trên nền tảng **Mobile App (Flutter)** kết hợp **Backend API (.NET 10 Clean Architecture)**. Hệ thống số hóa trọn vẹn vòng đời một buổi sinh hoạt: từ chuẩn bị (giữ chỗ, hàng đợi, tìm khách lân cận), tổ chức tại sân (điểm danh, xoay sân tự động) đến kết thúc (hạch toán chi phí, VietQR, tự động xác nhận thanh toán và sổ quỹ mở).
 
 ### 3.2. Mục tiêu nghiên cứu cụ thể
 1. **Về mặt lý thuyết**: Hệ thống hóa kiến trúc phần mềm **Clean Architecture**, nguyên lý **CQRS & MediatR**, mô hình phân quyền theo ngữ cảnh đa nhóm động **(Dynamic Contextual Multi-Group RBAC)** và thuật toán tối ưu hóa điều phối xoay tua sân.
@@ -65,7 +65,7 @@ Mục đích của đề tài là xây dựng một hệ thống quản lý hộ
 ## 4. ĐỐI TƯỢNG VÀ PHẠM VI NGHIÊN CỨU
 
 ### 4.1. Đối tượng nghiên cứu
-- **Đối tượng nghiệp vụ**: Quy trình lập kèo, biểu quyết giữ chỗ, thuật toán hàng đợi xoay tua tại sân, định mức tiêu hao quả cầu lông, công thức tài chính đa hệ số, đối soát ngân hàng tự động.
+- **Đối tượng nghiệp vụ**: Quy trình tổ chức buổi chơi, đăng ký giữ chỗ, thuật toán hàng đợi xoay tua tại sân, định mức tiêu hao quả cầu lông, công thức tài chính đa hệ số, đối soát ngân hàng tự động.
 - **Đối tượng người dùng**: Ban điều hành nhóm (Host, Thủ quỹ, Phó nhóm) và Cộng đồng người chơi (Hội viên cố định, Khách vãng lai).
 - **Đối tượng công nghệ**: .NET 10, C# 13, Entity Framework Core 10, PostgreSQL, Redis, MediatR, FluentValidation, Flutter.
 
@@ -73,9 +73,9 @@ Mục đích của đề tài là xây dựng một hệ thống quản lý hộ
 - **Nhóm tính năng bắt buộc (Core)**:
   - Xác thực tài khoản (JWT, Refresh Token).
   - Quản trị đa nhóm & phân quyền động theo ngữ cảnh (Dynamic Contextual Multi-Group RBAC: 1 người dùng tham gia nhiều nhóm với nhiều vai trò độc lập: Host, Phó nhóm, Thủ quỹ, Thành viên, Khách).
-  - Khám phá nhóm quanh tọa độ GPS; biểu quyết giữ chỗ có hàng đợi tự động.
+  - Khám phá nhóm quanh tọa độ GPS; đăng ký giữ chỗ có hàng đợi tự động.
   - Vận hành tại sân: Điểm danh, thuật toán xoay tua sân công bằng theo thời gian nghỉ.
-  - Hạch toán chi phí đa hệ số theo quả cầu bóc mới; sinh mã VietQR thanh toán; gạch nợ tự động qua Webhook ngân hàng; Sổ quỹ mở.
+  - Hạch toán chi phí đa hệ số theo quả cầu bóc mới; sinh mã VietQR thanh toán; tự động xác nhận thanh toán qua Webhook ngân hàng; Sổ quỹ mở.
 - **Nhóm tính năng quan trọng**:
   - Tìm người giao lưu lân cận khi lẻ sân (quét radar theo bán kính km).
   - Đánh giá tín nhiệm hai chiều (Điểm thành viên & Điểm CLB).

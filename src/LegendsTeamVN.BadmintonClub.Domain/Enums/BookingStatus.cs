@@ -1,7 +1,7 @@
 namespace LegendsTeamVN.BadmintonClub.Domain.Enums;
 
 /// <summary>
-/// Trạng thái đăng ký của biểu quyết giữ chỗ. Miền giá trị: CONFIRMED, WAITING, ABSENT, CHECKED_IN.
+/// Trạng thái của đăng ký giữ chỗ. Miền giá trị: CONFIRMED, WAITING, ABSENT, CHECKED_IN, NO_SHOW.
 /// </summary>
 public enum BookingStatus
 {

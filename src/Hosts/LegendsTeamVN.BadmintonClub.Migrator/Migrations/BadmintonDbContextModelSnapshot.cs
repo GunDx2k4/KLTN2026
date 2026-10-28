@@ -539,6 +539,13 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                         .HasDefaultValue(0m)
                         .HasColumnName("female_discount_daily");
 
+                    b.Property<decimal>("FemaleDiscountGuest")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasDefaultValue(0m)
+                        .HasColumnName("female_discount_guest");
+
                     b.Property<decimal>("FemaleDiscountMonthly")
                         .ValueGeneratedOnAdd()
                         .HasPrecision(18, 2)
@@ -1460,7 +1467,7 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                         .HasColumnType("character varying(50)")
                         .HasDefaultValue("CONFIRMED")
                         .HasColumnName("status")
-                        .HasComment("Trạng thái đăng ký của biểu quyết giữ chỗ. Miền giá trị: CONFIRMED, WAITING, ABSENT, CHECKED_IN.");
+                        .HasComment("Trạng thái đăng ký giữ chỗ. Miền giá trị: CONFIRMED, WAITING, ABSENT, CHECKED_IN.");
 
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid")

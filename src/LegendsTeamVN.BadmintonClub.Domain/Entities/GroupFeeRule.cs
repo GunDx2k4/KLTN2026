@@ -17,6 +17,7 @@ public class GroupFeeRule : Entity<Guid>
     public decimal GuestFee { get; private set; }
     public decimal FemaleDiscountMonthly { get; private set; }
     public decimal FemaleDiscountDaily { get; private set; }
+    public decimal FemaleDiscountGuest { get; private set; }
     public int RoundRule { get; private set; }
     public DateTime AppliedAt { get; private set; }
 
@@ -32,6 +33,7 @@ public class GroupFeeRule : Entity<Guid>
         decimal guestFee = 0,
         decimal femaleDiscountMonthly = 0,
         decimal femaleDiscountDaily = 0,
+        decimal femaleDiscountGuest = 0,
         int roundRule = 1000)
     {
         Id = Guid.NewGuid();
@@ -42,6 +44,7 @@ public class GroupFeeRule : Entity<Guid>
         GuestFee = guestFee;
         FemaleDiscountMonthly = femaleDiscountMonthly;
         FemaleDiscountDaily = femaleDiscountDaily;
+        FemaleDiscountGuest = femaleDiscountGuest;
         RoundRule = roundRule;
         AppliedAt = DateTime.UtcNow;
     }
@@ -54,8 +57,9 @@ public class GroupFeeRule : Entity<Guid>
         decimal guestFee = 0,
         decimal femaleDiscountMonthly = 0,
         decimal femaleDiscountDaily = 0,
+        decimal femaleDiscountGuest = 0,
         int roundRule = 1000)
-        : this(groupId, ParseFeeMode(feeMode), monthlyFee, dailyMemberFee, guestFee, femaleDiscountMonthly, femaleDiscountDaily, roundRule)
+        : this(groupId, ParseFeeMode(feeMode), monthlyFee, dailyMemberFee, guestFee, femaleDiscountMonthly, femaleDiscountDaily, femaleDiscountGuest, roundRule)
     {
     }
 
@@ -66,6 +70,7 @@ public class GroupFeeRule : Entity<Guid>
         decimal guestFee,
         decimal femaleDiscountMonthly,
         decimal femaleDiscountDaily,
+        decimal femaleDiscountGuest,
         int roundRule)
     {
         FeeMode = feeMode;
@@ -74,6 +79,7 @@ public class GroupFeeRule : Entity<Guid>
         GuestFee = guestFee;
         FemaleDiscountMonthly = femaleDiscountMonthly;
         FemaleDiscountDaily = femaleDiscountDaily;
+        FemaleDiscountGuest = femaleDiscountGuest;
         RoundRule = roundRule;
         AppliedAt = DateTime.UtcNow;
     }
@@ -85,9 +91,10 @@ public class GroupFeeRule : Entity<Guid>
         decimal guestFee,
         decimal femaleDiscountMonthly,
         decimal femaleDiscountDaily,
+        decimal femaleDiscountGuest,
         int roundRule)
     {
-        UpdateFees(ParseFeeMode(feeMode), monthlyFee, dailyMemberFee, guestFee, femaleDiscountMonthly, femaleDiscountDaily, roundRule);
+        UpdateFees(ParseFeeMode(feeMode), monthlyFee, dailyMemberFee, guestFee, femaleDiscountMonthly, femaleDiscountDaily, femaleDiscountGuest, roundRule);
     }
 
     private static FeeMode ParseFeeMode(string feeMode)

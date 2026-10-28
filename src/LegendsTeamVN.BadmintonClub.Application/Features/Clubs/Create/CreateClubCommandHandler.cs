@@ -1,6 +1,7 @@
 using LegendsTeamVN.BadmintonClub.Domain.Entities;
 using LegendsTeamVN.BadmintonClub.Domain.Enums;
 using LegendsTeamVN.BadmintonClub.Domain.Repositories;
+using LegendsTeamVN.BadmintonClub.Domain.Services;
 using LegendsTeamVN.Core.Application.Messaging.CQRS;
 using LegendsTeamVN.Core.Identity.Abstractions;
 using LegendsTeamVN.Core.Utilities.Results;
@@ -9,7 +10,8 @@ namespace LegendsTeamVN.BadmintonClub.Application.Features.Clubs.Create;
 
 public sealed class CreateClubCommandHandler(
     IClubRepository clubRepository,
-    ICurrentUserService currentUserService) : ICommandHandler<CreateClubCommand, Guid>
+    ICurrentUserService currentUserService,
+    TimeProvider? clock = null) : ICommandHandler<CreateClubCommand, Guid>
 {
     public async Task<Result<Guid>> Handle(CreateClubCommand request, CancellationToken cancellationToken)
     {
@@ -41,6 +43,13 @@ public sealed class CreateClubCommandHandler(
             foreach (var s in request.Schedules)
             {
                 club.Schedules.Add(new GroupSchedule(club.Id, s.DayOfWeek, s.StartTime, s.EndTime));
+            }
+
+            var nowUtc = (clock ?? TimeProvider.System).GetUtcNow();
+            var occurrences = RecurringScheduleEngine.CalculateOccurrences(club.Schedules, nowUtc, daysAhead: 14);
+            foreach (var (schedule, startUtc, endUtc) in occurrences)
+            {
+                club.CreateRecurringSession(schedule, startUtc, endUtc);
             }
         }
 

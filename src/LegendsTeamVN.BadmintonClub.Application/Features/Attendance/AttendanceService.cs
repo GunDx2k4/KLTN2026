@@ -64,6 +64,17 @@ public sealed class AttendanceService(
         var user = await users.FindSingleAsync(u => u.Id == userId && u.IsActive && !u.IsDeleted, ct);
         if (user is null) return Fail(Error.NotFound("User.NotFound", "Không tìm thấy tài khoản người chơi đang hoạt động."));
         var existing = session.Bookings.FirstOrDefault(b => b.UserId == userId);
+        if (existing is null || existing.Status != BookingStatus.CHECKED_IN)
+        {
+            var hasOverlap = await bookings.HasOverlappingBookingAsync(
+                userId,
+                session.StartTime,
+                session.EndTime,
+                session.Id,
+                ct);
+            if (hasOverlap)
+                return Fail(Error.Conflict("Booking.TimeOverlap", "Người chơi đã có lịch tham gia buổi chơi khác trong cùng khung giờ này."));
+        }
         var knownMatches = session.Matches.Select(m => m.Id).ToHashSet();
         var now = clock.GetUtcNow().UtcDateTime;
         var admitted = session.AdmitWalkIn(userId, currentUser.UserId!.Value, now, rotationOptions?.CurrentValue.Enabled ?? false);

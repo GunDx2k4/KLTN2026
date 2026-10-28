@@ -35,7 +35,7 @@ builder.Services.AddPostgreSQLIdentity(connectionStrings).AddDataSeederIdentity(
 
 builder.Services.AddIdentityServices().AddIdentityContext();
 
-builder.Services.AddRedisInfrastructure(builder.Configuration);
+builder.Services.AddCoreInfrastructure(builder.Configuration);
 
 builder.Services.AddPersistence(connectionStrings).AddDataSeederBadminton();
 
@@ -43,3 +43,6 @@ builder.Services.AddHostedService<Worker>();
 
 var host = builder.Build();
 host.Run();
+
+
+

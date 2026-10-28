@@ -15,7 +15,7 @@ Hệ thống được tổ chức thành 5 phân hệ nghiệp vụ cốt lõi b
 | | F1.3 | Quản trị đa nhóm & Chuyển đổi nhóm | Toàn bộ người dùng | FR03, FR04 |
 | | F1.4 | Quản lý hồ sơ cá nhân & Trình độ | Toàn bộ người dùng | FR05 |
 | **Khám phá, Giữ chỗ & Kết nối (F2)** | F2.1 | Khám phá & Tra cứu nhóm theo vị trí | Khách vãng lai, Thành viên | FR06, FR07 |
-| | F2.2 | Biểu quyết giữ chỗ có kiểm soát sĩ số | Khách vãng lai, Thành viên | FR08 |
+| | F2.2 | Đăng ký giữ chỗ có kiểm soát sĩ số | Khách vãng lai, Thành viên | FR08 |
 | | F2.3 | Tự động hàng đợi thông minh | Hệ thống tự động | FR09, FR10 |
 | | F2.4 | Phát tín hiệu tìm người giao lưu lân cận | Ban điều hành nhóm (Host) | FR11 |
 | | F2.5 | Tiếp nhận & Đăng ký slot giao lưu | Người chơi lân cận | FR12 |
@@ -27,7 +27,7 @@ Hệ thống được tổ chức thành 5 phân hệ nghiệp vụ cốt lõi b
 | **Hạch toán Vật tư & Sổ quỹ mở (F4)** | F4.1 | Ghi nhận vật tư tiêu hao (Cầu bóc mới)| Ban điều hành nhóm | FR18 |
 | | F4.2 | Hạch toán chi phí đa hệ số tự động | Hệ thống tự động | FR19 |
 | | F4.3 | Khởi tạo mã VietQR thanh toán | Hệ thống tự động | FR20 |
-| | F4.4 | Đối soát Webhook & Gạch nợ tự động | Hệ thống tự động | FR21 |
+| | F4.4 | Đối soát Webhook & Tự động xác nhận thanh toán | Hệ thống tự động | FR21 |
 | | F4.5 | Quản trị Sổ quỹ mở minh bạch | Thành viên (Xem), Host (Quản trị) | FR22 |
 | **Đánh giá Tín nhiệm & Tương tác (F5)**| F5.1 | Đánh giá & Tính điểm uy tín thành viên| Hệ thống tự động, Người chơi | FR23 |
 | | F5.2 | Đánh giá & Tính điểm chất lượng nhóm | Hệ thống tự động, Người chơi | FR23 |
@@ -76,7 +76,7 @@ graph TD
 ### UC03: Quản lý hồ sơ cá nhân & Trình độ
 - **FR đáp ứng**: FR05 (F1.4) | **Tác nhân**: Toàn bộ người dùng.
 - **Tiền điều kiện**: Đã đăng nhập.
-- **Luồng chính**: Người dùng xem hồ sơ ➔ Chỉnh sửa Avatar, Họ tên, Trình độ tự đánh giá (1-6: NB, Y, TBY, TB, TBK, K) và bật/tắt nhận kèo giao lưu (`isOpenForGuest`) ➔ Hệ thống lưu và đồng bộ cho các thuật toán ghép sân.
+- **Luồng chính**: Người dùng xem hồ sơ ➔ Chỉnh sửa Avatar, Họ tên, Trình độ tự đánh giá (1-6: NB, Y, TBY, TB, TBK, K) và bật/tắt sẵn sàng tham gia giao lưu (`isOpenForGuest`) ➔ Hệ thống lưu và đồng bộ cho các thuật toán ghép sân.
 - **Hậu điều kiện**: Hồ sơ cá nhân được cập nhật.
 
 ---
@@ -100,7 +100,7 @@ graph TD
 ### UC05: Chuyển đổi ngữ cảnh nhóm (Switch Context)
 - **FR đáp ứng**: FR03, FR04 (F1.3) | **Tác nhân**: Toàn bộ người dùng.
 - **Tiền điều kiện**: Người dùng đang tham gia ít nhất 1 hội nhóm.
-- **Luồng chính**: Người dùng chọn nhóm muốn làm việc trên thanh trượt ➔ Hệ thống kiểm tra tư cách thành viên (`group_member.status == ACTIVE`) ➔ Lấy toàn bộ quyền hạn thực tế của vai trò người dùng tại nhóm đó ➔ Phát hành Access Token mới có claim `tenantId` và mảng `permissions` tương ứng ➔ Ứng dụng cập nhật giao diện và quyền hạn tức thì (< 300ms) mà không bắt đăng nhập lại.
+- **Luồng chính**: Người dùng chọn nhóm muốn làm việc trên thanh trượt/Server-Rail ➔ Ứng dụng thiết lập Header HTTP ngữ cảnh `X-Group-Id = <clubId>` (hoặc truyền qua Route parameter) ➔ Giữ nguyên 1 JWT Access Token toàn cục duy nhất ➔ Hệ thống thẩm tra quyền hạn động qua `GroupPermissionHandler` và Redis Cache (`group:perm:{userId}:{groupId}`) ➔ Ứng dụng cập nhật giao diện và dữ liệu theo nhóm vừa chọn tức thì mà không cần xin cấp lại Token.
 - **Hậu điều kiện**: Ngữ cảnh làm việc được đồng bộ chính xác theo vai trò tại nhóm vừa chọn.
 
 ### UC06: Tìm kiếm & Gửi yêu cầu gia nhập nhóm
@@ -119,13 +119,13 @@ graph TD
 
 ---
 
-### UC08: Khởi tạo buổi sinh hoạt (Mở kèo chơi)
+### UC08: Khởi tạo buổi sinh hoạt (Mở buổi chơi)
 - **FR đáp ứng**: FR13 (F3.1) | **Tác nhân**: Trưởng nhóm (Host).
 - **Tiền điều kiện**: Có quyền `OPERATIONS.SESSION.CREATE`.
 - **Luồng chính**: Host nhập: Tiêu đề buổi chơi, Thời gian bắt đầu/kết thúc, Địa điểm cụm sân, Số lượng sân, Định mức người/sân (mặc định 6 người/sân), Sĩ số trần tối đa (`courtCount * targetPerCourt`), Tiền thuê sân, Hạn chốt giữ chỗ ➔ Hệ thống tạo bản ghi `badminton_session` với trạng thái `OPEN`.
-- **Hậu điều kiện**: Buổi chơi mở cho thành viên vào biểu quyết giữ chỗ.
+- **Hậu điều kiện**: Buổi chơi mở cho thành viên vào đăng ký giữ chỗ.
 
-### UC09: Biểu quyết giữ chỗ có kiểm soát sĩ số & Hàng đợi
+### UC09: Đăng ký giữ chỗ có kiểm soát sĩ số & Hàng đợi
 - **FR đáp ứng**: FR08, FR09, FR10 (F2.2, F2.3) | **Tác nhân**: Thành viên, Khách, Hệ thống.
 - **Tiền điều kiện**: Buổi sinh hoạt đang ở trạng thái `OPEN` và chưa quá hạn chốt giữ chỗ.
 - **Luồng chính**:
@@ -233,7 +233,7 @@ graph TD
   3. Hệ thống nạp biểu phí của nhóm (`group_fee_rule`) và tự động tính toán theo công thức đa hệ số:
      - Tính tổng chi phí buổi: `Tổng_chi_phí = Tiền_thuê_sân + (Số_cầu * Đơn_giá_cầu) + Phụ_phí`.
      - Phân bổ theo loại người chơi: Hội viên tháng (đã đóng trọn gói), Hội viên ngày, Khách vãng lai.
-     - Áp dụng chính sách ưu đãi giảm trừ cho người chơi Nữ (`female_discount_daily`).
+     - Áp dụng chính sách ưu đãi giảm trừ cho người chơi Nữ: Hội viên ngày (`female_discount_daily`), Khách vãng lai (`female_discount_guest`).
      - Áp dụng quy tắc làm tròn tiền lẻ (`round_rule`, ví dụ làm tròn lên 1.000đ).
   4. Hệ thống tự động sinh các bản ghi Khoản thu buổi chơi (`session_fee`) cho từng người tham gia ở trạng thái `UNPAID`.
   5. Đồng thời sinh mã định danh chuyển khoản duy nhất (`payment_code`, ví dụ: `BC12627_A8F1`).
@@ -258,7 +258,7 @@ graph TD
   5. Tạo bản ghi giao dịch ngân hàng đối soát `bank_transaction` (`MATCHED`).
   6. Tự động kết chuyển một dòng thu tiền vào Sổ quỹ mở của nhóm (`group_ledger`).
   7. Bắn thông báo đẩy (FCM) xác nhận thanh toán thành công đến điện thoại của người chơi.
-- **Hậu điều kiện**: Gạch nợ tự động 100%, thủ quỹ không cần kiểm tra sao kê thủ công.
+- **Hậu điều kiện**: Tự động xác nhận thanh toán 100%, thủ quỹ không cần kiểm tra sao kê thủ công.
 
 ---
 
@@ -274,6 +274,6 @@ graph TD
 - **FR đáp ứng**: FR23 (F5.1, F5.2) | **Tác nhân**: Hệ thống tự động, Người chơi.
 - **Tiền điều kiện**: Buổi sinh hoạt kết thúc và quá trình thanh toán hoàn tất.
 - **Luồng chính**:
-  1. *Hệ thống tự động tính điểm*: Người chơi đi đúng giờ, không bùng kèo, thanh toán ngay được cộng điểm uy tín cá nhân (`reputation_score`); người bùng kèo hoặc trễ hẹn bị trừ điểm.
+  1. *Hệ thống tự động tính điểm*: Người chơi đi đúng giờ, không hủy hẹn sát giờ, thanh toán ngay được cộng điểm uy tín cá nhân (`reputation_score`); người hủy hẹn sát giờ hoặc trễ hẹn bị trừ điểm.
   2. *Đánh giá hội nhóm*: Người chơi chấm điểm CLB (1-5 sao) về tính minh bạch sổ quỹ, mật độ người/sân và văn hóa chơi ➔ Hệ thống cập nhật điểm chất lượng nhóm `group_quality_score`.
 - **Hậu điều kiện**: Điểm tín nhiệm hai chiều được hiển thị công khai trên hồ sơ cá nhân và hồ sơ nhóm.
