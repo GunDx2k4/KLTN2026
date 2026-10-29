@@ -21,15 +21,16 @@ public sealed class AttendanceTests
     private sealed class Fixture
     {
         public Guid Actor { get; } = Guid.NewGuid();
-        public BadmintonSession Session { get; } = new(Guid.NewGuid(), "Attendance test", Now.AddHours(-1), Now.AddHours(1), "Court", maxPlayers: 2);
+        public BadmintonSession Session { get; }
         public Mock<ISessionRepository> Sessions { get; } = new();
         public Mock<IBookingRepository> Bookings { get; } = new();
         public Mock<IUserRepository> Users { get; } = new();
         public Mock<ICurrentUserService> Current { get; } = new();
         public AttendanceService Service { get; }
 
-        public Fixture()
+        public Fixture(SessionStatus status = SessionStatus.OPEN)
         {
+            Session = new(Guid.NewGuid(), "Attendance test", Now.AddHours(-1), Now.AddHours(1), "Court", maxPlayers: 2, status: status);
             Current.SetupGet(x => x.UserId).Returns(Actor);
             Sessions.Setup(x => x.FindSingleAsync(It.IsAny<Expression<Func<BadmintonSession, bool>>>(),
                 It.IsAny<CancellationToken>(), It.IsAny<Expression<Func<BadmintonSession, object>>[]>())).ReturnsAsync(Session);
@@ -212,7 +213,7 @@ public sealed class AttendanceTests
     [InlineData(SessionStatus.COMPLETED)]
     public async Task ClosedSessionsRejectWrites(SessionStatus status)
     {
-        var f = new Fixture(); var booking = f.Add(); f.Session.UpdateStatus(status);
+        var f = new Fixture(status); var booking = f.Add();
         var result = await f.Service.UpdateAsync(f.Session.Id, booking.UserId, BookingStatus.CHECKED_IN, default);
         Assert.Equal("Attendance.Closed", result.Error.Code);
     }

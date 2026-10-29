@@ -3,6 +3,7 @@ using LegendsTeamVN.BadmintonClub.Domain.Enums;
 using LegendsTeamVN.BadmintonClub.Domain.Events;
 using LegendsTeamVN.BadmintonClub.Domain.Services;
 using Xunit;
+using LegendsTeamVN.BadmintonClub.UnitTests.Domain.Sessions;
 
 namespace LegendsTeamVN.BadmintonClub.UnitTests;
 
@@ -99,7 +100,7 @@ public sealed class ManualRotationTests
             case "playing": s.StartRotationMatch(m.Id, Now); break;
             case "finished": s.StartRotationMatch(m.Id, Now); s.FinishRotationMatch(m.Id, Now, false); break;
             case "skipped": m.SkipMatch(Now); break;
-            case "closed": s.UpdateStatus(SessionStatus.CALCULATED); break;
+            case "closed": SettlementTestData.Publish(s, Actor, s.EndTime); break;
             case "ended": now = s.EndTime; break;
             case "deleted-session": Set(s, "IsDeleted", true); break;
             case "uninitialized": Set(s, "RotationStartedAt", null); break;
@@ -284,7 +285,9 @@ public sealed class ManualRotationTests
         var before = State(s); Assert.True(s.SetRotationPause(m.Players.First().UserId, true, s.RotationVersion, null, Now).IsFailure); Assert.Equal(before, State(s));
         var free = s.Bookings.First(b => !m.Players.Any(p => p.UserId == b.UserId));
         s.SetRotationPause(free.UserId, true, s.RotationVersion, null, Now);
-        s.FinishRotationMatch(m.Id, Now, false); s.ChangeOperationalStatus(SessionStatus.COMPLETED, true, Actor, Now);
+        s.FinishRotationMatch(m.Id, Now, false); SettlementTestData.Publish(s, Actor, s.EndTime);
+        Assert.True(s.ChangeOperationalStatus(SessionStatus.COMPLETED, true, Actor, s.EndTime).IsSuccess);
+        Assert.Equal(SessionStatus.COMPLETED, s.Status);
         var count = s.Matches.Count;
         Assert.True(s.SetRotationPause(free.UserId, false, s.RotationVersion, null, s.EndTime.AddMinutes(1), false).IsSuccess);
         Assert.False(free.IsRotationPaused); Assert.Equal(count, s.Matches.Count); Assert.Null(s.NextProposalCheckAt);

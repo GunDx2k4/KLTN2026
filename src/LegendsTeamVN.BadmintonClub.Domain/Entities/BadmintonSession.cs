@@ -26,6 +26,27 @@ public class BadmintonSession : AggregateRoot<Guid>
     public int ShuttlecockUsed { get; private set; }
     public decimal CourtRentalCost { get; private set; }
     public decimal ExtraExpense { get; private set; }
+    public decimal ShuttlecockPrice { get; private set; }
+    public Guid? PublishedPreviewId { get; private set; }
+    public string? PublishedRequestHash { get; private set; }
+    public DateTime? PublishedAt { get; private set; }
+    public Guid? PublishedBy { get; private set; }
+    public Guid? PublishedFeeRuleId { get; private set; }
+    public FeeMode? PublishedFeeMode { get; private set; }
+    public DateTime? PublishedFeeRuleAppliedAt { get; private set; }
+    public decimal PublishedDailyMemberFee { get; private set; }
+    public decimal PublishedGuestFee { get; private set; }
+    public decimal PublishedFemaleDiscountDaily { get; private set; }
+    public decimal PublishedFemaleDiscountGuest { get; private set; }
+    public int PublishedRoundRule { get; private set; }
+    public decimal TotalCost { get; private set; }
+    public decimal TotalReceivable { get; private set; }
+    public decimal MonthlyFundCovered { get; private set; }
+    public decimal TotalDiscount { get; private set; }
+    public decimal PolicyDelta { get; private set; }
+    public decimal RoundingDelta { get; private set; }
+    public decimal AdjustmentDelta { get; private set; }
+    public decimal BalanceDifference { get; private set; }
 
     /// <summary>
     /// Trạng thái buổi chơi của buổi sinh hoạt. Miền giá trị: OPEN, LOCKED, PLAYING, CALCULATED, COMPLETED.
@@ -135,7 +156,7 @@ public class BadmintonSession : AggregateRoot<Guid>
         int maxPlayers,
         DateTime deadlineBooking)
     {
-        if (RotationStartedAt.HasValue && (StartTime != startTime || EndTime != endTime ||
+        if ((RotationStartedAt.HasValue || PublishedPreviewId.HasValue) && (StartTime != startTime || EndTime != endTime ||
             CourtCount != courtCount || MaxPlayers != maxPlayers || DeadlineBooking != deadlineBooking))
             throw new InvalidOperationException("Session operational parameters are frozen after rotation starts.");
         Title = title;
@@ -149,6 +170,10 @@ public class BadmintonSession : AggregateRoot<Guid>
 
     public void UpdateExpenses(int shuttlecockUsed, decimal courtRentalCost, decimal extraExpense)
     {
+        if (PublishedPreviewId.HasValue || Fees.Count > 0)
+            throw new InvalidOperationException("Không thể thay đổi chi phí đã phát hành khoản thu.");
+        if (shuttlecockUsed < 0 || !SettlementAllocationEngine.IsValidAmount(courtRentalCost) || !SettlementAllocationEngine.IsValidAmount(extraExpense))
+            throw new ArgumentOutOfRangeException(nameof(shuttlecockUsed), "Chi phí không hợp lệ.");
         ShuttlecockUsed = shuttlecockUsed;
         CourtRentalCost = courtRentalCost;
         ExtraExpense = extraExpense;
@@ -269,6 +294,8 @@ public class BadmintonSession : AggregateRoot<Guid>
 
     public void UpdateStatus(SessionStatus status)
     {
+        if (status is SessionStatus.CALCULATED or SessionStatus.COMPLETED && !PublishedPreviewId.HasValue)
+            throw new InvalidOperationException("Hãy phê duyệt và phát hành khoản thu trước khi chốt buổi.");
         if (!CanTransitionTo(status))
             throw new InvalidOperationException("Invalid session status transition.");
         Status = status;
@@ -282,6 +309,8 @@ public class BadmintonSession : AggregateRoot<Guid>
             return Result.Failure(Error.Conflict("Rotation.StartMatchRequired", "Hãy bắt đầu trận đầu tiên để chuyển buổi sang đang chơi."));
         if (!CanTransitionTo(target))
             return Result.Failure(Error.Conflict("Session.InvalidTransition", "Không thể chuyển trạng thái buổi chơi về bước trước sau khi đã bắt đầu hoặc chốt buổi."));
+        if (target is SessionStatus.CALCULATED or SessionStatus.COMPLETED && !PublishedPreviewId.HasValue)
+            return Result.Failure(Error.Conflict("Settlement.ApprovalRequired", "Hãy phê duyệt và phát hành khoản thu trước khi chốt buổi."));
         if (target is SessionStatus.CALCULATED or SessionStatus.COMPLETED)
         {
             if (Matches.Any(m => !m.IsDeleted && m.Status == MatchStatus.PLAYING))
@@ -290,9 +319,16 @@ public class BadmintonSession : AggregateRoot<Guid>
             if (notArrived.Count > 0 && !confirmRemainingNoShows)
                 return Result.Failure(Error.Conflict("Attendance.NoShowConfirmationRequired",
                     $"Còn {notArrived.Count} người đã đăng ký nhưng chưa có mặt. Hãy kiểm tra danh sách điểm danh và xác nhận đánh dấu NO_SHOW trước khi đóng buổi."));
-            foreach (var booking in notArrived)
-                booking.MarkNoShow(actorId, now);
         }
+        ApplyOperationalStatus(target, actorId, now);
+        return Result.Success();
+    }
+
+    private void ApplyOperationalStatus(SessionStatus target, Guid actorId, DateTime now)
+    {
+        if (target is SessionStatus.CALCULATED or SessionStatus.COMPLETED)
+            foreach (var booking in Bookings.Where(b => !b.IsDeleted && b.Status == BookingStatus.CONFIRMED))
+                booking.MarkNoShow(actorId, now);
         UpdateStatus(target);
         if (target is SessionStatus.CALCULATED or SessionStatus.COMPLETED) NextProposalCheckAt = null;
         if (target is SessionStatus.CALCULATED or SessionStatus.COMPLETED)
@@ -300,6 +336,73 @@ public class BadmintonSession : AggregateRoot<Guid>
                 pending.SkipMatch(now);
         SynchronizeRecruitments(now);
         if (RotationStartedAt.HasValue) RecordRotationChange(now);
+    }
+
+    public Result ValidateSettlement(DateTime now, bool confirmRemainingNoShows = false)
+    {
+        if (IsDeleted || PublishedPreviewId.HasValue || Fees.Count > 0 || Status is SessionStatus.CALCULATED or SessionStatus.COMPLETED)
+            return Result.Failure(Error.Conflict("Settlement.AlreadyPublished", "Buổi chơi đã đóng hoặc đã có khoản thu, không thể phát hành lại."));
+        if (Status is not (SessionStatus.OPEN or SessionStatus.LOCKED or SessionStatus.PLAYING) || !CanTransitionTo(SessionStatus.CALCULATED))
+            return Result.Failure(Error.Conflict("Session.InvalidTransition", "Trạng thái buổi chơi không cho phép phát hành khoản thu."));
+        if (now.Kind != DateTimeKind.Utc || StartTime.Kind != DateTimeKind.Utc || EndTime.Kind != DateTimeKind.Utc)
+            return Result.Failure(Error.Validation("Settlement.UtcRequired", "Thời gian quyết toán phải sử dụng UTC."));
+        if (now < EndTime)
+            return Result.Failure(Error.Conflict("Settlement.NotEnded", "Buổi chơi chưa kết thúc khung giờ thuê sân."));
+        if (Matches.Any(m => !m.IsDeleted && m.Status == MatchStatus.PLAYING))
+            return Result.Failure(Error.Conflict("Session.ActiveMatches", "Còn trận đang thi đấu, hãy kết thúc trận trước khi chốt buổi."));
+        if (!confirmRemainingNoShows && Bookings.Any(b => !b.IsDeleted && b.Status == BookingStatus.CONFIRMED))
+            return Result.Failure(Error.Conflict("Attendance.NoShowConfirmationRequired", "Cần xác nhận người đã đăng ký nhưng chưa có mặt trước khi chốt buổi."));
+        return Result.Success();
+    }
+
+    public Result PublishSettlement(GroupFeeRule rule, IReadOnlyCollection<AppUser> users,
+        IReadOnlyCollection<GroupMember> memberships, SettlementCosts costs,
+        IReadOnlyCollection<SettlementAdjustment> adjustments, Guid previewId, string requestHash,
+        Guid actorId, DateTime now, bool confirmRemainingNoShows = false)
+    {
+        if (actorId == Guid.Empty || previewId == Guid.Empty || string.IsNullOrWhiteSpace(requestHash) ||
+            requestHash.Length != 64 || requestHash.Any(c => !Uri.IsHexDigit(c)))
+            return Result.Failure(Error.Validation("Settlement.InvalidPublication", "Thông tin người duyệt, bản xem trước hoặc mã xác nhận không hợp lệ."));
+        if (PublishedPreviewId.HasValue)
+            return PublishedPreviewId == previewId && PublishedRequestHash == requestHash && PublishedBy == actorId
+                ? Result.Success()
+                : Result.Failure(Error.Conflict("Settlement.AlreadyPublished", "Buổi chơi đã phát hành khoản thu từ một yêu cầu khác."));
+        var calculated = SettlementAllocationEngine.Calculate(this, rule, users, memberships, costs, adjustments,
+            now, confirmRemainingNoShows);
+        if (calculated.IsFailure) return Result.Failure(calculated.Error);
+        var allocation = calculated.Value;
+        var paymentCodes = allocation.Members.Select(m => SessionFee.CreatePaymentCode(Id, m.UserId)).ToArray();
+        if (paymentCodes.Distinct(StringComparer.Ordinal).Count() != paymentCodes.Length)
+            return Result.Failure(Error.Conflict("Settlement.PaymentCodeConflict", "Mã thanh toán bị trùng, chưa phát hành khoản thu."));
+        var fees = allocation.Members.Select(m => SessionFee.CreatePublished(Id, m, actorId, now)).ToArray();
+        PublishedPreviewId = previewId;
+        PublishedRequestHash = requestHash;
+        PublishedAt = now;
+        PublishedBy = actorId;
+        PublishedFeeRuleId = allocation.Rule.Id;
+        PublishedFeeMode = allocation.Rule.FeeMode;
+        PublishedFeeRuleAppliedAt = allocation.Rule.AppliedAt;
+        PublishedDailyMemberFee = allocation.Rule.DailyMemberFee;
+        PublishedGuestFee = allocation.Rule.GuestFee;
+        PublishedFemaleDiscountDaily = allocation.Rule.FemaleDiscountDaily;
+        PublishedFemaleDiscountGuest = allocation.Rule.FemaleDiscountGuest;
+        PublishedRoundRule = allocation.Rule.RoundRule;
+        ShuttlecockUsed = allocation.Costs.ShuttlecockUsed;
+        ShuttlecockPrice = allocation.Costs.ShuttlecockPrice;
+        CourtRentalCost = allocation.Costs.CourtRentalCost;
+        ExtraExpense = allocation.Costs.ExtraExpense;
+        TotalCost = allocation.TotalCost;
+        TotalReceivable = allocation.TotalReceivable;
+        MonthlyFundCovered = allocation.MonthlyFundCovered;
+        TotalDiscount = allocation.TotalDiscount;
+        PolicyDelta = allocation.PolicyDelta;
+        RoundingDelta = allocation.RoundingDelta;
+        AdjustmentDelta = allocation.AdjustmentDelta;
+        BalanceDifference = allocation.BalanceDifference;
+        foreach (var fee in fees) Fees.Add(fee);
+        ApplyOperationalStatus(SessionStatus.CALCULATED, actorId, now);
+        RaiseDomainEvent(new SettlementPublishedDomainEvent(Id, GroupId, previewId, actorId, now,
+            Array.AsReadOnly(fees.Select(f => f.Id).ToArray())));
         return Result.Success();
     }
 

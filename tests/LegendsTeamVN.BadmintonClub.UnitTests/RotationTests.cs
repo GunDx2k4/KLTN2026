@@ -9,6 +9,7 @@ using LegendsTeamVN.BadmintonClub.Application.Features.Rotation.Generate;
 using LegendsTeamVN.BadmintonClub.Application.Features.Rotation.Start;
 using LegendsTeamVN.BadmintonClub.Application.Features.Rotation.Finish;
 using Moq;
+using LegendsTeamVN.BadmintonClub.UnitTests.Domain.Sessions;
 using Xunit;
 
 namespace LegendsTeamVN.BadmintonClub.UnitTests;
@@ -220,7 +221,8 @@ public sealed class RotationTests
     {
         var s = Session(); s.InitializeRotation(Actor, Now);
         Assert.True(s.ChangeOperationalStatus(SessionStatus.OPEN, false, Actor, Now).IsFailure);
-        Assert.True(s.ChangeOperationalStatus(SessionStatus.COMPLETED, true, Actor, Now).IsSuccess);
+        SettlementTestData.Publish(s, Actor, s.EndTime);
+        Assert.True(s.ChangeOperationalStatus(SessionStatus.COMPLETED, true, Actor, s.EndTime).IsSuccess);
         Assert.All(s.Matches, m => Assert.Equal(MatchStatus.SKIPPED, m.Status));
         Assert.Throws<InvalidOperationException>(() => s.UpdateSession("Changed", s.StartTime, s.EndTime, "Court", 2, 12, s.DeadlineBooking));
     }

@@ -52,11 +52,11 @@ public sealed class RecruitmentCapacityTests
         var s = Session(); var r = new GuestRecruitment(s.Id, 1); s.Recruitments.Add(r);
         RecruitmentRules.Synchronize(s, s.EndTime);
         Assert.Equal(RecruitmentStatus.EXPIRED, r.Status);
-        var second = new GuestRecruitment(s.Id, 1); s.Recruitments.Add(second);
-        s.UpdateStatus(SessionStatus.COMPLETED);
-        RecruitmentRules.Synchronize(s, Now);
+        var closed = Session(SessionStatus.COMPLETED);
+        var second = new GuestRecruitment(closed.Id, 1); closed.Recruitments.Add(second);
+        RecruitmentRules.Synchronize(closed, Now);
         Assert.Equal(RecruitmentStatus.EXPIRED, second.Status);
     }
 
-    private static BadmintonSession Session() => new(Guid.NewGuid(), "Quota", Now.AddMinutes(30), Now.AddHours(2), "Court", maxPlayers: 4);
+    private static BadmintonSession Session(SessionStatus status = SessionStatus.OPEN) => new(Guid.NewGuid(), "Quota", Now.AddMinutes(30), Now.AddHours(2), "Court", maxPlayers: 4, status: status);
 }
