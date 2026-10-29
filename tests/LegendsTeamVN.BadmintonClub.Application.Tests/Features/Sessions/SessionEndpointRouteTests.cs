@@ -58,6 +58,25 @@ public sealed class SessionEndpointRouteTests
             route.Metadata.GetMetadata<ITagsMetadata>()!.Tags);
     }
 
+
+    [Theory]
+    [InlineData("GetSettlementForm", "GET", "{sessionId:guid}/settlement/form", GroupPermissions.Finance.FeeManage)]
+    [InlineData("PreviewSettlement", "POST", "{sessionId:guid}/settlement/preview", GroupPermissions.Finance.FeeManage)]
+    [InlineData("ApproveSettlement", "POST", "{sessionId:guid}/settlement/approve", GroupPermissions.Finance.FeeManage)]
+    [InlineData("GetSessionSettlement", "GET", "{sessionId:guid}/settlement", GroupPermissions.Finance.FeeView)]
+    [InlineData("MarkMemberSettlementPaid", "POST", "{sessionId:guid}/settlement/members/{userId:guid}/pay", GroupPermissions.Finance.FeeManage)]
+    public async Task SettlementRoutesUseCanonicalPathAndExpectedPermission(string name, string method, string suffix, string permission)
+    {
+        await using var app = CreateApplication();
+        var route = Assert.Single(Routes(app), e => e.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName == name);
+        Assert.Equal("api/v{version:apiversion}/sessions/" + suffix, route.RoutePattern.RawText!.Trim('/'));
+        Assert.Equal(method, Assert.Single(route.Metadata.GetMetadata<HttpMethodMetadata>()!.HttpMethods));
+        var requirements = route.Metadata.GetOrderedMetadata<AuthorizationPolicy>()
+            .SelectMany(policy => policy.Requirements).OfType<GroupPermissionRequirement>().ToArray();
+        Assert.Equal(permission, Assert.Single(requirements).Permission);
+        Assert.Contains(route.Metadata.GetOrderedMetadata<IProducesResponseTypeMetadata>(), metadata => metadata.StatusCode == 200);
+    }
+
     [Fact]
     public async Task UserAndSessionRoutes_HaveNoDuplicateNamesOrMethodPaths()
     {

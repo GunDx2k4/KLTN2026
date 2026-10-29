@@ -81,7 +81,7 @@ Khảo sát nhằm thu thập dữ liệu định lượng và định tính t�
 
 #### Phân hệ 4: Hạch toán Vật tư, Tài chính đa hệ số & Sổ quỹ mở (F4)
 - **FR18**: Hệ thống cho phép trưởng nhóm (Host/Thủ quỹ) ghi nhận số lượng quả cầu lông thực tế đã bóc mới trong suốt buổi chơi và các khoản phụ phí phát sinh ngoài sân.
-- **FR19**: Hệ thống tự động tính toán tổng chi phí và áp dụng công thức phân bổ đa hệ số dựa trên trọng số riêng biệt cho từng đối tượng (Nam, Nữ, Hội viên cố định đóng theo tháng, Khách vãng lai đóng theo buổi).
+- **FR19**: Hệ thống xem trước và phê duyệt phân bổ chi phí theo DYNAMIC/FIXED, quyền lợi tháng còn hạn, giảm trừ Nữ theo loại ngày/khách và RoundRule; cho phép override số cuối kèm lý do. Preview không lưu; chỉ approve mới phát hành nguyên tử snapshot và khoản thu. Không thêm trọng số Nam/Nữ.
 - **FR20**: Hệ thống tự động khởi tạo mã VietQR thanh toán (nhúng sẵn số tiền chính xác và mã định danh giao dịch duy nhất) cho từng cá nhân khi chốt sổ buổi chơi.
 - **FR21**: Hệ thống tự động tiếp nhận thông báo biến động số dư qua Webhook ngân hàng theo thời gian thực để tự động khớp lệnh và xác nhận thanh toán sang trạng thái "Đã thanh toán" (`PAID`).
 - **FR22**: Hệ thống cho phép ban điều hành nhóm và thành viên theo dõi Sổ quỹ mở nội bộ của nhóm (lịch sử thu chi, số dư khả dụng và danh sách người còn nợ phí theo thời gian thực).

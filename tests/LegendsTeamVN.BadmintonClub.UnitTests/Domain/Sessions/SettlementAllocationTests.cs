@@ -14,7 +14,7 @@ public sealed class SettlementAllocationTests
     private static readonly Guid Actor = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
     private sealed class Fixture
     {
-        public BadmintonSession Session { get; } = new(Guid.NewGuid(), "Quyết toán", Now.AddHours(-2), Now, "Sân");
+        public BadmintonSession Session { get; } = new(Guid.NewGuid(), "Quyết toán", Now.AddHours(-2), Now, "Sân", courtCount: 1);
         public List<AppUser> Users { get; } = [];
         public List<GroupMember> Members { get; } = [];
         public GroupFeeRule Rule { get; set; }
@@ -235,7 +235,7 @@ public sealed class SettlementAllocationTests
             case "receivable": f.Add(); f.Rule = new(f.Session.GroupId, FeeMode.FIXED, dailyMemberFee: max - 0.99m, roundRule: 1); break;
         }
         Assert.Equal("Settlement.AmountOutOfRange", f.Publish().Error.Code);
-        Assert.Empty(f.Session.Fees); Assert.Null(f.Session.PublishedPreviewId); Assert.Equal(0m, f.Session.TotalCost);
+        Assert.Empty(f.Session.Fees); Assert.Null(f.Session.PublishedPreviewId); Assert.Null(f.Session.TotalCost);
     }
 
     [Fact]
@@ -375,6 +375,51 @@ public sealed class SettlementAllocationTests
     {
         var f = new Fixture(); var user = f.Add(); f.Session.Fees.Add(new(f.Session.Id, user, 123, PriceType.GUEST, "old", ""));
         Assert.Equal("Settlement.AlreadyPublished", f.Publish().Error.Code); Assert.Equal(123m, f.Session.Fees.Single().Amount);
+    }
+
+    [Theory]
+    [InlineData("invalid")]
+    [InlineData("999")]
+    [InlineData("0")]
+    [InlineData("paid")]
+    [InlineData("")]
+    public void InvalidPaymentStringsCannotSilentlyChangeFinancialState(string value)
+    {
+        var fee = new SessionFee(Guid.NewGuid(), Guid.NewGuid(), 100, PriceType.DAILY_MEMBER, "code", "");
+        Assert.Throws<ArgumentException>(() => fee.UpdatePriceType(value));
+        Assert.Throws<ArgumentException>(() => fee.UpdatePaymentStatus(value));
+        Assert.Throws<ArgumentException>(() => fee.UpdatePaymentMethod(value));
+        Assert.Throws<ArgumentException>(() => fee.MarkAsPaid(value));
+        Assert.Equal(PriceType.DAILY_MEMBER, fee.PriceType);
+        Assert.Equal(PaymentStatus.UNPAID, fee.PaymentStatus);
+        Assert.Null(fee.PaymentMethod);
+        Assert.Null(fee.PaidAt);
+    }
+
+    [Theory]
+    [InlineData("-1")]
+    [InlineData("0.001")]
+    [InlineData("10000000000000000")]
+    public void FeeConstructionCannotBypassMonetaryValidation(string value)
+    {
+        var amount = decimal.Parse(value, CultureInfo.InvariantCulture);
+        Assert.Throws<ArgumentOutOfRangeException>(() => new SessionFee(Guid.NewGuid(), Guid.NewGuid(), amount,
+            PriceType.DAILY_MEMBER, "code", ""));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new SessionFee(Guid.NewGuid(), Guid.NewGuid(), 100,
+            PriceType.DAILY_MEMBER, "code", "", discountApplied: amount));
+    }
+
+    [Fact]
+    public void UndefinedEnumsCannotEnterFeeThroughConstructorOrMutators()
+    {
+        Assert.Throws<ArgumentException>(() => new SessionFee(Guid.NewGuid(), Guid.NewGuid(), 100,
+            (PriceType)999, "code", ""));
+        var fee = new SessionFee(Guid.NewGuid(), Guid.NewGuid(), 100, PriceType.DAILY_MEMBER, "code", "");
+        Assert.Throws<ArgumentOutOfRangeException>(() => fee.UpdatePriceType((PriceType)999));
+        Assert.Throws<ArgumentOutOfRangeException>(() => fee.UpdatePaymentStatus((PaymentStatus)999));
+        Assert.Throws<ArgumentOutOfRangeException>(() => fee.UpdatePaymentMethod((PaymentMethod)999));
+        Assert.Throws<InvalidOperationException>(() => fee.MarkAsPaid((PaymentMethod)999));
+        Assert.Equal(PaymentStatus.UNPAID, fee.PaymentStatus);
     }
 }
 

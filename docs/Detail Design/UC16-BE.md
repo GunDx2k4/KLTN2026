@@ -2,6 +2,16 @@
 
 Ngày ghi nhận: 29/10/2026, múi giờ Việt Nam.
 
+## Tình hình triển khai hiện tại — 29/10/2026
+
+UC16 BE đã được triển khai theo phương án B: form, preview trong bộ nhớ, approve có token, khóa Redis và khóa nguồn PostgreSQL, snapshot phát hành, outbox thông báo. `Settlement:WritesEnabled` và `Settlement:DispatchEnabled` mặc định false. Cấu hình `Settlement:PreviewSigningKey` riêng tối thiểu 32 byte phải được cấp từ môi trường; không lưu khóa trong repository.
+
+Đã kiểm tra bằng PostgreSQL 16 và Redis 7 trong container test riêng; không chạy Migrator host hoặc seeder, không áp dụng migration lên production. Các checkpoint chưa được kiểm đầy đủ và cảnh báo nghiêm trọng có sẵn được liệt kê tại mục 7; chưa tuyên bố nghiệm thu production.
+
+## Nhật ký baseline Đợt 0
+
+Các mục 1–6 phía dưới là ảnh chụp lịch sử tại thời điểm Đợt 0, không phản ánh trạng thái mã nguồn hiện tại.
+
 ## 1. Phạm vi và trạng thái
 
 Đợt 0 đã thực hiện đối chiếu phạm vi, chuẩn bị tooling tạm và ghi baseline. Chưa triển khai nghiệp vụ UC16 của Đợt 1 trở đi; chưa tạo entity, migration, endpoint hoặc test UC16 mới. Báo cáo này là file mới đã được liệt kê trong mục 1.3 của kế hoạch.
@@ -154,3 +164,73 @@ dotnet test tests/LegendsTeamVN.BadmintonClub.Infrastructure.Tests/LegendsTeamVN
 ## 7. Nội dung FE sẽ bàn giao sau khi có BE
 
 Chưa sửa FE. Báo cáo kết thúc UC16 sẽ bổ sung hợp đồng form/preview/approve/GET, input overrides/lý do, token expiry/409, lỗi MONTHLY thiếu expiry, các delta giải trình, code12+12, trạng thái UNPAID/EXEMPT/PAID và dedupe notification. QR đầy đủ thuộc UC17; chưa coi nội dung ở đây là API UC16 mới đã chạy được.
+
+## 7. Triển khai và kiểm chứng tiếp nối
+
+### 7.1. Thay đổi chính
+
+- Domain phân bổ từng khoản sân/cầu/phụ phí bằng decimal và largest remainder; quy định MONTHLY/DAILY/GUEST, DYNAMIC/FIXED, discount, RoundRule và override theo G01–G03. Nếu nhiều hội viên tháng thiếu expiry, lỗi chỉ rõ danh sách UserId.
+- Fee > 0 là UNPAID, fee = 0 là EXEMPT. Mã thanh toán theo G04; QR để rỗng, thuộc phạm vi UC17.
+- Form và preview chỉ đọc; approve xác thực HMAC, actor, input và source/result; retry cùng identity đọc lại khoản đã phát hành kể cả sau PAID hoặc sau expiry, không tạo fee mới.
+- Redis lock có wait tối đa 3 giây, lease tối đa 5 giây; PostgreSQL giữ khóa source đến cuối transaction. Notification và outbox ghi cùng transaction, worker payment gửi sau commit, retry và dead-letter dùng cơ chế outbox hiện có.
+- Snapshot mới nullable cho dữ liệu cũ; `is_published=false` và marker null phân biệt legacy, không tính lại khoản cũ.
+- Bổ sung `code` vào Problem Details của lớp `Core.Presentation/ResultExtensions.cs` dùng chung để FE phân biệt các lỗi cùng HTTP status. Status code và message hiện có vẫn giữ nguyên.
+- Manifest kiểm thử được mở rộng thêm `SettlementHttpPipelineTests.cs`, `SettlementPersistenceModelTests.cs`, `RedisSettlementLockTests.cs`, project reference Infrastructure của Application.Tests và hai file SQL Up/Down.
+
+### 7.2. Kết quả kiểm thử
+
+| Kiểm tra | Môi trường | Kết quả |
+|---|---|---|
+| UnitTests toàn bộ | .NET 10, sau sửa snapshot nullable | 256/256, 0 failed, 0 skipped |
+| Application.Tests toàn bộ | PostgreSQL 16 + Redis 7 riêng, trước khi thêm ba ca bên dưới | 170/170, 0 failed, 0 skipped |
+| Cạnh tranh hai token/giữ cùng identity; gender đổi sau preview | PostgreSQL/Redis thật, scope/connection độc lập | 2/2, không skip |
+| Va chạm payment_code giữa các session | PostgreSQL/Redis thật | 1/1, rollback marker, NO_SHOW, fees, notification/outbox và trả PaymentCodeConflict |
+| HTTP/MediatR | Kestrel loopback, auth/authorization và pipeline thật, repository/UoW/Redis giả | 12/12, không skip; test status/code, quyền, validation, thứ tự lock/UoW và preview không ghi |
+| PostgreSQL/Redis integration đã có | DB test riêng `uc16_test_<guid>`, Redis riêng | Khóa nguồn/chặn writer và phantom insert; rollback cùng notification/outbox; lease hết và DB chặn; Up/Down bảo toàn PAID và bank reference; approve → PAID → retry hết hạn |
+| Infrastructure.Tests | Redis test riêng và các mock FCM | Xem kết quả cuối trong mục 7.5 |
+| Architecture và build | Runner dự án, solution | Xem kết quả cuối trong mục 7.5 |
+
+Các lệnh integration cần đặt `UC16_TEST_POSTGRES` trỏ đúng database test `uc16_test` trên loopback port 55436 và `UC16_TEST_REDIS=localhost:56386`. Test tạo và xóa đúng database test có tiền tố `uc16_test_`; khi không có biến môi trường, các test tích hợp có trạng thái skipped và không được coi là đạt.
+
+### 7.3. Hợp đồng FE
+
+Các route và request/response chi tiết tại [API_DOCUMENTATION.md](../API_DOCUMENTATION.md). FE cần:
+
+- Hiển thị người có mặt, chi phí, các thành phần chia tiền, phần quỹ tháng bao, ưu đãi, làm tròn và override.
+- Giữ input/overrides/token tại client. Mỗi lần sửa phải preview lại; hủy chỉ đóng preview. Approve gửi đúng input và token.
+- Hiển thị lỗi `PreviewStale`, `PreviewExpired`, `AlreadyPublished`, `MonthlyExpiryRequired` qua `code` trong Problem Details; status cho validation nghiệp vụ hiện là 400 theo ResultExtensions chung, không phải 422 như đề xuất ban đầu.
+- Hiển thị UNPAID, PAID, EXEMPT; fee cũ state LEGACY không có breakdown mới. Không hiển thị QR giả khi payload rỗng.
+- Dedupe push theo EventId và mở đúng FeeId. Push có thể lặp sau crash; không có bảo đảm exactly-once. Người dùng chỉ xem khoản riêng qua UC17 khi tính năng đó được triển khai.
+
+### 7.4. Giới hạn và vận hành
+
+- Chưa có chứng minh riêng cho mọi điểm fault injection/commit outcome và mọi tổ hợp thay đổi membership/attendance/rule trong kế hoạch. Đã có các ca rollback, collision, gender stale, phantom locks, cạnh tranh và retry nêu trên; không suy rộng thành toàn bộ checklist Đợt 4.
+- HTTP tests dùng repository/UoW giả; database tests dùng PostgreSQL/Redis thật nhưng không khởi động toàn bộ production host hoặc FCM thật. Chưa kiểm thiết bị, FE và FCM production.
+- NU1903 của `System.Security.Cryptography.Pkcs` đã có ở baseline; build còn cảnh báo high này nên gate “không cảnh báo nghiêm trọng” chưa đạt.
+- SQL [Up](UC16-BE.Up.sql) và [Down](UC16-BE.Down.sql) chỉ là artifact review. Down chỉ dùng khi snapshot mới chưa cần bảo toàn; sau khi đã có khoản phát hành ưu tiên tắt ghi và sửa tiến tương thích schema. Việc áp dụng DB, seeder, bật worker/ghi ở production vẫn qua cổng D02 riêng.
+- Working tree khi bắt đầu có file `docs/Detail Design/UC16-BE-plan.md` đã bị xóa; thay đổi đó được giữ nguyên. Không tự commit.
+
+### 7.5. Kết quả cuối
+
+- Infrastructure.Tests: 30/30, không failed/skip, Redis thật, exit 0.
+- Architecture: 37/37, exit 0.
+- `dotnet build --no-restore -v:q`: exit 0, 0 lỗi, 19 cảnh báo; vẫn có NU1903 baseline.
+- `git diff --check`: kiểm tra lại sau khi cập nhật báo cáo.
+
+### 7.6. Đợt 2 — kiểm chứng bổ sung
+
+Ngày 29/10/2026, tiếp tục trực tiếp theo các checkpoint 2.1–2.5:
+
+| Checkpoint | Kết quả và phạm vi |
+|---|---|
+| 2.1 schema | EF model kiểm tiền decimal(18,2), snapshot/marker nullable, unique session/user và payment code, không có bảng draft; PostgreSQL test xác nhận FK group của session/member/rule không deferrable và không deferred. |
+| 2.2 migration | SQL Up/Down chạy trên PostgreSQL test, giữ fee PAID và tham chiếu bank. Bổ sung fault injection ngay sau DDL đầu: transaction rollback cột đã tạo và history, rồi Up lại thành công. Không áp DB production. |
+| 2.3 nguồn | PostgreSQL connection độc lập chứng minh chặn sửa user, thêm membership/rule, khôi phục membership soft-deleted và thay AppliedAt đến commit; latest tie theo GUID ordinal. Preview đọc một RepeatableRead snapshot khi gender đổi trong lúc nạp, không track entity. |
+| 2.4 token | Kiểm HMAC, sửa payload/chữ ký/input/override/NO_SHOW, actor/group/session, culture/decimal/order, policy version, thiếu/đổi key, expiry và retry đã phát hành; thêm kiểm hai instance cùng key xác thực chéo. |
+| 2.5 khóa | Kiểm TTL tối đa 5 giây, wait tối đa 3 giây, owner cũ không xóa khóa mới; Redis không kết nối dừng trước UoW/ghi. Giới hạn 3 giây nay tính cả thời gian khởi tạo kết nối. HTTP pipeline kiểm lock → begin → save → commit/rollback → release. |
+
+- Application: filter SettlementTransactionTests/SettlementPersistenceModelTests/SettlementHttpPipelineTests đạt 26/26; test FK PostgreSQL mới đạt 1/1; không skip, exit 0.
+- Infrastructure.Tests: 32/32, không skip, exit 0, bao gồm Redis thật.
+- Build exit 0, 0 lỗi, 19 cảnh báo baseline; verify_architecture.py: 37/37, exit 0.
+- Soát writer theo mã: attendance/booking/rotation khóa session; fee-rule cập nhật group/rule; user profile cập nhật user. Chưa phát hiện writer hiện hữu chủ động khóa ngược từ session sang club trong các luồng đã rà. Deadlock/timeout vẫn được PostgreSQL phát hiện và approve rollback; chưa tuyên bố đã kiểm mọi tổ hợp writer ngoài các ca trên.
+- Hai service test dùng container tạm và DB riêng; đã dọn sau kiểm thử. Các hạn chế Đợt 4/5 và cảnh báo NU1903 tại mục 7.4 vẫn giữ nguyên.

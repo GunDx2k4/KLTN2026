@@ -1,3 +1,6 @@
+using LegendsTeamVN.BadmintonClub.Application.Abstractions;
+using LegendsTeamVN.BadmintonClub.Application.DependencyInjection.Options;
+using LegendsTeamVN.BadmintonClub.Application.DTOs.Sessions.Requests;
 using LegendsTeamVN.BadmintonClub.Application.Features.Sessions.Settlement;
 using LegendsTeamVN.BadmintonClub.Application.Tests.Common;
 using LegendsTeamVN.BadmintonClub.Domain.Entities;
@@ -5,196 +8,249 @@ using LegendsTeamVN.BadmintonClub.Domain.Enums;
 using LegendsTeamVN.BadmintonClub.Domain.Events;
 using LegendsTeamVN.BadmintonClub.Domain.Repositories;
 using LegendsTeamVN.BadmintonClub.Domain.Services;
-using LegendsTeamVN.BadmintonClub.Persistence;
 using LegendsTeamVN.BadmintonClub.Persistence.Repositories;
 using LegendsTeamVN.Core.Identity.Abstractions;
+using LegendsTeamVN.Core.Utilities.Results;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using Xunit;
 
 namespace LegendsTeamVN.BadmintonClub.Application.Tests.Features.Sessions;
 
-public sealed class SettlementRotationSafetyTests : IDisposable
+public sealed class SettlementRotationSafetyTests
 {
-    private readonly BadmintonDbContext db = TestDbContextFactory.Create();
-    private readonly ISessionRepository sessions = Substitute.For<ISessionRepository>();
-    private readonly ICurrentUserService currentUser = Substitute.For<ICurrentUserService>();
-    private readonly Guid actor = Guid.NewGuid();
-    private readonly DateTime now = DateTime.UtcNow;
-
-    public SettlementRotationSafetyTests()
+    private static readonly DateTime Now = new(2026, 10, 29, 12, 0, 0, DateTimeKind.Utc);
+    private sealed class Fixture
     {
-        currentUser.UserId.Returns(actor);
-        sessions.CanManageFinanceAsync(Arg.Any<Guid>(), actor, Arg.Any<CancellationToken>()).Returns(true);
-        sessions.When(r => r.AddSettlementFees(Arg.Any<IEnumerable<SessionFee>>()))
+        public Guid Actor { get; } = Guid.NewGuid();
+        public BadmintonSession Session { get; } = new(Guid.NewGuid(), "Quyết toán", Now.AddHours(-1), Now.AddHours(2), "Sân", courtCount: 2);
+        public ISessionRepository Sessions { get; } = Substitute.For<ISessionRepository>();
+        public ICurrentUserService User { get; } = Substitute.For<ICurrentUserService>();
+        public ISettlementPreviewTokenService Tokens { get; } = Substitute.For<ISettlementPreviewTokenService>();
+        public IOptionsMonitor<SettlementOptions> Options { get; } = Substitute.For<IOptionsMonitor<SettlementOptions>>();
+        public MutableClock Clock { get; } = new();
+        public PreviewSettlementRequest Input { get; } = new(2, 25000m, 300000m, 0m, []);
+        public SettlementPreviewIdentity Identity { get; }
+        public Fixture()
+        {
+            User.UserId.Returns(Actor);
+            Sessions.CanManageFinanceAsync(Session.GroupId, Actor, Arg.Any<CancellationToken>()).Returns(true);
+            Sessions.CanViewFinanceAsync(Session.GroupId, Actor, Arg.Any<CancellationToken>()).Returns(true);
+            for (var i = 0; i < 12; i++)
+            {
+                var user = new AppUser(Guid.NewGuid(), "Người chơi " + i);
+                var booking = new SessionBooking(Session.Id, user.Id);
+                booking.MarkPresent(Actor, Now.AddMinutes(-10).AddSeconds(i));
+                typeof(SessionBooking).GetProperty(nameof(SessionBooking.User))!.SetValue(booking, user);
+                Session.Bookings.Add(booking);
+            }
+            Assert.True(Session.CompleteAttendance(Actor, Now).IsSuccess);
+            Assert.True(Session.InitializeRotation(Actor, Now).IsSuccess);
+            Session.ClearDomainEvents();
+            Clock.Now = Session.EndTime;
+            Identity = new(1, SettlementOptions.CurrentPolicyVersion, Guid.NewGuid(), Actor, Session.GroupId, Session.Id,
+                Clock.Now, Clock.Now.AddMinutes(15), new string('a', 64), "source", "result");
+            Sessions.GetSettlementAsync(Session.Id, Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(Session);
+            Sessions.GetSettlementSourceAsync(Session.Id, Arg.Any<bool>(), Arg.Any<CancellationToken>())
+                .Returns((Session, new GroupFeeRule(Session.GroupId), Session.Bookings.Select(b => b.User).ToArray(), Array.Empty<GroupMember>()));
+            Tokens.HashSource(Arg.Any<BadmintonSession>(), Arg.Any<GroupFeeRule>(), Arg.Any<IReadOnlyCollection<AppUser>>(),
+                Arg.Any<IReadOnlyCollection<GroupMember>>()).Returns("source");
+            Tokens.HashResult(Arg.Any<SettlementAllocation>()).Returns("result");
+            Tokens.Create(Actor, Session.GroupId, Session.Id, Arg.Any<SettlementCosts>(), Arg.Any<IReadOnlyCollection<SettlementAdjustment>>(),
+                Arg.Any<bool>(), "source", Arg.Any<SettlementAllocation>(), Clock.Now).Returns(new SettlementPreviewToken("preview", Identity));
+            Tokens.Validate(Arg.Any<string>(), Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<SettlementCosts>(),
+                Arg.Any<IReadOnlyCollection<SettlementAdjustment>>(), Arg.Any<bool>()).Returns(Result.Failure<SettlementPreviewIdentity>(
+                    Error.Conflict("Settlement.InvalidPreviewToken", "Token không hợp lệ.")));
+            Tokens.Validate("preview", Actor, Session.GroupId, Session.Id, new SettlementCosts(2, 25000m, 300000m, 0m),
+                Arg.Any<IReadOnlyCollection<SettlementAdjustment>>(), Arg.Any<bool>()).Returns(Result.Success(Identity));
+            Options.CurrentValue.Returns(new SettlementOptions { WritesEnabled = true });
+        }
+        public PreviewSettlementQueryHandler Preview() => new(Sessions, User, Tokens, Clock);
+        public ApproveSettlementCommandHandler Approve() => new(Sessions, User, Tokens, Clock, Options);
+        public SessionBooking AddPending()
+        {
+            var booking = new SessionBooking(Session.Id, Guid.NewGuid());
+            Session.Bookings.Add(booking);
+            return booking;
+        }
+    }
+
+    [Fact]
+    public async Task PreviewIsReadOnly_ApprovalClosesRotationAndRegistersFees()
+    {
+        var f = new Fixture(); var session = f.Session; var version = session.RotationVersion;
+        var preview = await f.Preview().Handle(new(session.Id, f.Input), default);
+        Assert.True(preview.IsSuccess); Assert.Equal(350000m, preview.Value.Allocation.TotalCost);
+        Assert.Empty(session.Fees); Assert.Null(session.PublishedPreviewId); Assert.Equal(version, session.RotationVersion);
+        Assert.All(session.Matches, m => Assert.Equal(MatchStatus.WAITING, m.Status)); Assert.Empty(session.DomainEvents);
+        f.Sessions.DidNotReceive().AddSettlementFees(Arg.Any<IEnumerable<SessionFee>>());
+        using var db = TestDbContextFactory.Create();
+        f.Sessions.When(r => r.AddSettlementFees(Arg.Any<IEnumerable<SessionFee>>()))
             .Do(call => new SessionRepository(db).AddSettlementFees(call.Arg<IEnumerable<SessionFee>>()));
-    }
-
-    private async Task<BadmintonSession> CreateSession(bool initialize = true)
-    {
-        var club = new ClubGroup("Settlement rotation safety");
-        var session = new BadmintonSession(club.Id, "Session", now.AddHours(-1), now.AddHours(2), "Court", courtCount: 2);
-        for (var i = 0; i < 12; i++)
-        {
-            var user = new AppUser(Guid.NewGuid(), "Player " + i);
-            var booking = new SessionBooking(session.Id, user.Id);
-            if (initialize) booking.MarkPresent(actor, now.AddMinutes(-10).AddSeconds(i));
-            typeof(SessionBooking).GetProperty(nameof(SessionBooking.User))!.SetValue(booking, user);
-            session.Bookings.Add(booking);
-        }
-        if (initialize)
-        {
-            Assert.True(session.CompleteAttendance(actor, now).IsSuccess);
-            Assert.True(session.InitializeRotation(actor, now).IsSuccess);
-        }
-        db.ClubGroups.Add(club);
-        db.BadmintonSessions.Add(session);
-        await db.SaveChangesAsync();
-        session.ClearDomainEvents();
-        sessions.GetSettlementAsync(session.Id, true, Arg.Any<CancellationToken>()).Returns(session);
-        return session;
-    }
-
-    private CalculateSessionSettlementCommandHandler Calculator() => new(sessions,
-        new ClubRepository(db), new ClubMemberRepository(db), currentUser);
-
-    private static SessionBooking FreePlayer(BadmintonSession session) => session.Bookings.First(b =>
-        !session.Matches.Any(m => m.Players.Any(p => p.UserId == b.UserId)));
-
-    [Fact]
-    public async Task Calculate_WhenTargetIsPlaying_RejectsWithoutClosingOrChangingExpenses()
-    {
-        var session = await CreateSession();
-        var player = FreePlayer(session);
-        Assert.True(session.SetSelfRotationPause(player.UserId, true, session.RotationVersion, now).IsSuccess);
-        var target = session.Matches.First(m => m.Status == MatchStatus.WAITING);
-        Assert.True(session.StartRotationMatch(target.Id, now.AddSeconds(1)).IsSuccess);
-        var version = session.RotationVersion;
-        var nextCheck = session.NextProposalCheckAt;
-        session.ClearDomainEvents();
-
-        var result = await Calculator().Handle(new(session.Id, 5, 25000m, 10000m, 300000m), default);
-
-        Assert.True(result.IsFailure);
-        Assert.Equal("Session.ActiveMatches", result.Error.Code);
-        Assert.Equal(SessionStatus.PLAYING, session.Status);
-        Assert.Equal(version, session.RotationVersion);
-        Assert.Equal(nextCheck, session.NextProposalCheckAt);
-        Assert.Equal(0, session.ShuttlecockUsed);
-        Assert.Equal(0m, session.CourtRentalCost);
-        Assert.Empty(session.Fees);
-        Assert.Empty(session.DomainEvents);
-        Assert.True(player.IsRotationPaused);
-        Assert.Equal(target.Id, player.SelfPauseTargetMatchId);
-        Assert.True(session.FinishRotationMatch(target.Id, now.AddMinutes(1)).IsSuccess);
-        Assert.False(player.IsRotationPaused);
-        await sessions.Received(1).GetSettlementAsync(session.Id, true, Arg.Any<CancellationToken>());
-        sessions.DidNotReceive().Update(Arg.Any<BadmintonSession>());
-        sessions.DidNotReceive().AddSettlementFees(Arg.Any<IEnumerable<SessionFee>>());
-    }
-
-    [Fact]
-    public async Task Calculate_WhenAttendanceIsUnresolved_DoesNotSilentlyMarkNoShows()
-    {
-        var session = await CreateSession(false);
-        var result = await Calculator().Handle(new(session.Id, 5, 25000m, 10000m, 300000m), default);
-
-        Assert.True(result.IsFailure);
-        Assert.Equal("Attendance.NoShowConfirmationRequired", result.Error.Code);
-        Assert.Equal(SessionStatus.OPEN, session.Status);
-        Assert.All(session.Bookings, b => Assert.Equal(BookingStatus.CONFIRMED, b.Status));
-        Assert.Empty(session.Fees);
-        Assert.Equal(0, session.ShuttlecockUsed);
-        Assert.Empty(session.DomainEvents);
-    }
-
-    [Fact]
-    public async Task Calculate_WhenSafeToClose_SkipsProposalsAndEmitsRotationChange()
-    {
-        var session = await CreateSession();
-        var proposals = session.Matches.ToArray();
-        var version = session.RotationVersion;
-
-        var result = await Calculator().Handle(new(session.Id, 2, 25000m, 0m, 300000m), default);
-
-        Assert.True(result.IsSuccess);
-        Assert.Equal(SessionStatus.CALCULATED, session.Status);
-        Assert.Null(session.NextProposalCheckAt);
-        Assert.All(proposals, m => Assert.Equal(MatchStatus.SKIPPED, m.Status));
-        Assert.True(session.RotationVersion > version);
+        var result = await f.Approve().Handle(new(session.Id, f.Input, preview.Value.PreviewToken), default);
+        Assert.True(result.IsSuccess); Assert.Equal(SessionStatus.CALCULATED, session.Status); Assert.Null(session.NextProposalCheckAt);
+        Assert.All(session.Matches, m => Assert.Equal(MatchStatus.SKIPPED, m.Status)); Assert.True(session.RotationVersion > version);
         Assert.Single(session.DomainEvents.OfType<RotationChangedDomainEvent>());
-        Assert.Equal("Closed", PersonalMatchSchedulePolicy.Evaluate(session,
-            session.Bookings.First().UserId, now, true, true, true).Phase);
-        Assert.Equal(12, session.Fees.Count);
-        Assert.All(session.Fees, fee => Assert.Equal(EntityState.Added, db.Entry(fee).State));
-        Assert.Equal(12, result.Value!.MemberFees.Count);
-        await sessions.Received(1).GetSettlementAsync(session.Id, true, Arg.Any<CancellationToken>());
-        await sessions.DidNotReceive().GetSettlementAsync(session.Id, false, Arg.Any<CancellationToken>());
-        sessions.DidNotReceive().Update(Arg.Any<BadmintonSession>());
-
-        await db.SaveChangesAsync();
-        Assert.Equal(12, await db.SessionFees.CountAsync(f => f.SessionId == session.Id));
+        Assert.Single(session.DomainEvents.OfType<SettlementPublishedDomainEvent>());
+        Assert.Equal(12, session.Fees.Count); Assert.All(session.Fees, fee => Assert.Equal(EntityState.Added, db.Entry(fee).State));
+        await db.SaveChangesAsync(); Assert.Equal(12, await db.SessionFees.CountAsync());
+        await f.Sessions.Received(1).GetSettlementSourceAsync(session.Id, false, Arg.Any<CancellationToken>());
+        await f.Sessions.Received(1).GetSettlementSourceAsync(session.Id, true, Arg.Any<CancellationToken>());
+        f.Sessions.DidNotReceive().Update(Arg.Any<BadmintonSession>());
     }
 
     [Fact]
-    public async Task MarkPaid_OnlyMarksFeeModified_AndPreservesRotationAndSelfPause()
+    public async Task PlayingMatchBlocksPreviewWithoutChangingSelfPauseOrExpenses()
     {
-        var session = await CreateSession();
-        var player = FreePlayer(session);
-        Assert.True(session.SetSelfRotationPause(player.UserId, true, session.RotationVersion, now).IsSuccess);
+        var f = new Fixture(); var session = f.Session;
+        var player = session.Bookings.First(b => !session.Matches.Any(m => m.Players.Any(p => p.UserId == b.UserId)));
+        Assert.True(session.SetSelfRotationPause(player.UserId, true, session.RotationVersion, Now).IsSuccess);
         var target = session.Matches.First(m => m.Status == MatchStatus.WAITING);
-        Assert.True(session.StartRotationMatch(target.Id, now.AddSeconds(1)).IsSuccess);
-        var fee = new SessionFee(session.Id, player.UserId, 50000m, PriceType.GUEST, "TEST", "TEST");
-        session.Fees.Add(fee);
-        db.SessionFees.Add(fee);
-        await db.SaveChangesAsync();
-        var version = session.RotationVersion;
-        var nextCheck = session.NextProposalCheckAt;
-        session.ClearDomainEvents();
-        var handler = new MarkMemberPaidCommandHandler(sessions, new ClubMemberRepository(db), currentUser);
+        Assert.True(session.StartRotationMatch(target.Id, Now.AddSeconds(1)).IsSuccess);
+        var version = session.RotationVersion; session.ClearDomainEvents();
+        var result = await f.Preview().Handle(new(session.Id, f.Input), default);
+        Assert.Equal("Session.ActiveMatches", result.Error.Code); Assert.Equal(version, session.RotationVersion);
+        Assert.Equal(SessionStatus.PLAYING, session.Status); Assert.Empty(session.Fees); Assert.Empty(session.DomainEvents);
+        Assert.True(player.IsRotationPaused); Assert.Equal(target.Id, player.SelfPauseTargetMatchId); Assert.Equal(0m, session.CourtRentalCost);
+    }
 
-        var result = await handler.Handle(new(session.Id, player.UserId), default);
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RemainingConfirmedAreOnlyMarkedNoShowDuringConfirmedApproval(bool confirm)
+    {
+        var f = new Fixture(); var pending = f.AddPending(); var request = f.Input with { ConfirmRemainingNoShows = confirm };
+        var preview = await f.Preview().Handle(new(f.Session.Id, request), default);
+        Assert.Equal(BookingStatus.CONFIRMED, pending.Status); Assert.Null(pending.AttendanceMarkedAt);
+        if (!confirm) { Assert.Equal("Attendance.NoShowConfirmationRequired", preview.Error.Code); return; }
+        Assert.True(preview.IsSuccess);
+        Assert.True((await f.Approve().Handle(new(f.Session.Id, request, "preview"), default)).IsSuccess);
+        Assert.Equal(BookingStatus.NO_SHOW, pending.Status); Assert.Equal(f.Actor, pending.AttendanceMarkedBy);
+        Assert.Equal(f.Clock.Now, pending.AttendanceMarkedAt); Assert.Equal(12, f.Session.Fees.Count);
+    }
+
+    [Theory]
+    [InlineData("source", "Settlement.PreviewStale")]
+    [InlineData("result", "Settlement.PreviewStale")]
+    [InlineData("expired", "Settlement.PreviewExpired")]
+    [InlineData("input", "Settlement.InvalidPreviewToken")]
+    [InlineData("actor", "Settlement.InvalidPreviewToken")]
+    [InlineData("writes", "Settlement.WritesDisabled")]
+    public async Task InvalidApprovalNeverMutatesSessionFeesOrNoShows(string change, string expected)
+    {
+        var f = new Fixture(); var pending = f.AddPending(); var request = f.Input with { ConfirmRemainingNoShows = true };
+        if (change == "source") f.Tokens.HashSource(Arg.Any<BadmintonSession>(), Arg.Any<GroupFeeRule>(),
+            Arg.Any<IReadOnlyCollection<AppUser>>(), Arg.Any<IReadOnlyCollection<GroupMember>>()).Returns("changed");
+        if (change == "result") f.Tokens.HashResult(Arg.Any<SettlementAllocation>()).Returns("changed");
+        if (change == "expired") f.Clock.Now = f.Identity.ExpiresAt;
+        if (change == "input") request = request with { CourtRentalCost = 1m };
+        if (change == "writes") f.Options.CurrentValue.Returns(new SettlementOptions());
+        if (change == "actor")
+        {
+            f.User.UserId.Returns(Guid.NewGuid());
+            f.Sessions.CanManageFinanceAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(true);
+        }
+        var version = f.Session.RotationVersion;
+        var result = await f.Approve().Handle(new(f.Session.Id, request, "preview"), default);
+        Assert.Equal(expected, result.Error.Code); Assert.Equal(BookingStatus.CONFIRMED, pending.Status);
+        Assert.Null(pending.AttendanceMarkedAt); Assert.Null(f.Session.PublishedAt); Assert.Empty(f.Session.Fees);
+        Assert.Empty(f.Session.DomainEvents); Assert.Equal(version, f.Session.RotationVersion);
+        Assert.All(f.Session.Matches, m => Assert.Equal(MatchStatus.WAITING, m.Status));
+        f.Sessions.DidNotReceive().AddSettlementFees(Arg.Any<IEnumerable<SessionFee>>());
+    }
+
+    [Fact]
+    public async Task RetryAfterPaymentAndExpiryReturnsOriginalPublication()
+    {
+        var f = new Fixture(); Assert.True((await f.Approve().Handle(new(f.Session.Id, f.Input, "preview"), default)).IsSuccess);
+        var fee = f.Session.Fees.First(); fee.MarkAsPaid(PaymentMethod.CASH, f.Actor);
+        var paidAt = fee.PaidAt; var eventCount = f.Session.DomainEvents.Count;
+        f.Clock.Now = f.Identity.ExpiresAt.AddDays(1);
+        f.Tokens.HashSource(Arg.Any<BadmintonSession>(), Arg.Any<GroupFeeRule>(), Arg.Any<IReadOnlyCollection<AppUser>>(),
+            Arg.Any<IReadOnlyCollection<GroupMember>>()).Returns("changed");
+        var result = await f.Approve().Handle(new(f.Session.Id, f.Input, "preview"), default);
+        Assert.True(result.IsSuccess); Assert.Equal(12, f.Session.Fees.Count); Assert.Equal(PaymentStatus.PAID, fee.PaymentStatus);
+        Assert.Equal(paidAt, fee.PaidAt); Assert.Equal(eventCount, f.Session.DomainEvents.Count);
+        f.Sessions.Received(1).AddSettlementFees(Arg.Any<IEnumerable<SessionFee>>());
+    }
+
+    [Theory]
+    [InlineData("preview")]
+    [InlineData("approve")]
+    [InlineData("get")]
+    [InlineData("form")]
+    public async Task HandlersRequirePermissionInActualSessionGroup(string action)
+    {
+        var f = new Fixture();
+        f.Sessions.CanManageFinanceAsync(f.Session.GroupId, f.Actor, Arg.Any<CancellationToken>()).Returns(false);
+        f.Sessions.CanViewFinanceAsync(f.Session.GroupId, f.Actor, Arg.Any<CancellationToken>()).Returns(false);
+        var error = action switch
+        {
+            "preview" => (await f.Preview().Handle(new(f.Session.Id, f.Input), default)).Error,
+            "approve" => (await f.Approve().Handle(new(f.Session.Id, f.Input, "preview"), default)).Error,
+            "form" => (await new GetSettlementFormQueryHandler(f.Sessions, f.User).Handle(new(f.Session.Id), default)).Error,
+            _ => (await new GetSessionSettlementQueryHandler(f.Sessions, f.User).Handle(new(f.Session.Id), default)).Error
+        };
+        Assert.Equal("Settlement.Forbidden", error.Code); Assert.Empty(f.Session.Fees); Assert.Empty(f.Session.DomainEvents);
+    }
+
+    [Fact]
+    public async Task LegacyReadDoesNotInventSnapshotsOrRecalculateFees()
+    {
+        var f = new Fixture(); f.Session.Fees.Add(new SessionFee(f.Session.Id, f.Session.Bookings.First().UserId, 12345m, PriceType.GUEST, "OLD", ""));
+        var result = await new GetSessionSettlementQueryHandler(f.Sessions, f.User).Handle(new(f.Session.Id), default);
+        Assert.True(result.IsSuccess); Assert.Equal("LEGACY", result.Value.State); Assert.Null(result.Value.TotalCost);
+        Assert.Null(result.Value.ShuttlecockPrice); var fee = Assert.Single(result.Value.MemberFees);
+        Assert.Equal(12345m, fee.FinalFee); Assert.Null(fee.Breakdown);
+        await f.Sessions.Received(1).GetSettlementAsync(f.Session.Id, false, Arg.Any<CancellationToken>());
+        await f.Sessions.DidNotReceive().GetSettlementAsync(f.Session.Id, true, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RepositoryWriteLoadRequiresExistingTransaction()
+    {
+        using var db = TestDbContextFactory.Create();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new SessionRepository(db).GetSettlementAsync(Guid.NewGuid(), true));
+    }
+
+    [Fact]
+    public async Task MarkPaidOnlyModifiesFeeAndPreservesActiveRotationAndSelfPause()
+    {
+        var f = new Fixture(); var session = f.Session;
+        var player = session.Bookings.First(b => !session.Matches.Any(m => m.Players.Any(p => p.UserId == b.UserId)));
+        Assert.True(session.SetSelfRotationPause(player.UserId, true, session.RotationVersion, Now).IsSuccess);
+        var target = session.Matches.First(m => m.Status == MatchStatus.WAITING);
+        Assert.True(session.StartRotationMatch(target.Id, Now.AddSeconds(1)).IsSuccess);
+        var fee = new SessionFee(session.Id, player.UserId, 50000m, PriceType.GUEST, "OLD", "");
+        session.Fees.Add(fee); session.ClearDomainEvents(); var version = session.RotationVersion;
+        using var db = TestDbContextFactory.Create(); db.Attach(session);
+        var result = await new MarkMemberPaidCommandHandler(f.Sessions, f.User).Handle(new(session.Id, player.UserId), default);
         db.ChangeTracker.DetectChanges();
-
-        Assert.True(result.IsSuccess);
-        Assert.Equal(PaymentStatus.PAID, fee.PaymentStatus);
-        Assert.Equal(EntityState.Modified, db.Entry(fee).State);
-        Assert.Equal(EntityState.Unchanged, db.Entry(session).State);
-        Assert.False(db.Entry(session).Property(s => s.RotationVersion).IsModified);
-        Assert.False(db.Entry(session).Property(s => s.Status).IsModified);
-        Assert.Equal(version, session.RotationVersion);
-        Assert.Equal(nextCheck, session.NextProposalCheckAt);
-        Assert.True(player.IsRotationPaused);
-        Assert.Equal(target.Id, player.SelfPauseTargetMatchId);
-        Assert.Equal(MatchStatus.PLAYING, target.Status);
-        Assert.Empty(session.DomainEvents);
-        Assert.Equal("PAID", result.Value!.MemberFees.Single(f => f.UserId == player.UserId).PaymentStatus);
-        await sessions.Received(1).GetSettlementAsync(session.Id, true, Arg.Any<CancellationToken>());
-        sessions.DidNotReceive().Update(Arg.Any<BadmintonSession>());
+        Assert.True(result.IsSuccess); Assert.Equal(PaymentStatus.PAID, fee.PaymentStatus);
+        Assert.Equal(EntityState.Modified, db.Entry(fee).State); Assert.Equal(EntityState.Unchanged, db.Entry(session).State);
+        Assert.Equal(version, session.RotationVersion); Assert.Equal(SessionStatus.PLAYING, session.Status);
+        Assert.True(player.IsRotationPaused); Assert.Equal(target.Id, player.SelfPauseTargetMatchId);
+        Assert.Equal(MatchStatus.PLAYING, target.Status); Assert.Empty(session.DomainEvents);
+        Assert.Equal("PAID", Assert.Single(result.Value.MemberFees).PaymentStatus);
+        f.Sessions.DidNotReceive().Update(Arg.Any<BadmintonSession>());
     }
 
     [Fact]
-    public async Task GetSettlement_UsesReadOnlyRepositoryPath()
+    public async Task PublishedReadUsesStoredAmountsWhenWritesAreDisabled()
     {
-        var session = await CreateSession();
-        sessions.GetSettlementAsync(session.Id, false, Arg.Any<CancellationToken>()).Returns(session);
-        sessions.ClearReceivedCalls();
-        var handler = new GetSessionSettlementQueryHandler(sessions, new ClubMemberRepository(db));
-
-        var result = await handler.Handle(new(session.Id), default);
-
-        Assert.True(result.IsSuccess);
-        await sessions.Received(1).GetSettlementAsync(session.Id, false, Arg.Any<CancellationToken>());
-        await sessions.DidNotReceive().GetSettlementAsync(session.Id, true, Arg.Any<CancellationToken>());
-        sessions.DidNotReceive().Update(Arg.Any<BadmintonSession>());
+        var f = new Fixture(); Assert.True((await f.Approve().Handle(new(f.Session.Id, f.Input, "preview"), default)).IsSuccess);
+        f.Options.CurrentValue.Returns(new SettlementOptions());
+        var result = await new GetSessionSettlementQueryHandler(f.Sessions, f.User).Handle(new(f.Session.Id), default);
+        Assert.True(result.IsSuccess); Assert.Equal("PUBLISHED", result.Value.State);
+        Assert.Equal(350000m, result.Value.TotalCost); Assert.Equal(25000m, result.Value.ShuttlecockPrice);
+        Assert.Equal(360000m, result.Value.TotalReceivable); Assert.Equal(10000m, result.Value.RoundingDelta);
+        Assert.All(result.Value.MemberFees, fee => { Assert.Equal(30000m, fee.FinalFee); Assert.NotNull(fee.Breakdown); });
+        Assert.Equal(f.Identity.PreviewId, f.Session.PublishedPreviewId);
     }
-
-    [Fact]
-    public async Task RepositoryWriteLoad_RequiresExistingUnitOfWorkTransaction()
+    private sealed class MutableClock : TimeProvider
     {
-        var repository = new SessionRepository(db);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => repository.GetSettlementAsync(Guid.NewGuid(), true));
+        public DateTime Now { get; set; }
+        public override DateTimeOffset GetUtcNow() => new(Now);
     }
-
-    public void Dispose() => db.Dispose();
 }

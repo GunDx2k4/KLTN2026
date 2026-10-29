@@ -27,8 +27,8 @@
 | **FR15** | Giải thuật tự động đề xuất xoay tua sân (Nghỉ lâu + Trình độ) | Vận hành Buổi chơi & Điều phối (F3) | BE UC13 đã có engine/API; FE chưa triển khai | 5 API |
 | **FR16** | Host can thiệp điều chỉnh danh sách thi đấu thủ công | Vận hành Buổi chơi & Điều phối (F3) | BE A–G hoàn thành trên sandbox: chức năng, tranh chấp/rollback/SignalR hai instance/hồi quy đều đạt; FE và DB đích chưa triển khai | 4 API mới + mở rộng GET rotation |
 | **FR17** | Người chơi theo dõi lượt thi đấu cá nhân theo thời gian thực | Vận hành Buổi chơi & Điều phối (F3) | BE A–E hoàn tất sandbox 27/10/2026; FE/thiết bị/FCM thật và DB đích chưa triển khai | 3 API đã triển khai, cờ UC15 mặc định tắt |
-| **FR18** | Ghi nhận số quả cầu bóc mới và phụ phí phát sinh buổi chơi | Hạch toán Vật tư & Sổ quỹ (F4) | ⏳ *Sẵn sàng DB, cần thêm Endpoint* | 0 API |
-| **FR19** | Hạch toán chi phí đa hệ số tự động (Nam, Nữ, Tháng, Ngày, Khách vãng lai) | Hạch toán Vật tư & Sổ quỹ (F4) | 🔄 *Đã có API cấu hình biểu phí, cần thêm Engine tính tiền buổi* | 2 APIs |
+| **FR18** | Ghi nhận số cầu, chi phí sân và phụ phí thực tế | Hạch toán Vật tư & Sổ quỹ (F4) | BE UC16 có form, preview và approve; FE/DB đích chưa triển khai | 4 API quyết toán |
+| **FR19** | Phân bổ chi phí theo rule và loại hội viên | Hạch toán Vật tư & Sổ quỹ (F4) | BE UC16 có engine và snapshot; xem báo cáo kiểm chứng | 4 API quyết toán + API biểu phí |
 | **FR20** | Khởi tạo mã VietQR thanh toán nhúng sẵn tiền & mã duy nhất | Hạch toán Vật tư & Sổ quỹ (F4) | ⏳ *Sẵn sàng DB, cần thêm Engine* | 0 API |
 | **FR21** | Tiếp nhận biến động số dư ngân hàng để tự động xác nhận thanh toán | Hạch toán Vật tư & Sổ quỹ (F4) | ⏳ *Sẵn sàng DB, cần thêm Webhook* | 0 API |
 | **FR22** | Quản trị Sổ quỹ mở nội bộ minh bạch (Thu, Chi, Dư nợ) | Hạch toán Vật tư & Sổ quỹ (F4) | ⏳ *Sẵn sàng DB, cần thêm Endpoint* | 0 API |
@@ -241,15 +241,10 @@ Các phân hệ dưới đây đã có sẵn cấu trúc bảng và mô hình th
 ---
 
 ### 2. Phân hệ Hạch toán đa hệ số, VietQR & Sổ quỹ mở (FR18 - FR22)
-- **FR18 - Ghi nhận vật tư thực tế**:
-  - *Mục tiêu*: Host/Thủ quỹ nhập số lượng quả cầu đã bóc mới trong buổi chơi và các khoản phụ phí phát sinh (nước uống, tiền sân ngoài giờ).
-  - *Endpoint dự kiến*: `PUT /api/v1/sessions/{sessionId}/consumables`.
-- **FR19 - Hạch toán chi phí đa hệ số**:
-  - *Mục tiêu*: Tự động chia tổng chi phí theo công thức trọng số cấu hình tại `group_fee_rule`:
-    - Hội viên tháng: Không tính tiền sân/cầu ngày (đã đóng gói tháng).
-    - Hội viên ngày (Nam vs Nữ): Áp dụng mức giảm giá riêng cho Nữ (emale_discount_daily).
-    - Khách vãng lai (Nam vs Nữ): Áp dụng giá vé khách vãng lai và giảm giá riêng cho Nữ (emale_discount_guest).
-  - *Endpoint dự kiến*: `POST /api/v1/sessions/{sessionId}/settlement`.
+- **FR18/FR19 - Chi phí và phân bổ UC16**:
+  - Form/preview/approve: `/api/v1/sessions/{sessionId}/settlement/{form|preview|approve}`; GET snapshot không hậu tố.
+  - Preview không ghi; approve khóa và phát hành. Phân bổ theo DYNAMIC/FIXED, expiry tháng, giảm trừ Nữ và RoundRule; override kèm lý do.
+  - Theo dõi kiểm chứng và yêu cầu FE tại [UC16-BE](Detail%20Design/UC16-BE.md).
 - **FR20 - Khởi tạo mã thanh toán VietQR định danh**:
   - *Mục tiêu*: Tự động sinh chuỗi mã VietQR nhúng sẵn chính xác số tiền phải đóng và mã giao dịch định danh duy nhất (ví dụ: `PAY_SES123_USR456`) để người chơi quét chuyển khoản bằng app ngân hàng.
   - *Bảng dữ liệu đã có*: `session_fee`, `group_bank_account`.

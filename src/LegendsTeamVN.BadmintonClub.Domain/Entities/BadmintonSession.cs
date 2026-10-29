@@ -26,7 +26,7 @@ public class BadmintonSession : AggregateRoot<Guid>
     public int ShuttlecockUsed { get; private set; }
     public decimal CourtRentalCost { get; private set; }
     public decimal ExtraExpense { get; private set; }
-    public decimal ShuttlecockPrice { get; private set; }
+    public decimal? ShuttlecockPrice { get; private set; }
     public Guid? PublishedPreviewId { get; private set; }
     public string? PublishedRequestHash { get; private set; }
     public DateTime? PublishedAt { get; private set; }
@@ -34,19 +34,19 @@ public class BadmintonSession : AggregateRoot<Guid>
     public Guid? PublishedFeeRuleId { get; private set; }
     public FeeMode? PublishedFeeMode { get; private set; }
     public DateTime? PublishedFeeRuleAppliedAt { get; private set; }
-    public decimal PublishedDailyMemberFee { get; private set; }
-    public decimal PublishedGuestFee { get; private set; }
-    public decimal PublishedFemaleDiscountDaily { get; private set; }
-    public decimal PublishedFemaleDiscountGuest { get; private set; }
-    public int PublishedRoundRule { get; private set; }
-    public decimal TotalCost { get; private set; }
-    public decimal TotalReceivable { get; private set; }
-    public decimal MonthlyFundCovered { get; private set; }
-    public decimal TotalDiscount { get; private set; }
-    public decimal PolicyDelta { get; private set; }
-    public decimal RoundingDelta { get; private set; }
-    public decimal AdjustmentDelta { get; private set; }
-    public decimal BalanceDifference { get; private set; }
+    public decimal? PublishedDailyMemberFee { get; private set; }
+    public decimal? PublishedGuestFee { get; private set; }
+    public decimal? PublishedFemaleDiscountDaily { get; private set; }
+    public decimal? PublishedFemaleDiscountGuest { get; private set; }
+    public int? PublishedRoundRule { get; private set; }
+    public decimal? TotalCost { get; private set; }
+    public decimal? TotalReceivable { get; private set; }
+    public decimal? MonthlyFundCovered { get; private set; }
+    public decimal? TotalDiscount { get; private set; }
+    public decimal? PolicyDelta { get; private set; }
+    public decimal? RoundingDelta { get; private set; }
+    public decimal? AdjustmentDelta { get; private set; }
+    public decimal? BalanceDifference { get; private set; }
 
     /// <summary>
     /// Trạng thái buổi chơi của buổi sinh hoạt. Miền giá trị: OPEN, LOCKED, PLAYING, CALCULATED, COMPLETED.

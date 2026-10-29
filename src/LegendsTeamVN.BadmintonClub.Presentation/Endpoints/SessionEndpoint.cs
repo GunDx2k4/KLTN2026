@@ -282,20 +282,31 @@ public class SessionEndpoint : EndpointGroupBase
         // ======================================
         // FR18 - FR20: Hạch toán & Quyết toán chi phí đa hệ số (Settlement)
         // ======================================
-        var fr18Group = group.MapGroup("api/v1/sessions")
+        var fr18Group = group.MapGroup("")
             .WithTags("Session Operations - FR18-FR20 Settlement")
             .RequireAuthorization();
 
-        fr18Group.MapPost("{sessionId:guid}/settlement", CalculateSessionSettlement)
-            .WithName("CalculateSessionSettlement")
-            .WithSummary("Hạch toán chi phí đa hệ số và chốt quyết toán buổi chơi (FR18-FR20)")
+
+        fr18Group.MapGet("{sessionId:guid}/settlement/form", GetSettlementForm)
+            .WithName("GetSettlementForm")
+            .Produces<SettlementFormResponse>()
+            .RequireGroupPermission(GroupPermissions.Finance.FeeManage);
+
+        fr18Group.MapPost("{sessionId:guid}/settlement/preview", PreviewSettlement)
+            .WithName("PreviewSettlement")
+            .Produces<SettlementPreviewResponse>()
+            .RequireGroupPermission(GroupPermissions.Finance.FeeManage);
+
+        fr18Group.MapPost("{sessionId:guid}/settlement/approve", ApproveSettlement)
+            .WithName("ApproveSettlement")
             .Produces<SessionSettlementResponse>()
             .RequireGroupPermission(GroupPermissions.Finance.FeeManage);
 
         fr18Group.MapGet("{sessionId:guid}/settlement", GetSessionSettlement)
             .WithName("GetSessionSettlement")
             .WithSummary("Xem thông tin quyết toán chi phí buổi chơi (FR18-FR20)")
-            .Produces<SessionSettlementResponse>();
+            .Produces<SessionSettlementResponse>()
+            .RequireGroupPermission(GroupPermissions.Finance.FeeView);
 
         fr18Group.MapPost("{sessionId:guid}/settlement/members/{userId:guid}/pay", MarkMemberSettlementPaid)
             .WithName("MarkMemberSettlementPaid")
@@ -661,21 +672,28 @@ public class SessionEndpoint : EndpointGroupBase
     }
 
     // --- FR18 - FR20 Handlers ---
-    private static async Task<IResult> CalculateSessionSettlement(
-        [FromRoute] Guid sessionId,
-        [FromBody] CalculateSettlementRequest request,
-        ISender sender,
-        CancellationToken cancellationToken)
+
+    private static async Task<IResult> GetSettlementForm(
+        [FromRoute] Guid sessionId, ISender sender, CancellationToken cancellationToken)
     {
-        var command = new CalculateSessionSettlementCommand(
-            sessionId,
-            request.ShuttlecockUsed,
-            request.ShuttlecockPrice,
-            request.ExtraFee,
-            request.CourtFee
-        );
-        var result = await sender.Send(command, cancellationToken);
-        return result.Match(Results.Ok);
+        var result = await sender.Send(new GetSettlementFormQuery(sessionId), cancellationToken);
+        return result.Match(onSuccess: data => Results.Ok(data));
+    }
+
+    private static async Task<IResult> PreviewSettlement(
+        [FromRoute] Guid sessionId, [FromBody] PreviewSettlementRequest request,
+        ISender sender, CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(new PreviewSettlementQuery(sessionId, request), cancellationToken);
+        return result.Match(onSuccess: data => Results.Ok(data));
+    }
+
+    private static async Task<IResult> ApproveSettlement(
+        [FromRoute] Guid sessionId, [FromBody] ApproveSettlementRequest request,
+        ISender sender, CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(new ApproveSettlementCommand(sessionId, request.Input, request.PreviewToken), cancellationToken);
+        return result.Match(onSuccess: data => Results.Ok(data));
     }
 
     private static async Task<IResult> GetSessionSettlement(

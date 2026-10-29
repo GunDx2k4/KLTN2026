@@ -12,6 +12,9 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.IdentityModel.Tokens;
+using LegendsTeamVN.BadmintonClub.Application.DependencyInjection.Options;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using StackExchange.Redis;
 
 namespace LegendsTeamVN.BadmintonClub.Infrastructure.DependencyInjection.Extensions;
 
@@ -20,6 +23,12 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddCoreInfrastructure(configuration);
+        services.Configure<SettlementOptions>(configuration.GetSection(SettlementOptions.SectionName));
+        services.TryAddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(
+            configuration.GetConnectionString("Redis") ?? throw new InvalidOperationException("Thiếu ConnectionStrings:Redis cho khóa quyết toán.")));
+        services.AddScoped<ISettlementLock, RedisSettlementLock>();
+        services.AddSingleton<ISettlementPreviewTokenService, SettlementPreviewTokenService>();
+        services.AddHostedService<SettlementNotificationWorker>();
         // Session operations authentication, realtime and outbox worker.
         services.AddSessionOperationsAuthentication(configuration);
         var signalR = services.AddSignalR();

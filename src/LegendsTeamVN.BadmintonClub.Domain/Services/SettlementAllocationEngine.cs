@@ -43,6 +43,13 @@ public static class SettlementAllocationEngine
         if (adjustments.Any(a => !userIds.Contains(a.UserId) || !IsValidAmount(a.FinalAmount) || string.IsNullOrWhiteSpace(a.Reason)) ||
             adjustments.Select(a => a.UserId).Distinct().Count() != adjustments.Count)
             return Fail("Settlement.InvalidAdjustment", "Điều chỉnh phải thuộc người có mặt, không trùng, có số tiền hợp lệ và lý do.");
+        var missingExpiry = memberships.Where(m => m.GroupId == session.GroupId && userIds.Contains(m.UserId) &&
+            !m.IsDeleted && m.Status == ClubMemberStatus.ACTIVE && m.MemberType == "MONTHLY" &&
+            !m.MonthlyExpiryDate.HasValue).Select(m => m.UserId).Distinct()
+            .OrderBy(id => id.ToString("N"), StringComparer.Ordinal).ToArray();
+        if (missingExpiry.Length > 0)
+            return Fail("Settlement.MonthlyExpiryRequired",
+                $"Hội viên tháng chưa có ngày hết hạn được xác nhận: {string.Join(", ", missingExpiry)}.");
         var adjustmentsByUser = adjustments.ToDictionary(a => a.UserId);
 
         try
@@ -69,7 +76,10 @@ public static class SettlementAllocationEngine
                     return Fail("Settlement.InvalidMembership", "Dữ liệu thành viên bị trùng trong câu lạc bộ.");
                 var member = matchingMembers.SingleOrDefault();
                 var priceType = ResolvePriceType(member, session.StartTime);
-                if (priceType.IsFailure) return Result.Failure<SettlementAllocation>(priceType.Error);
+                if (priceType.IsFailure) return Result.Failure<SettlementAllocation>(priceType.Error with
+                {
+                    Message = $"{priceType.Error.Message} Người chơi: {userId}."
+                });
                 var actualShare = courtShares[index] + shuttleShares[index] + extraShares[index];
                 var monthlyCovered = priceType.Value == PriceType.MONTHLY_MEMBER ? actualShare : 0m;
                 var baseAmount = priceType.Value == PriceType.MONTHLY_MEMBER ? 0m : rule.FeeMode == FeeMode.DYNAMIC

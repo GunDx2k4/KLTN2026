@@ -496,3 +496,22 @@ Bổ sung ngoài 22 bảng nghiệp vụ ban đầu để giao nhận SignalR/FC
 | `last_error` | VARCHAR(2000), NULL | Loại lỗi gần nhất, không lưu token |
 
 Có thêm các cột audit/soft-delete theo AggregateRoot hiện tại. Index trên `(next_attempt_at, created_at)` cho bản ghi chưa delivered, attempts < 10. Worker claim bằng SKIP LOCKED; network chạy ngoài transaction claim. Xem hợp đồng và vận hành tại [UC13-BE.md](Detail%20Design/UC13-BE.md).
+
+## Bổ sung UC16 — Snapshot phát hành trên bảng hiện hữu
+
+Migration `AddSettlementPublicationSnapshot` chỉ bổ sung cột cho `badminton_session` và `session_fee`; không tạo bảng draft hoặc thay unique payment_code và (id_session,id_user).
+
+| Bảng | Cột mới | Kiểu và nullability |
+|---|---|---|
+| badminton_session | shuttlecock_price; published_daily_member_fee, published_guest_fee, published_female_discount_daily, published_female_discount_guest; total_cost, total_receivable, monthly_fund_covered, total_discount, policy_delta, rounding_delta, adjustment_delta, balance_difference | numeric(18,2), NULL cho dữ liệu cũ |
+| badminton_session | published_preview_id, published_by, published_fee_rule_id | uuid, NULL |
+| badminton_session | published_at, published_fee_rule_applied_at | timestamptz, NULL |
+| badminton_session | published_request_hash, published_fee_mode, published_round_rule | varchar(64), varchar(50), integer; NULL |
+| session_fee | court_share, shuttle_share, extra_share, monthly_fund_covered, base_amount, raw_amount, calculated_amount, rounding_delta, adjustment_delta | numeric(18,2), NULL |
+| session_fee | gender, member_type, monthly_expiry_date | smallint, varchar(50), timestamptz; NULL |
+| session_fee | adjustment_reason, adjusted_by, adjusted_at, published_by, published_at | varchar(2000), uuid, timestamptz, uuid, timestamptz; NULL |
+| session_fee | is_published | boolean, false cho khoản cũ |
+
+PublishedPreviewId/PublishedAt là dấu phát hành; status đơn lẻ không thay thế marker. Khoản cũ không được backfill/recompute. Amount/payment status/payment code/bank references hiện hữu được giữ nguyên. Publication chỉ ghi snapshot lần đầu; thanh toán về sau chỉ đổi payment metadata qua hành vi hợp lệ.
+
+Preview đọc RepeatableRead. Approve khóa club → session → users/members/rules và giữ tới cuối transaction; parent FK immediate chặn insert nguồn mới. Redis lease 5 giây chỉ giảm cạnh tranh; DB locks và approval identity bảo vệ sau khi lease hết. Xem [SQL Up](Detail%20Design/UC16-BE.Up.sql), [SQL Down](Detail%20Design/UC16-BE.Down.sql). Down chỉ dùng cho DB test/chưa có snapshot cần giữ; production cần duyệt riêng.

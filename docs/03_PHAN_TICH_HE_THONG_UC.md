@@ -224,20 +224,20 @@ graph TD
 
 ---
 
-### UC16: Chốt sổ buổi chơi & Phân bổ chi phí đa hệ số
-- **FR đáp ứng**: FR18, FR19 (F4.1, F4.2) | **Tác nhân**: Host, Thủ quỹ.
-- **Tiền điều kiện**: Buổi sinh hoạt kết thúc khung giờ thuê sân.
+### UC16: Chốt sổ buổi chơi & Phân bổ chi phí
+
+- **FR đáp ứng**: FR18, FR19 (F4.1, F4.2). Người thao tác có quyền FeeManage trong chính nhóm của buổi chơi.
+- **Tiền điều kiện phát hành**: Đã đến EndTime, không còn trận PLAYING; các CONFIRMED chưa đến cần xác nhận chuyển NO_SHOW. Chỉ CHECKED_IN được thu phí.
 - **Luồng chính**:
-  1. Host nhập: Số quả cầu lông bóc mới thực tế trong buổi (`shuttlecock_used`) và các phụ phí phát sinh (`extra_expense` như tiền nước, tiền thảm phát sinh).
-  2. Chuyển trạng thái buổi chơi sang `CALCULATED`.
-  3. Hệ thống nạp biểu phí của nhóm (`group_fee_rule`) và tự động tính toán theo công thức đa hệ số:
-     - Tính tổng chi phí buổi: `Tổng_chi_phí = Tiền_thuê_sân + (Số_cầu * Đơn_giá_cầu) + Phụ_phí`.
-     - Phân bổ theo loại người chơi: Hội viên tháng (đã đóng trọn gói), Hội viên ngày, Khách vãng lai.
-     - Áp dụng chính sách ưu đãi giảm trừ cho người chơi Nữ: Hội viên ngày (`female_discount_daily`), Khách vãng lai (`female_discount_guest`).
-     - Áp dụng quy tắc làm tròn tiền lẻ (`round_rule`, ví dụ làm tròn lên 1.000đ).
-  4. Hệ thống tự động sinh các bản ghi Khoản thu buổi chơi (`session_fee`) cho từng người tham gia ở trạng thái `UNPAID`.
-  5. Đồng thời sinh mã định danh chuyển khoản duy nhất (`payment_code`, ví dụ: `BC12627_A8F1`).
-- **Hậu điều kiện**: Bảng chi phí của từng người chơi được ban hành.
+  1. Mở form để đọc người có mặt, chi phí và biểu phí; nhập chi phí sân, số cầu, đơn giá cầu và phụ phí thường.
+  2. Gửi preview gồm toàn bộ input và overrides. BE tính trong bộ nhớ, ký token HMAC có hạn 15 phút; không ghi chi phí, phí hay trạng thái.
+  3. DYNAMIC chia đều từng khoản sân/cầu/phụ phí trên toàn bộ người có mặt, giữ phần dư 0,01 đồng theo UserId. MONTHLY có expiry >= StartTime được quỹ tháng bao; expiry trước StartTime tính DAILY_MEMBER; null báo lỗi kèm người cần xử lý.
+  4. FIXED dùng DailyMemberFee/GuestFee làm giá cuối buổi thường. Ưu đãi Nữ là giảm tiền cố định đúng loại; không cộng phụ phí thường lần nữa. Làm tròn lên theo RoundRule. Override là số cuối có lý do, không làm tròn lại.
+  5. Người quản lý xem, điều chỉnh rồi preview lại hoặc hủy tại client. Approve gửi đúng input và token; BE kiểm quyền hiện hành, khóa nguồn và đối chiếu chữ ký/nguồn/kết quả trước mọi mutation.
+  6. Phát hành nguyên tử snapshot, khoản thu, mã chuyển khoản, đóng điểm danh/buổi và notification/outbox. Phí >0 là UNPAID, =0 là EXEMPT; session chuyển CALCULATED. Mã `CLB {12 ký tự đầu SessionId:N viết hoa} {12 ký tự đầu UserId:N viết hoa}`.
+- **Ngoại lệ**: Nguồn đổi trả PreviewStale; hết hạn trả PreviewExpired; phát hành khác identity trả AlreadyPublished. Retry cùng identity trả snapshot hiện hữu và payment status hiện tại, kể cả đã PAID/hết hạn sau commit; không tạo lại phí hoặc thông báo.
+- **Hậu điều kiện**: Snapshot phát hành bất biến; FCM được worker gửi sau commit. QR thuộc UC17, UC16 trả payload rỗng khi chưa có; không dùng ngân hàng mặc định. Fees cũ không có marker được đọc ở state LEGACY và không được tái phát hành.
+- Hợp đồng và kiểm chứng: [UC16-BE](Detail%20Design/UC16-BE.md).
 
 ---
 

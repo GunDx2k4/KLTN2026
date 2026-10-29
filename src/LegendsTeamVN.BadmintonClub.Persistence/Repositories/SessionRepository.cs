@@ -1,4 +1,6 @@
 using System.Text.Json;
+using LegendsTeamVN.BadmintonClub.Domain.Exceptions;
+using Npgsql;
 using LegendsTeamVN.BadmintonClub.Domain.Entities;
 using LegendsTeamVN.BadmintonClub.Domain.Repositories;
 using LegendsTeamVN.BadmintonClub.Domain.Services;
@@ -190,6 +192,78 @@ public class SessionRepository(BadmintonDbContext dbContext)
             .FirstOrDefaultAsync(s => s.Id == sessionId && !s.IsDeleted, cancellationToken);
     }
 
+    public async Task<(BadmintonSession? Session, GroupFeeRule? Rule, IReadOnlyList<AppUser> Users, IReadOnlyList<GroupMember> Memberships)> GetSettlementSourceAsync(
+        Guid sessionId, bool forUpdate, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await ReadSettlementSourceAsync(sessionId, forUpdate, cancellationToken);
+        }
+        catch (PostgresException ex) when (forUpdate && ex.SqlState is PostgresErrorCodes.LockNotAvailable or PostgresErrorCodes.DeadlockDetected)
+        {
+            throw new SettlementPublicationConflictException("Settlement.Busy", "Nguồn quyết toán đang được thay đổi, hãy thử lại.", ex);
+        }
+    }
+
+    private async Task<(BadmintonSession? Session, GroupFeeRule? Rule, IReadOnlyList<AppUser> Users, IReadOnlyList<GroupMember> Memberships)> ReadSettlementSourceAsync(
+        Guid sessionId, bool forUpdate, CancellationToken cancellationToken = default)
+    {
+        if (forUpdate && DbContext.Database.CurrentTransaction is null)
+            throw new InvalidOperationException("Settlement writes require an active transaction.");
+        if (!forUpdate && DbContext.Database.CurrentTransaction is not null)
+            throw new InvalidOperationException("Settlement previews require their own repeatable-read snapshot.");
+        if (forUpdate && DbContext.ChangeTracker.Entries().Any(e => e.Entity is BadmintonSession or SessionBooking or
+            SessionMatch or MatchPlayer or GuestRecruitment or SessionFee or AppUser or GroupMember or GroupFeeRule))
+            throw new InvalidOperationException("Settlement sources must be loaded freshly before tracking financial changes.");
+        await using var snapshot = !forUpdate && DbContext.Database.CurrentTransaction is null
+            ? await DbContext.Database.BeginTransactionAsync(System.Data.IsolationLevel.RepeatableRead, cancellationToken)
+            : null;
+        var groupId = await DbContext.BadmintonSessions.AsNoTracking()
+            .Where(s => s.Id == sessionId && !s.IsDeleted).Select(s => (Guid?)s.GroupId).SingleOrDefaultAsync(cancellationToken);
+        if (!groupId.HasValue) return (null, null, Array.Empty<AppUser>(), Array.Empty<GroupMember>());
+        if (forUpdate)
+        {
+            await DbContext.Database.ExecuteSqlRawAsync("SET LOCAL lock_timeout = '3s'", cancellationToken);
+            await DbContext.ClubGroups.FromSqlInterpolated($"SELECT * FROM club_group WHERE id_group = {groupId.Value} FOR UPDATE")
+                .IgnoreQueryFilters().AsNoTracking().ToListAsync(cancellationToken);
+            await DbContext.BadmintonSessions.FromSqlInterpolated($"SELECT * FROM badminton_session WHERE id_session = {sessionId} FOR UPDATE")
+                .IgnoreQueryFilters().AsNoTracking().ToListAsync(cancellationToken);
+            await DbContext.AppUsers.FromSqlInterpolated($"SELECT * FROM app_user WHERE id_user IN (SELECT id_user FROM session_booking WHERE id_session = {sessionId}) ORDER BY id_user FOR SHARE")
+                .IgnoreQueryFilters().AsNoTracking().ToListAsync(cancellationToken);
+            await DbContext.GroupMembers.FromSqlInterpolated($"SELECT * FROM group_member WHERE id_group = {groupId.Value} AND id_user IN (SELECT id_user FROM session_booking WHERE id_session = {sessionId}) ORDER BY id_member FOR SHARE")
+                .IgnoreQueryFilters().AsNoTracking().ToListAsync(cancellationToken);
+            await DbContext.GroupFeeRules.FromSqlInterpolated($"SELECT * FROM group_fee_rule WHERE id_group = {groupId.Value} ORDER BY id_fee_rule FOR SHARE")
+                .IgnoreQueryFilters().AsNoTracking().ToListAsync(cancellationToken);
+        }
+        var session = await DbContext.BadmintonSessions.AsNoTrackingWithIdentityResolution()
+            .Include(s => s.Bookings).ThenInclude(b => b.User)
+            .Include(s => s.Fees).ThenInclude(f => f.User)
+            .Include(s => s.Matches).ThenInclude(m => m.Players)
+            .Include(s => s.Recruitments).AsSplitQuery()
+            .SingleOrDefaultAsync(s => s.Id == sessionId && !s.IsDeleted, cancellationToken);
+        if (session is null) return (null, null, Array.Empty<AppUser>(), Array.Empty<GroupMember>());
+        if (session.GroupId != groupId.Value)
+            throw new InvalidOperationException("Settlement group changed while acquiring source locks.");
+        session.ValidateRotationPauseMetadata();
+        var userIds = session.Bookings.Where(b => !b.IsDeleted).Select(b => b.UserId).Distinct().ToArray();
+        var users = await DbContext.AppUsers.IgnoreQueryFilters().AsNoTracking().Where(u => userIds.Contains(u.Id)).ToListAsync(cancellationToken);
+        var memberships = await DbContext.GroupMembers.IgnoreQueryFilters().AsNoTracking()
+            .Where(m => m.GroupId == session.GroupId && userIds.Contains(m.UserId)).ToListAsync(cancellationToken);
+        var rules = await DbContext.GroupFeeRules.IgnoreQueryFilters().AsNoTracking()
+            .Where(r => r.GroupId == session.GroupId).ToListAsync(cancellationToken);
+        var rule = rules.OrderByDescending(r => r.AppliedAt)
+            .ThenByDescending(r => r.Id.ToString("N"), StringComparer.Ordinal).FirstOrDefault();
+        if (forUpdate) DbContext.Attach(session);
+        if (snapshot is not null) await snapshot.CommitAsync(cancellationToken);
+        return (session, rule, users, memberships);
+    }
+
+    public Task<bool> CanViewFinanceAsync(Guid groupId, Guid userId, CancellationToken cancellationToken = default) =>
+        DbContext.GroupMembers.AsNoTracking().AnyAsync(m =>
+            m.GroupId == groupId && m.UserId == userId && m.Status == ClubMemberStatus.ACTIVE && !m.IsDeleted &&
+            m.Group.IsActive && !m.Group.IsDeleted && m.User.IsActive && !m.User.IsDeleted &&
+            m.RoleEntity.GroupId == groupId && !m.RoleEntity.IsDeleted &&
+            m.RoleEntity.RolePermissions.Any(rp => rp.Permission.PermissionCode == GroupPermissions.Finance.FeeView), cancellationToken);
     public void AddSettlementFees(IEnumerable<SessionFee> fees)
     {
         foreach (var fee in fees)

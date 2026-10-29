@@ -14,6 +14,8 @@ public interface ISessionRepository : IGenericRepository<BadmintonSession, Guid>
     Task<IReadOnlyList<Guid>> FindRotationRecoveryIdsAsync(DateTime now, Guid? after, int limit, CancellationToken ct);
     Task<BadmintonSession?> GetAttendanceAsync(Guid sessionId, bool forUpdate, CancellationToken cancellationToken = default);
     Task<BadmintonSession?> GetSettlementAsync(Guid sessionId, bool forUpdate, CancellationToken cancellationToken = default);
+    Task<(BadmintonSession? Session, GroupFeeRule? Rule, IReadOnlyList<AppUser> Users, IReadOnlyList<GroupMember> Memberships)> GetSettlementSourceAsync(Guid sessionId, bool forUpdate, CancellationToken cancellationToken = default);
+    Task<bool> CanViewFinanceAsync(Guid groupId, Guid userId, CancellationToken cancellationToken = default);
     void AddSettlementFees(IEnumerable<SessionFee> fees);
     Task<bool> CanManageFinanceAsync(Guid groupId, Guid userId, CancellationToken cancellationToken = default);
     Task<bool> CanManageAttendanceAsync(Guid groupId, Guid userId, CancellationToken cancellationToken = default);
