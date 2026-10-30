@@ -284,7 +284,7 @@ public class SessionEndpoint : EndpointGroupBase
         // ======================================
         var fr18Group = group.MapGroup("")
             .WithTags("Session Operations - FR18-FR20 Settlement")
-            .RequireAuthorization();
+            .RequireAuthorization("SessionOperations");
 
 
         fr18Group.MapGet("{sessionId:guid}/settlement/form", GetSettlementForm)

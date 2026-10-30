@@ -1,7 +1,6 @@
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Sessions.Requests;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Sessions.Responses;
 using LegendsTeamVN.BadmintonClub.Domain.Entities;
-using LegendsTeamVN.BadmintonClub.Domain.Enums;
 using LegendsTeamVN.BadmintonClub.Domain.Services;
 
 namespace LegendsTeamVN.BadmintonClub.Application.Features.Sessions.Settlement;
@@ -27,7 +26,7 @@ internal static class SessionSettlementMapper
         return new(session.Id, published ? "PUBLISHED" : fees.Length > 0 ? "LEGACY" : "UNPUBLISHED",
             session.ShuttlecockUsed, published ? session.ShuttlecockPrice : null, session.CourtRentalCost,
             session.ExtraExpense, published ? session.TotalCost : null, published ? session.TotalReceivable : null,
-            fees.Where(f => f.PaymentStatus == nameof(PaymentStatus.PAID)).Sum(f => f.FinalFee),
+            session.CalculateCollectedAmount(),
             published ? session.MonthlyFundCovered : null, published ? session.TotalDiscount : null, published ? session.PolicyDelta : null,
             published ? session.RoundingDelta : null, published ? session.AdjustmentDelta : null,
             published ? session.BalanceDifference : null, session.PublishedAt, session.PublishedBy, fees);

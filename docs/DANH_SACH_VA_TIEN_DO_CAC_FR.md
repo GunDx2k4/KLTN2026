@@ -27,8 +27,8 @@
 | **FR15** | Giải thuật tự động đề xuất xoay tua sân (Nghỉ lâu + Trình độ) | Vận hành Buổi chơi & Điều phối (F3) | BE UC13 đã có engine/API; FE chưa triển khai | 5 API |
 | **FR16** | Host can thiệp điều chỉnh danh sách thi đấu thủ công | Vận hành Buổi chơi & Điều phối (F3) | BE A–G hoàn thành trên sandbox: chức năng, tranh chấp/rollback/SignalR hai instance/hồi quy đều đạt; FE và DB đích chưa triển khai | 4 API mới + mở rộng GET rotation |
 | **FR17** | Người chơi theo dõi lượt thi đấu cá nhân theo thời gian thực | Vận hành Buổi chơi & Điều phối (F3) | BE A–E hoàn tất sandbox 27/10/2026; FE/thiết bị/FCM thật và DB đích chưa triển khai | 3 API đã triển khai, cờ UC15 mặc định tắt |
-| **FR18** | Ghi nhận số cầu, chi phí sân và phụ phí thực tế | Hạch toán Vật tư & Sổ quỹ (F4) | BE UC16 có form, preview và approve; FE/DB đích chưa triển khai | 4 API quyết toán |
-| **FR19** | Phân bổ chi phí theo rule và loại hội viên | Hạch toán Vật tư & Sổ quỹ (F4) | BE UC16 có engine và snapshot; xem báo cáo kiểm chứng | 4 API quyết toán + API biểu phí |
+| **FR18** | Ghi nhận số cầu, chi phí sân và phụ phí thực tế | Hạch toán Vật tư & Sổ quỹ (F4) | BE kiểm chứng Đợt 5 ngày 30/10/2026; gói triển khai Đợt 6 đã chuẩn bị; FE/DB đích chưa triển khai | 4 API quyết toán |
+| **FR19** | Phân bổ chi phí theo rule và loại hội viên | Hạch toán Vật tư & Sổ quỹ (F4) | BE kiểm chứng Domain/API/transaction/Redis/outbox; xem báo cáo UC16 và runbook | 4 API quyết toán + API biểu phí |
 | **FR20** | Khởi tạo mã VietQR thanh toán nhúng sẵn tiền & mã duy nhất | Hạch toán Vật tư & Sổ quỹ (F4) | ⏳ *Sẵn sàng DB, cần thêm Engine* | 0 API |
 | **FR21** | Tiếp nhận biến động số dư ngân hàng để tự động xác nhận thanh toán | Hạch toán Vật tư & Sổ quỹ (F4) | ⏳ *Sẵn sàng DB, cần thêm Webhook* | 0 API |
 | **FR22** | Quản trị Sổ quỹ mở nội bộ minh bạch (Thu, Chi, Dư nợ) | Hạch toán Vật tư & Sổ quỹ (F4) | ⏳ *Sẵn sàng DB, cần thêm Endpoint* | 0 API |
@@ -245,8 +245,9 @@ Các phân hệ dưới đây đã có sẵn cấu trúc bảng và mô hình th
   - Form/preview/approve: `/api/v1/sessions/{sessionId}/settlement/{form|preview|approve}`; GET snapshot không hậu tố.
   - Preview không ghi; approve khóa và phát hành. Phân bổ theo DYNAMIC/FIXED, expiry tháng, giảm trừ Nữ và RoundRule; override kèm lý do.
   - Theo dõi kiểm chứng và yêu cầu FE tại [UC16-BE](Detail%20Design/UC16-BE.md).
+  - Build đã vá NU1902/NU1903; hướng dẫn cấu hình/rollback trong [báo cáo UC16, mục 7.12](Detail%20Design/UC16-BE.md). Chưa áp DB, bật ghi/gửi FCM trên production.
 - **FR20 - Khởi tạo mã thanh toán VietQR định danh**:
-  - *Mục tiêu*: Tự động sinh chuỗi mã VietQR nhúng sẵn chính xác số tiền phải đóng và mã giao dịch định danh duy nhất (ví dụ: `PAY_SES123_USR456`) để người chơi quét chuyển khoản bằng app ngân hàng.
+  - *Mục tiêu*: UC17 sinh VietQR từ khoản thu đã phát hành, dùng số tiền và mã `CLB {SessionIdShort} {UserIdShort}` chuẩn G04 của UC16 để quét chuyển khoản; không sinh QR giả khi chưa có cấu hình ngân hàng phù hợp.
   - *Bảng dữ liệu đã có*: `session_fee`, `group_bank_account`.
   - *Endpoint dự kiến*: `GET /api/v1/sessions/{sessionId}/fees/me/qr`.
 - **FR21 - Đối soát & Xác nhận thanh toán ngân hàng tự động**:

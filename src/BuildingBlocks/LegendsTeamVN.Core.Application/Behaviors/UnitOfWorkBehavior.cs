@@ -17,11 +17,11 @@ public sealed class UnitOfWorkBehavior<TRequest, TResponse>(IUnitOfWork unitOfWo
 
         try
         {
-            var response = await next();
+            var response = await next(cancellationToken);
 
             if (response.IsFailure)
             {
-                await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                await _unitOfWork.RollbackTransactionAsync(CancellationToken.None);
                 return response;
             }
 
@@ -32,7 +32,7 @@ public sealed class UnitOfWorkBehavior<TRequest, TResponse>(IUnitOfWork unitOfWo
         }
         catch (Exception)
         {
-            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            await _unitOfWork.RollbackTransactionAsync(CancellationToken.None);
             throw;
         }
     }

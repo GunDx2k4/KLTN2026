@@ -28,7 +28,7 @@ public sealed class SettlementLockBehavior(ISettlementLock settlementLock, IOpti
         if (lease is null) return Failure("Settlement.Busy", "Buổi chơi đang được quyết toán, hãy thử lại.");
         await using (lease)
         {
-            try { return await next(); }
+            try { return await next(ct); }
             catch (SettlementPublicationConflictException ex) { return Failure(ex.Code, ex.Message); }
         }
     }

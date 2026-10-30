@@ -421,6 +421,25 @@ public sealed class SettlementAllocationTests
         Assert.Throws<InvalidOperationException>(() => fee.MarkAsPaid((PaymentMethod)999));
         Assert.Equal(PaymentStatus.UNPAID, fee.PaymentStatus);
     }
+
+    [Fact]
+    public void CollectedAmountIncludesPaidCashAndBankFeesAndExcludesUnpaidExemptAndDeletedFees()
+    {
+        var f = new Fixture();
+        Assert.Equal(0m, f.Session.CalculateCollectedAmount());
+        var cash = new SessionFee(f.Session.Id, Guid.NewGuid(), 100.01m, PriceType.GUEST, "cash", "");
+        var bank = new SessionFee(f.Session.Id, Guid.NewGuid(), 200.02m, PriceType.GUEST, "bank", "");
+        var removed = new SessionFee(f.Session.Id, Guid.NewGuid(), 999m, PriceType.GUEST, "removed", "");
+        cash.MarkAsPaid(PaymentMethod.CASH);
+        bank.MarkAsPaid(PaymentMethod.BANK_TRANSFER);
+        removed.MarkAsPaid(PaymentMethod.CASH);
+        typeof(SessionFee).GetProperty(nameof(SessionFee.IsDeleted))!.SetValue(removed, true);
+        foreach (var fee in new[] { cash, bank, removed,
+            new SessionFee(f.Session.Id, Guid.NewGuid(), 400m, PriceType.GUEST, "unpaid", ""),
+            new SessionFee(f.Session.Id, Guid.NewGuid(), 0m, PriceType.MONTHLY_MEMBER, "exempt", "", paymentStatus: PaymentStatus.EXEMPT) })
+            f.Session.Fees.Add(fee);
+        Assert.Equal(300.03m, f.Session.CalculateCollectedAmount());
+    }
 }
 
 internal static class SettlementTestData

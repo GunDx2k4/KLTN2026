@@ -4,6 +4,8 @@ using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.IdentityModel.Tokens.Jwt;
+using System.Net.Http.Headers;
 using LegendsTeamVN.BadmintonClub.Application.Abstractions;
 using LegendsTeamVN.BadmintonClub.Application.DependencyInjection.Extensions;
 using LegendsTeamVN.BadmintonClub.Application.DependencyInjection.Options;
@@ -13,6 +15,7 @@ using LegendsTeamVN.BadmintonClub.Domain.Entities;
 using LegendsTeamVN.BadmintonClub.Domain.Exceptions;
 using LegendsTeamVN.BadmintonClub.Domain.Repositories;
 using LegendsTeamVN.BadmintonClub.Domain.Services;
+using LegendsTeamVN.BadmintonClub.Infrastructure.DependencyInjection.Extensions;
 using LegendsTeamVN.BadmintonClub.Presentation.Endpoints;
 using LegendsTeamVN.BadmintonClub.Presentation.Security;
 using LegendsTeamVN.Core.Domain.Repositories;
@@ -26,6 +29,8 @@ using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Configuration;
+using Microsoft.IdentityModel.Tokens;
 using NSubstitute;
 using Xunit;
 
@@ -77,7 +82,7 @@ public sealed class SettlementHttpPipelineTests
             UnitOfWork.CommitTransactionAsync(Arg.Any<CancellationToken>()).Returns(_ => { Order.Add("commit"); return Task.CompletedTask; });
             UnitOfWork.RollbackTransactionAsync(Arg.Any<CancellationToken>()).Returns(_ => { Order.Add("rollback"); return Task.CompletedTask; });
         }
-        public static async Task<Fixture> Create()
+        public static async Task<Fixture> Create(bool useBearer = false)
         {
             var f = new Fixture();
             var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Testing" });
@@ -85,8 +90,18 @@ public sealed class SettlementHttpPipelineTests
             LegendsTeamVN.Core.Presentation.DependencyInjection.Extensions.ServiceCollectionExtensions.AddCorePresentation(builder.Services);
             LegendsTeamVN.Core.Presentation.DependencyInjection.Extensions.SwaggerExtensions.AddCoreSwagger(builder.Services);
             builder.Services.AddHttpContextAccessor();
-            builder.Services.AddAuthentication("Test").AddScheme<AuthenticationSchemeOptions, HeaderAuthenticationHandler>("Test", _ => { });
-            builder.Services.AddAuthorization(o => o.AddPolicy("SessionOperations", p => p.RequireAuthenticatedUser()));
+            if (useBearer)
+                builder.Services.AddSessionOperationsAuthentication(new ConfigurationBuilder().AddInMemoryCollection(
+                    new Dictionary<string, string?>
+                    {
+                        ["Jwt:Issuer"] = "uc16-tests", ["Jwt:Audience"] = "uc16-tests",
+                        ["Jwt:SecretKey"] = new string('k', 64)
+                    }).Build());
+            else
+            {
+                builder.Services.AddAuthentication("Test").AddScheme<AuthenticationSchemeOptions, HeaderAuthenticationHandler>("Test", _ => { });
+                builder.Services.AddAuthorization(o => o.AddPolicy("SessionOperations", p => p.RequireAuthenticatedUser()));
+            }
             builder.Services.AddSingleton<IAuthorizationHandler, GroupPermissionHandler>();
             builder.Services.AddApplication();
             builder.Services.AddSingleton(f.Sessions);
@@ -129,6 +144,35 @@ public sealed class SettlementHttpPipelineTests
         {
             Client.Dispose(); await app.StopAsync(); await app.DisposeAsync();
         }
+    }
+
+    [Theory]
+    [InlineData("valid", HttpStatusCode.OK)]
+    [InlineData("expired", HttpStatusCode.Unauthorized)]
+    [InlineData("issuer", HttpStatusCode.Unauthorized)]
+    [InlineData("audience", HttpStatusCode.Unauthorized)]
+    [InlineData("signature", HttpStatusCode.Unauthorized)]
+    [InlineData("no-expiry", HttpStatusCode.Unauthorized)]
+    [InlineData("not-yet-valid", HttpStatusCode.Unauthorized)]
+    public async Task SettlementRoutesEnforceStrictBearerPolicyBeforeLoadingFinancialData(string scenario, HttpStatusCode expected)
+    {
+        await using var f = await Fixture.Create(useBearer: true);
+        var now = DateTime.UtcNow;
+        var jwt = new JwtSecurityToken(
+            issuer: scenario == "issuer" ? "other" : "uc16-tests",
+            audience: scenario == "audience" ? "other" : "uc16-tests",
+            claims: [new Claim(JwtRegisteredClaimNames.Sub, f.Actor.ToString())],
+            notBefore: scenario == "not-yet-valid" ? now.AddMinutes(5) : now.AddMinutes(-10),
+            expires: scenario == "no-expiry" ? null : scenario == "expired" ? now.AddMinutes(-1) : now.AddMinutes(30),
+            signingCredentials: new SigningCredentials(new SymmetricSecurityKey(
+                System.Text.Encoding.UTF8.GetBytes(new string(scenario == "signature" ? 'x' : 'k', 64))), SecurityAlgorithms.HmacSha256));
+        f.Client.DefaultRequestHeaders.Remove("X-Test-User");
+        f.Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", new JwtSecurityTokenHandler().WriteToken(jwt));
+        var response = await f.Client.GetAsync(f.Path("/form"));
+        Assert.Equal(expected, response.StatusCode);
+        if (scenario != "valid") Assert.Empty(f.Order);
+        Assert.Empty(f.Session.Fees);
+        Assert.Null(f.Session.PublishedPreviewId);
     }
 
     [Theory]

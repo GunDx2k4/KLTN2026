@@ -54,6 +54,25 @@ public sealed class SettlementDeliveryTests
     }
 
     [Fact]
+    public async Task DisabledDispatchLeavesMessagePendingThenResumesWithoutCreatingAnotherFee()
+    {
+        await using var f = new Fixture();
+        f.Settings.DispatchEnabled = false;
+        await f.Worker.StartAsync(default);
+        await Task.Delay(1100);
+        Assert.Equal(0, f.ClaimCount);
+        Assert.Null(f.Message.DeliveredAt);
+        Assert.Null(f.Message.LeaseId);
+        f.VerifyNoPush();
+        f.Settings.DispatchEnabled = true;
+        await f.Completed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await f.Worker.StopAsync(default);
+        Assert.Single(f.Session.Fees);
+        Assert.NotNull(f.Message.DeliveredAt);
+        Assert.Equal(0, f.Message.Attempts);
+    }
+
+    [Fact]
     public async Task FailedDeliveriesReachDeadLetterAndNeverComplete()
     {
         await using var f = new Fixture();
@@ -75,6 +94,8 @@ public sealed class SettlementDeliveryTests
         public Mock<INotificationService> Notifications { get; } = new();
         public Mock<IDeviceRepository> Devices { get; } = new();
         public SettlementNotificationWorker Worker { get; }
+        public SettlementOptions Settings { get; } = new() { DispatchEnabled = true };
+        public int ClaimCount { get; private set; }
         public TaskCompletionSource Completed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource DeadLetter { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly ServiceProvider provider;
@@ -94,6 +115,7 @@ public sealed class SettlementDeliveryTests
             outbox.Setup(o => o.ClaimAsync(It.Is<IReadOnlyCollection<string>>(k => k.Count == 1 && k.Contains("SettlementPaymentPush")),
                 It.IsAny<DateTime>(), It.IsAny<CancellationToken>())).Returns(() =>
                 {
+                    ClaimCount++;
                     if (Message.DeliveredAt.HasValue || Message.Attempts >= 10) return Task.FromResult<OutboxMessage?>(null);
                     Message.Claim(Guid.NewGuid(), DateTime.UtcNow);
                     return Task.FromResult<OutboxMessage?>(Message);
@@ -112,7 +134,7 @@ public sealed class SettlementDeliveryTests
             provider = new ServiceCollection().AddSingleton(outbox.Object).AddSingleton(sessions.Object)
                 .AddSingleton(Devices.Object).AddSingleton(Notifications.Object).BuildServiceProvider();
             var options = new Mock<IOptionsMonitor<SettlementOptions>>();
-            options.SetupGet(o => o.CurrentValue).Returns(new SettlementOptions { DispatchEnabled = true });
+            options.SetupGet(o => o.CurrentValue).Returns(() => Settings);
             Worker = new(provider.GetRequiredService<IServiceScopeFactory>(), options.Object, TimeProvider.System,
                 NullLogger<SettlementNotificationWorker>.Instance);
         }

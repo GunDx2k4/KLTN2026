@@ -179,6 +179,9 @@ public class BadmintonSession : AggregateRoot<Guid>
         ExtraExpense = extraExpense;
     }
 
+    public decimal CalculateCollectedAmount() =>
+        Fees.Where(f => !f.IsDeleted && f.PaymentStatus == PaymentStatus.PAID).Sum(f => f.Amount);
+
     public bool CanEditAttendance(DateTime now) =>
         !IsDeleted && StartTime.AddHours(-1) <= now && now < EndTime &&
         Status is SessionStatus.OPEN or SessionStatus.LOCKED or SessionStatus.PLAYING;

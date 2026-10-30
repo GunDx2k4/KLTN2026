@@ -199,7 +199,8 @@ public class SessionRepository(BadmintonDbContext dbContext)
         {
             return await ReadSettlementSourceAsync(sessionId, forUpdate, cancellationToken);
         }
-        catch (PostgresException ex) when (forUpdate && ex.SqlState is PostgresErrorCodes.LockNotAvailable or PostgresErrorCodes.DeadlockDetected)
+        catch (Exception ex) when (forUpdate && ex.GetBaseException() is PostgresException
+            { SqlState: PostgresErrorCodes.LockNotAvailable or PostgresErrorCodes.DeadlockDetected })
         {
             throw new SettlementPublicationConflictException("Settlement.Busy", "Nguồn quyết toán đang được thay đổi, hãy thử lại.", ex);
         }

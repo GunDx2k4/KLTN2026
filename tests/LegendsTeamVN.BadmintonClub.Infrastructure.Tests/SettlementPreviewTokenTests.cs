@@ -1,10 +1,16 @@
 using System.Globalization;
 using System.Text;
+using LegendsTeamVN.BadmintonClub.Application.Abstractions;
+using LegendsTeamVN.BadmintonClub.Application.DependencyInjection.Extensions;
 using LegendsTeamVN.BadmintonClub.Application.DependencyInjection.Options;
 using LegendsTeamVN.BadmintonClub.Domain.Entities;
 using LegendsTeamVN.BadmintonClub.Domain.Enums;
 using LegendsTeamVN.BadmintonClub.Domain.Services;
 using LegendsTeamVN.BadmintonClub.Infrastructure.Services;
+using LegendsTeamVN.BadmintonClub.Infrastructure.DependencyInjection.Extensions;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -12,6 +18,38 @@ namespace LegendsTeamVN.BadmintonClub.Infrastructure.Tests;
 
 public sealed class SettlementPreviewTokenTests
 {
+    [Fact]
+    public void ProductionRegistrationsResolveSettlementServicesAndBindOperationalSwitches()
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Settlement:PreviewSigningKey"] = new string('a', 32),
+            ["Settlement:WritesEnabled"] = "false",
+            ["Settlement:DispatchEnabled"] = "false",
+            ["Firebase:CredentialsPath"] = "uc16-test-no-firebase-credentials.json"
+        }).Build();
+        var services = new ServiceCollection().AddLogging().AddSingleton<IConfiguration>(configuration);
+        services.AddApplication().AddInfrastructure(configuration);
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+        using var first = provider.CreateScope();
+        using var second = provider.CreateScope();
+        var settings = provider.GetRequiredService<IOptionsMonitor<SettlementOptions>>().CurrentValue;
+        Assert.False(settings.WritesEnabled);
+        Assert.False(settings.DispatchEnabled);
+        Assert.Equal(new string('a', 32), settings.PreviewSigningKey);
+        Assert.IsType<RedisSettlementLock>(first.ServiceProvider.GetRequiredService<ISettlementLock>());
+        Assert.NotSame(first.ServiceProvider.GetRequiredService<ISettlementLock>(), second.ServiceProvider.GetRequiredService<ISettlementLock>());
+        Assert.Same(first.ServiceProvider.GetRequiredService<ISettlementPreviewTokenService>(), second.ServiceProvider.GetRequiredService<ISettlementPreviewTokenService>());
+        using var worker = ActivatorUtilities.CreateInstance<SettlementNotificationWorker>(provider);
+        Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(IHostedService) &&
+            descriptor.ImplementationType == typeof(SettlementNotificationWorker));
+        var f = new Fixture();
+        var tokenService = provider.GetRequiredService<ISettlementPreviewTokenService>();
+        var token = tokenService.Create(f.Actor, f.Session.GroupId, f.Session.Id, f.Costs, f.Adjustments,
+            false, tokenService.HashSource(f.Session, f.Rule, f.Users, []), f.Allocation, f.Now);
+        Assert.True(f.Validate(token.Token).IsSuccess);
+    }
+
     [Fact]
     public void SignatureRejectsPayloadAndSignatureTampering()
     {

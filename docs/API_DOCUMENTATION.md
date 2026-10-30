@@ -1377,7 +1377,7 @@ Bảng mã quyền hạn chuẩn hóa theo hệ thống phân quyền đa nhóm 
 
 ## UC16 — Form, xem trước và phê duyệt khoản thu
 
-Prefix: `/api/v1/sessions/{sessionId}/settlement`. Tất cả yêu cầu đăng nhập; handler kiểm quyền theo session.GroupId và membership/role hiện hành, độc lập với global-admin bypass.
+Prefix: `/api/v1/sessions/{sessionId}/settlement`. Tất cả yêu cầu JWT hợp lệ theo policy `SessionOperations`, kiểm chữ ký, issuer, audience và lifetime; token hết hạn/sai ngữ cảnh trả 401 trước khi tải dữ liệu tài chính. Handler kiểm quyền theo session.GroupId và membership/role hiện hành, độc lập với global-admin bypass.
 
 | Method | Hậu tố | Quyền | Kết quả |
 |---|---|---|---|
@@ -1406,6 +1406,6 @@ Preview chứa chi tiết phần sân/cầu/phụ phí, miễn tháng, giảm tr
 
 GET/approve trả `SessionSettlementResponse`: State, chi phí, TotalCost/TotalReceivable/TotalCollected/MonthlyFundCovered, PolicyDelta/RoundingDelta/AdjustmentDelta/BalanceDifference, PublishedAt/By và MemberFees. Mỗi fee có FeeId/UserId, FinalFee decimal, PriceType, PaymentStatus chuẩn UNPAID/PAID/EXEMPT, PaymentCode, PaidAt/PaymentMethod và Breakdown snapshot. Với legacy, các snapshot mới và Breakdown là null; không suy lại biểu phí hoặc hardcode giá cầu. QrCodePayload chưa tạo là chuỗi rỗng.
 
-Lỗi: 400 validation/token sai hoặc thiếu policy/membership, 401 chưa đăng nhập, 403 sai quyền/người duyệt/nhóm, 404 không tồn tại, 409 PreviewStale/PreviewExpired/AlreadyPublished/LegacyFees/PaymentCodeConflict/Busy/LockUnavailable/WritesDisabled/chưa EndTime/trận PLAYING/chưa xác nhận NO_SHOW. Các lỗi dữ liệu nghiệp vụ hiện dùng Error.Validation nên được ánh xạ 400 theo cơ chế chung của repository (thay cho 422 dự kiến); FE đọc Error.Code.
+Lỗi: 400 validation/token sai hoặc thiếu policy/membership, 401 chưa đăng nhập, 403 sai quyền/người duyệt/nhóm, 404 không tồn tại, 409 PreviewStale/PreviewExpired/AlreadyPublished/LegacyFees/PaymentCodeConflict/Busy/LockUnavailable/WritesDisabled/chưa EndTime/trận PLAYING/chưa xác nhận NO_SHOW. Các lỗi dữ liệu nghiệp vụ hiện dùng Error.Validation nên được ánh xạ 400 theo cơ chế chung (thay cho 422 dự kiến); FE đọc thuộc tính `code` ở cấp gốc của Problem Details, ví dụ `Settlement.PreviewStale`, không suy loại lỗi từ `detail`.
 
 Endpoint POST không hậu tố tính và phát hành một bước đã bỏ. Không có alias URL lặp `api/v1/sessions/api/v1/sessions`. Xem [báo cáo UC16](Detail%20Design/UC16-BE.md) và SQL chỉ dùng sau khi duyệt môi trường đích.

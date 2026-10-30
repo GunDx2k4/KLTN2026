@@ -37,12 +37,22 @@ public sealed class SettlementIntegrationFactAttribute : FactAttribute
     }
 }
 
+public sealed class SettlementIntegrationTheoryAttribute : TheoryAttribute
+{
+    public SettlementIntegrationTheoryAttribute()
+    {
+        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("UC16_TEST_POSTGRES")) ||
+            string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("UC16_TEST_REDIS")))
+            Skip = "Requires dedicated UC16 PostgreSQL and Redis test instances.";
+    }
+}
+
 public sealed class SettlementTransactionTests : IAsyncLifetime
 {
     private string connectionString = string.Empty;
     private string adminConnectionString = string.Empty;
     private readonly string databaseName = "uc16_test_" + Guid.NewGuid().ToString("N");
-    private readonly DateTime now = DateTime.UtcNow;
+    private readonly DateTime now = new(DateTime.UtcNow.Ticks / 10 * 10, DateTimeKind.Utc);
 
     public async Task InitializeAsync()
     {
@@ -134,8 +144,10 @@ public sealed class SettlementTransactionTests : IAsyncLifetime
         Assert.Null(booking.AttendanceMarkedAt);
     }
 
-    [SettlementIntegrationFact]
-    public async Task ExpiredRedisLeaseStillLeavesSecondPublisherBlockedByDatabaseAndOwnershipSafe()
+    [SettlementIntegrationTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ExpiredRedisLeaseStillLeavesSecondPublisherBlockedByDatabaseAndOwnershipSafe(bool rollbackFirst)
     {
         var fixture = await SeedAsync();
         using var redis = await ConnectionMultiplexer.ConnectAsync(Environment.GetEnvironmentVariable("UC16_TEST_REDIS")!);
@@ -163,12 +175,31 @@ public sealed class SettlementTransactionTests : IAsyncLifetime
             new string('b', 64), fixture.UserId, now, true).IsSuccess);
         firstRepository.AddSettlementFees(source.Session.Fees);
         await first.SaveChangesAsync();
-        await firstTransaction.CommitAsync();
+        if (rollbackFirst) await firstTransaction.RollbackAsync();
+        else await firstTransaction.CommitAsync();
         var retry = await waiting.WaitAsync(TimeSpan.FromSeconds(5));
-        Assert.Equal(identity, retry.Session!.PublishedPreviewId);
-        Assert.Equal(source.Session.Fees.Single().Id, retry.Session.Fees.Single().Id);
-        Assert.Equal(source.Session.Fees.Single().PaymentCode, retry.Session.Fees.Single().PaymentCode);
-        await secondTransaction.RollbackAsync();
+        if (rollbackFirst)
+        {
+            Assert.Null(retry.Session!.PublishedPreviewId);
+            Assert.Empty(retry.Session.Fees);
+            Assert.Equal(BookingStatus.CONFIRMED, retry.Session.Bookings.Single(b => b.UserId == fixture.AbsentId).Status);
+            Assert.True(retry.Session.PublishSettlement(retry.Rule!, retry.Users, retry.Memberships,
+                new(0, 25000, 100000, 0), [], Guid.NewGuid(), new string('c', 64), fixture.UserId, now, true).IsSuccess);
+            new SessionRepository(second).AddSettlementFees(retry.Session.Fees);
+            await second.SaveChangesAsync();
+            await secondTransaction.CommitAsync();
+            await using var verify = CreateContext();
+            Assert.Single(await verify.SessionFees.ToListAsync());
+            Assert.Single(await verify.Notifications.ToListAsync());
+            Assert.Single(await verify.OutboxMessages.ToListAsync());
+        }
+        else
+        {
+            Assert.Equal(identity, retry.Session!.PublishedPreviewId);
+            Assert.Equal(source.Session.Fees.Single().Id, retry.Session.Fees.Single().Id);
+            Assert.Equal(source.Session.Fees.Single().PaymentCode, retry.Session.Fees.Single().PaymentCode);
+            await secondTransaction.RollbackAsync();
+        }
     }
 
     [SettlementIntegrationFact]
@@ -197,7 +228,10 @@ public sealed class SettlementTransactionTests : IAsyncLifetime
         await ExecuteAsync(connection, "CREATE TABLE IF NOT EXISTS \"__EFMigrationsHistory\" (\"MigrationId\" character varying(150) PRIMARY KEY, \"ProductVersion\" character varying(32) NOT NULL)");
         await ExecuteAsync(connection, ReadSql("UC16-BE.Down.sql"));
         var before = await ReadLegacyAsync(connection, feeId, bankId);
+        await ExecuteAsync(connection, "INSERT INTO \"__EFMigrationsHistory\" (\"MigrationId\", \"ProductVersion\") VALUES ('20261026090341_AddFemaleDiscountGuestToFeeRule', '10.0.10')");
+        await ExecuteAsync(connection, ReadSql("UC16-BE.Preflight.sql"));
         await ExecuteAsync(connection, ReadSql("UC16-BE.Up.sql"));
+        await ExecuteAsync(connection, ReadSql("UC16-BE.Postflight.sql"));
         var after = await ReadLegacyAsync(connection, feeId, bankId);
         Assert.Equal(before, after);
         Assert.Contains("123456.78", after);
@@ -659,6 +693,8 @@ public sealed class SettlementTransactionTests : IAsyncLifetime
             Assert.Equal(previous.Breakdown, current.Breakdown);
             Assert.Equal("PAID", current.PaymentStatus);
             Assert.NotNull(current.PaidAt);
+            Assert.Equal(0m, before.TotalCollected);
+            Assert.Equal(current.FinalFee, after.TotalCollected);
         }
     }
 
@@ -707,6 +743,477 @@ public sealed class SettlementTransactionTests : IAsyncLifetime
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE group_member SET id_role = {otherRole.Id} WHERE id_group = {fixture.GroupId} AND id_user = {fixture.UserId}");
         Assert.False(await repository.CanManageFinanceAsync(fixture.GroupId, fixture.UserId));
         Assert.False(await repository.CanViewFinanceAsync(fixture.GroupId, fixture.UserId));
+    }
+
+    [SettlementIntegrationTheory]
+    [InlineData("attendance")]
+    [InlineData("pending")]
+    [InlineData("member-type")]
+    [InlineData("expiry")]
+    [InlineData("rule")]
+    public async Task ChangedSourceRejectsApprovalBeforeNoShowAndPreservesEveryStoredValue(string change)
+    {
+        var fixture = await SeedAsync(true);
+        var workflow = new ApprovalWorkflow(this, fixture.SessionId, fixture.UserId);
+        var command = await workflow.Preview();
+        await using (var db = CreateContext())
+        {
+            var sql = change switch
+            {
+                "attendance" => $"UPDATE session_booking SET status = 'ABSENT' WHERE id_user = '{fixture.UserId}'",
+                "pending" => $"UPDATE session_booking SET status = 'ABSENT' WHERE id_user = '{fixture.AbsentId}'",
+                "member-type" => $"UPDATE group_member SET member_type = 'MONTHLY', monthly_expiry_date = CURRENT_TIMESTAMP + INTERVAL '1 day' WHERE id_user = '{fixture.UserId}'",
+                "expiry" => $"UPDATE group_member SET monthly_expiry_date = CURRENT_TIMESTAMP WHERE id_user = '{fixture.UserId}'",
+                _ => $"UPDATE group_fee_rule SET guest_fee = guest_fee + 1 WHERE id_group = '{fixture.GroupId}'"
+            };
+            await db.Database.ExecuteSqlRawAsync(sql);
+        }
+        var before = await StoredState();
+        var result = await workflow.Approve(command);
+        Assert.Equal("Settlement.PreviewStale", result.Error.Code);
+        Assert.Equal(before, await StoredState());
+    }
+
+    [SettlementIntegrationTheory]
+    [InlineData("after-handler")]
+    [InlineData("session_fee")]
+    [InlineData("notification")]
+    [InlineData("rotation_outbox")]
+    [InlineData("after-save")]
+    [InlineData("before-commit")]
+    public async Task FailuresAtPublicationBoundariesRollbackAllStoredState(string point)
+    {
+        var fixture = await SeedAsync(true);
+        await using (var seed = CreateContext())
+        {
+            seed.AddRange(new SessionMatch(fixture.SessionId, 1, 1, now.AddHours(-1)),
+                new GuestRecruitment(fixture.SessionId, 1));
+            await seed.SaveChangesAsync();
+        }
+        var workflow = new ApprovalWorkflow(this, fixture.SessionId, fixture.UserId);
+        var command = await workflow.Preview();
+        if (point is "session_fee" or "notification" or "rotation_outbox")
+        {
+            await using var db = CreateContext();
+            await db.Database.ExecuteSqlRawAsync("CREATE FUNCTION fail_settlement_insert() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'injected settlement failure'; END $$");
+            await using var connection = new NpgsqlConnection(connectionString);
+            await connection.OpenAsync();
+            await ExecuteAsync(connection, $"CREATE TRIGGER fail_insert BEFORE INSERT ON {point} FOR EACH ROW EXECUTE FUNCTION fail_settlement_insert()");
+        }
+        var before = await StoredState();
+        await Assert.ThrowsAnyAsync<Exception>(() => workflow.Approve(command, point));
+        Assert.Equal(before, await StoredState());
+        if (point is "session_fee" or "notification" or "rotation_outbox")
+        {
+            await using var connection = new NpgsqlConnection(connectionString);
+            await connection.OpenAsync();
+            await ExecuteAsync(connection, $"DROP TRIGGER fail_insert ON {point}");
+        }
+        var retry = await workflow.Approve(command);
+        Assert.True(retry.IsSuccess, retry.Error.ToString());
+        Assert.Single(retry.Value.MemberFees);
+        await using var closed = CreateContext();
+        Assert.Equal(MatchStatus.SKIPPED, (await closed.SessionMatches.SingleAsync()).Status);
+        Assert.Equal(RecruitmentStatus.EXPIRED, (await closed.GuestRecruitments.SingleAsync()).Status);
+    }
+
+    [SettlementIntegrationFact]
+    public async Task DisabledWritesPreservesPublicationAndAllowsSnapshotRead()
+    {
+        var fixture = await SeedAsync(true);
+        var workflow = new ApprovalWorkflow(this, fixture.SessionId, fixture.UserId);
+        var command = await workflow.Preview();
+        Assert.True((await workflow.Approve(command)).IsSuccess);
+        var before = await StoredState();
+        workflow.Settings.WritesEnabled = false;
+        Assert.Equal("Settlement.WritesDisabled", (await workflow.Approve(command)).Error.Code);
+        await using var db = CreateContext();
+        var view = new GroupPermission(GroupPermissions.Finance.FeeView, "Xem khoản thu", ModuleGroup.FINANCE);
+        db.AddRange(view, new RolePermission(fixture.RoleId, view.Id));
+        await db.SaveChangesAsync();
+        var result = await new GetSessionSettlementQueryHandler(new SessionRepository(db), workflow.Actor)
+            .Handle(new(fixture.SessionId), default);
+        Assert.True(result.IsSuccess, result.Error.ToString());
+        Assert.Equal("PUBLISHED", result.Value.State);
+        Assert.Equal(before, await StoredState());
+    }
+
+    [SettlementIntegrationFact]
+    public async Task PaymentOutboxCannotBeClaimedBeforeCommitAndRecoversExpiredLeaseWithoutTouchingRotation()
+    {
+        var fixture = await SeedAsync(true);
+        await using var writer = CreateContext();
+        await using var transaction = await writer.Database.BeginTransactionAsync();
+        var repository = new SessionRepository(writer);
+        var source = await repository.GetSettlementSourceAsync(fixture.SessionId, true);
+        Assert.True(source.Session!.PublishSettlement(source.Rule!, source.Users, source.Memberships,
+            new(0, 0, 100000, 0), [], Guid.NewGuid(), new string('a', 64), fixture.UserId, now, true).IsSuccess);
+        repository.AddSettlementFees(source.Session.Fees);
+        var rotation = new OutboxMessage("RotationChanged", fixture.UserId, "{}", now);
+        writer.OutboxMessages.Add(rotation);
+        await writer.SaveChangesAsync();
+        await using (var reader = CreateContext())
+            Assert.Null(await new OutboxRepository(reader).ClaimAsync(["SettlementPaymentPush"], now, default));
+        await transaction.CommitAsync();
+        Guid messageId;
+        Guid oldLease;
+        await using (var firstWorker = CreateContext())
+        {
+            var message = await new OutboxRepository(firstWorker).ClaimAsync(["SettlementPaymentPush"], now, default);
+            Assert.NotNull(message);
+            messageId = message.Id;
+            oldLease = message.LeaseId!.Value;
+        }
+        await using (var secondWorker = CreateContext())
+        {
+            var outbox = new OutboxRepository(secondWorker);
+            Assert.Null(await outbox.ClaimAsync(["SettlementPaymentPush"], now.AddSeconds(59), default));
+            var recovered = await outbox.ClaimAsync(["SettlementPaymentPush"], now.AddSeconds(61), default);
+            Assert.NotNull(recovered);
+            Assert.Equal(messageId, recovered.Id);
+            Assert.NotEqual(oldLease, recovered.LeaseId);
+            await outbox.CompleteAsync(messageId, oldLease, now.AddSeconds(62), default);
+            await outbox.FailAsync(messageId, oldLease, now.AddSeconds(62), "old-owner", default);
+            await using var verify = CreateContext();
+            var stored = await verify.OutboxMessages.SingleAsync(m => m.Id == messageId);
+            Assert.Null(stored.DeliveredAt);
+            Assert.Equal(recovered.LeaseId, stored.LeaseId);
+            Assert.Equal(0, stored.Attempts);
+            await outbox.CompleteAsync(messageId, recovered.LeaseId!.Value, now.AddSeconds(63), default);
+        }
+        await using var final = CreateContext();
+        Assert.Null((await final.OutboxMessages.SingleAsync(m => m.Id == rotation.Id)).LeaseId);
+        Assert.NotNull((await final.OutboxMessages.SingleAsync(m => m.Id == messageId)).DeliveredAt);
+        Assert.Single(await final.Notifications.ToListAsync());
+    }
+
+    private async Task<string> StoredState()
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync();
+        var values = new List<string>();
+        foreach (var table in new[] { "badminton_session", "session_booking", "session_match", "guest_recruitment",
+                     "session_fee", "notification", "rotation_outbox", "bank_transaction", "group_ledger" })
+        {
+            await using var query = new NpgsqlCommand($"SELECT COALESCE(jsonb_agg(row ORDER BY row::text), '[]'::jsonb)::text FROM (SELECT to_jsonb(t) AS row FROM {table} t) rows", connection);
+            values.Add(table + ":" + (string)(await query.ExecuteScalarAsync())!);
+        }
+        return string.Join("\n", values);
+    }
+
+    [SettlementIntegrationTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SourceLockTimeoutOrCancellationNeverPublishesAndSameRequestCanRetry(bool cancel)
+    {
+        var fixture = await SeedAsync(true);
+        var workflow = new ApprovalWorkflow(this, fixture.SessionId, fixture.UserId);
+        var command = await workflow.Preview();
+        var before = await StoredState();
+        await using var blocker = CreateContext();
+        await using var transaction = await blocker.Database.BeginTransactionAsync();
+        await blocker.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM club_group WHERE id_group = {fixture.GroupId} FOR UPDATE");
+        using var cancellation = new CancellationTokenSource();
+        var approval = workflow.Approve(command, cancellationToken: cancellation.Token);
+        await WaitForSourceWaiter();
+        if (cancel)
+        {
+            cancellation.Cancel();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => approval);
+        }
+        else Assert.Equal("Settlement.Busy", (await approval).Error.Code);
+        await transaction.RollbackAsync();
+        Assert.Equal(before, await StoredState());
+        var retry = await workflow.Approve(command);
+        Assert.True(retry.IsSuccess, retry.Error.ToString());
+    }
+
+    [SettlementIntegrationFact]
+    public async Task SourceDeadlockRollsBackVictimAndRetryPublishesOnlyOnce()
+    {
+        var fixture = await SeedAsync(true);
+        var workflow = new ApprovalWorkflow(this, fixture.SessionId, fixture.UserId);
+        var command = await workflow.Preview();
+        await using var writer = CreateContext();
+        await using var transaction = await writer.Database.BeginTransactionAsync();
+        await writer.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM app_user WHERE id_user = {fixture.UserId} FOR UPDATE");
+        var approval = workflow.Approve(command);
+        await WaitForSourceWaiter();
+        try
+        {
+            await writer.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM club_group WHERE id_group = {fixture.GroupId} FOR UPDATE");
+        }
+        catch (Exception ex) when (ex.GetBaseException() is PostgresException { SqlState: PostgresErrorCodes.DeadlockDetected }) { }
+        await transaction.RollbackAsync();
+        var result = await approval.WaitAsync(TimeSpan.FromSeconds(10));
+        if (result.IsFailure)
+        {
+            Assert.Equal("Settlement.Busy", result.Error.Code);
+            await using var verify = CreateContext();
+            Assert.Empty(await verify.SessionFees.ToListAsync());
+            Assert.Null((await verify.BadmintonSessions.SingleAsync()).PublishedPreviewId);
+        }
+        var retry = await workflow.Approve(command);
+        Assert.True(retry.IsSuccess, retry.Error.ToString());
+        await using var final = CreateContext();
+        Assert.Single(await final.SessionFees.ToListAsync());
+        Assert.Single(await final.Notifications.ToListAsync());
+        Assert.Single(await final.OutboxMessages.ToListAsync());
+    }
+
+    [SettlementIntegrationTheory]
+    [InlineData("response-lost")]
+    [InlineData("release")]
+    public async Task FailureAfterCommitPreservesPaidAuditAndBankReferenceOnExpiredRetry(string failure)
+    {
+        var fixture = await SeedAsync(true);
+        var workflow = new ApprovalWorkflow(this, fixture.SessionId, fixture.UserId);
+        var command = await workflow.Preview();
+        if (failure == "response-lost") await Assert.ThrowsAnyAsync<Exception>(() => workflow.Approve(command, failure));
+        else Assert.True((await workflow.Approve(command, failure)).IsSuccess);
+        await using (var paid = CreateContext())
+        {
+            var fee = await paid.SessionFees.SingleAsync();
+            Assert.Matches("^CLB [0-9A-F]{12} [0-9A-F]{12}$", fee.PaymentCode);
+            fee.MarkAsPaid(PaymentMethod.BANK_TRANSFER, fixture.UserId);
+            paid.BankTransactions.Add(new BankTransaction("test-only", Guid.NewGuid().ToString(), fee.Amount,
+                fee.PaymentCode, now, fee.Id, ReconciliationStatus.MATCHED));
+            await paid.SaveChangesAsync();
+            await paid.Database.ExecuteSqlInterpolatedAsync($"UPDATE group_fee_rule SET guest_fee = guest_fee + 100 WHERE id_group = {fixture.GroupId}");
+        }
+        var before = await StoredState();
+        workflow.Clock.Current = now.AddMinutes(20);
+        if (failure == "release")
+        {
+            Assert.Equal("Settlement.Busy", (await workflow.Approve(command)).Error.Code);
+            Assert.Equal(before, await StoredState());
+            using var redis = await ConnectionMultiplexer.ConnectAsync(Environment.GetEnvironmentVariable("UC16_TEST_REDIS")!);
+            var remaining = await redis.GetDatabase().KeyTimeToLiveAsync($"lock:session:{fixture.SessionId}:settlement");
+            if (remaining is { } ttl) await Task.Delay(ttl + TimeSpan.FromMilliseconds(100));
+        }
+        var retry = await workflow.Approve(command);
+        Assert.True(retry.IsSuccess, retry.Error.ToString());
+        Assert.Equal("PAID", Assert.Single(retry.Value.MemberFees).PaymentStatus);
+        Assert.Equal(before, await StoredState());
+        var differentInput = command with { Input = command.Input with { ExtraExpense = 999m } };
+        Assert.True((await workflow.Approve(differentInput)).IsFailure);
+        Assert.Equal(before, await StoredState());
+    }
+
+    [SettlementIntegrationFact]
+    public async Task OutboxRetriesPersistBackoffAndStopClaimingAfterTenFailures()
+    {
+        await using (var seed = CreateContext())
+        {
+            seed.OutboxMessages.Add(new("SettlementPaymentPush", Guid.NewGuid(), "{}", now));
+            await seed.SaveChangesAsync();
+        }
+        var attemptAt = now;
+        for (var attempt = 1; attempt <= 10; attempt++)
+        {
+            await using var db = CreateContext();
+            var repository = new OutboxRepository(db);
+            var message = await repository.ClaimAsync(["SettlementPaymentPush"], attemptAt, default);
+            Assert.NotNull(message);
+            await repository.FailAsync(message.Id, message.LeaseId!.Value, attemptAt, "FCM unavailable", default);
+            await using var reader = CreateContext();
+            var stored = await reader.OutboxMessages.SingleAsync();
+            Assert.Equal(attempt, stored.Attempts);
+            Assert.Null(stored.DeliveredAt);
+            Assert.Null(stored.LeaseId);
+            Assert.Equal("FCM unavailable", stored.LastError);
+            Assert.Null(await repository.ClaimAsync(["SettlementPaymentPush"], stored.NextAttemptAt.AddTicks(-1), default));
+            attemptAt = stored.NextAttemptAt;
+        }
+        await using var final = CreateContext();
+        Assert.Null(await new OutboxRepository(final).ClaimAsync(["SettlementPaymentPush"], attemptAt.AddDays(1), default));
+    }
+
+    private async Task WaitForSourceWaiter()
+    {
+        await using var observer = new NpgsqlConnection(connectionString);
+        await observer.OpenAsync();
+        var deadline = Stopwatch.StartNew();
+        while (deadline.Elapsed < TimeSpan.FromSeconds(2))
+        {
+            await using var query = new NpgsqlCommand("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid() AND wait_event_type = 'Lock')", observer);
+            if (await query.ExecuteScalarAsync() is true) return;
+            await Task.Delay(20);
+        }
+        Assert.Fail("Approval was not observed waiting for a PostgreSQL source lock.");
+    }
+
+    [SettlementIntegrationTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TwoHostsOrIdenticalFirstApprovalsProduceExactlyOnePublication(bool sameIdentity)
+    {
+        var fixture = await SeedAsync(true);
+        var other = new AppUser(Guid.NewGuid(), "Thủ quỹ");
+        await using (var seed = CreateContext())
+        {
+            seed.AddRange(other, new GroupMember(fixture.GroupId, other.Id, fixture.RoleId, "DAILY"));
+            await seed.SaveChangesAsync();
+        }
+        var first = new ApprovalWorkflow(this, fixture.SessionId, fixture.UserId);
+        var second = new ApprovalWorkflow(this, fixture.SessionId, sameIdentity ? fixture.UserId : other.Id);
+        var firstCommand = await first.Preview();
+        var secondCommand = sameIdentity ? firstCommand : await second.Preview();
+        var results = await Task.WhenAll(first.Approve(firstCommand), second.Approve(secondCommand));
+        if (sameIdentity)
+        {
+            Assert.All(results, result => Assert.True(result.IsSuccess, result.Error.ToString()));
+            Assert.Equal(results[0].Value.MemberFees.Single().FeeId, results[1].Value.MemberFees.Single().FeeId);
+        }
+        else
+        {
+            Assert.Single(results, result => result.IsSuccess);
+            Assert.Equal("Settlement.AlreadyPublished", Assert.Single(results, result => result.IsFailure).Error.Code);
+        }
+        await using var verify = CreateContext();
+        Assert.Single(await verify.SessionFees.ToListAsync());
+        Assert.Single(await verify.Notifications.ToListAsync());
+        Assert.Single(await verify.OutboxMessages.ToListAsync());
+        Assert.Equal(BookingStatus.NO_SHOW, (await verify.SessionBookings.SingleAsync(b => b.UserId == fixture.AbsentId)).Status);
+    }
+
+    [SettlementIntegrationTheory]
+    [InlineData("missing")]
+    [InlineData("expired")]
+    [InlineData("valid")]
+    [InlineData("override")]
+    public async Task MonthlyPolicyPersistsClassificationWithoutChangingMembershipOrCreatingLedgerEntries(string scenario)
+    {
+        var fixture = await SeedAsync(true);
+        DateTime? expiry = scenario == "missing" ? null : scenario == "expired" ? now.AddDays(-1) : now.AddDays(1);
+        await using (var seed = CreateContext())
+            await seed.Database.ExecuteSqlInterpolatedAsync($"UPDATE group_member SET member_type = 'MONTHLY', monthly_expiry_date = {expiry} WHERE id_user = {fixture.UserId}");
+        var workflow = new ApprovalWorkflow(this, fixture.SessionId, fixture.UserId);
+        var input = new PreviewSettlementRequest(2, 25000, 100000, 10000,
+            scenario == "override" ? [new(fixture.UserId, 12345.67m, "Phụ phí đặc biệt")] : [], true);
+        if (scenario == "missing")
+        {
+            var before = await StoredState();
+            await using var db = CreateContext();
+            var preview = await new PreviewSettlementQueryHandler(new SessionRepository(db), workflow.Actor,
+                new SettlementPreviewTokenService(Options.Create(workflow.Settings)), workflow.Clock)
+                .Handle(new(fixture.SessionId, input), default);
+            Assert.Equal("Settlement.MonthlyExpiryRequired", preview.Error.Code);
+            Assert.Equal(before, await StoredState());
+            return;
+        }
+        var command = await workflow.Preview(input);
+        var result = await workflow.Approve(command);
+        Assert.True(result.IsSuccess, result.Error.ToString());
+        await using var verify = CreateContext();
+        var membership = await verify.GroupMembers.SingleAsync();
+        Assert.Equal("MONTHLY", membership.MemberType);
+        Assert.Equal(expiry, membership.MonthlyExpiryDate);
+        var fee = await verify.SessionFees.SingleAsync();
+        Assert.Equal(scenario == "expired" ? PriceType.DAILY_MEMBER : PriceType.MONTHLY_MEMBER, fee.PriceType);
+        Assert.Equal(scenario == "valid" ? 0m : scenario == "override" ? 12345.67m : 160000m, fee.Amount);
+        Assert.Equal(scenario == "valid" ? PaymentStatus.EXEMPT : PaymentStatus.UNPAID, fee.PaymentStatus);
+        Assert.Equal(string.Empty, fee.QrCodePayload);
+        Assert.Empty(await verify.GroupLedgers.ToListAsync());
+        Assert.Empty(await verify.BankTransactions.ToListAsync());
+        if (scenario == "valid")
+        {
+            var before = await StoredState();
+            var cash = new MarkMemberPaidCommand(fixture.SessionId, fixture.UserId);
+            var resultPaid = await new UnitOfWorkBehavior<MarkMemberPaidCommand, Result<SessionSettlementResponse>>(verify)
+                .Handle(cash, ct => new MarkMemberPaidCommandHandler(new SessionRepository(verify), workflow.Actor).Handle(cash, ct), default);
+            Assert.Equal("Settlement.Exempt", resultPaid.Error.Code);
+            Assert.Equal(before, await StoredState());
+        }
+    }
+
+    private sealed class ApprovalWorkflow(SettlementTransactionTests owner, Guid sessionId, Guid actorId)
+    {
+        public SettlementOptions Settings { get; } = new() { WritesEnabled = true, PreviewSigningKey = new string('K', 64) };
+        public ICurrentUserService Actor { get; } = CreateActor(actorId);
+        public AdjustableClock Clock { get; } = new(owner.now);
+        private static ICurrentUserService CreateActor(Guid id)
+        {
+            var actor = Substitute.For<ICurrentUserService>();
+            actor.UserId.Returns(id);
+            return actor;
+        }
+
+        public async Task<ApproveSettlementCommand> Preview(PreviewSettlementRequest? request = null)
+        {
+            await using var db = owner.CreateContext();
+            var input = request ?? new PreviewSettlementRequest(2, 25000, 100000, 10000, [], true);
+            var result = await new PreviewSettlementQueryHandler(new SessionRepository(db), Actor,
+                new SettlementPreviewTokenService(Options.Create(Settings)), Clock)
+                .Handle(new(sessionId, input), default);
+            Assert.True(result.IsSuccess, result.Error.ToString());
+            return new(sessionId, input, result.Value.PreviewToken);
+        }
+
+        public async Task<Result<SessionSettlementResponse>> Approve(ApproveSettlementCommand command, string? failure = null,
+            CancellationToken cancellationToken = default)
+        {
+            using var redis = await ConnectionMultiplexer.ConnectAsync(Environment.GetEnvironmentVariable("UC16_TEST_REDIS")!);
+            await using var services = new ServiceCollection().AddSingleton<IConnectionMultiplexer>(redis).BuildServiceProvider();
+            var monitor = Substitute.For<IOptionsMonitor<SettlementOptions>>();
+            monitor.CurrentValue.Returns(Settings);
+            var gate = new RedisSettlementLock(services, NullLogger<RedisSettlementLock>.Instance);
+            await using var db = owner.CreateContext();
+            var handler = new ApproveSettlementCommandHandler(new SessionRepository(db), Actor,
+                new SettlementPreviewTokenService(Options.Create(Settings)), Clock, monitor);
+            var uow = new UnitOfWorkBehavior<ApproveSettlementCommand, Result<SessionSettlementResponse>>(new FailingUnitOfWork(db, failure));
+            return await new SettlementLockBehavior(gate, monitor).Handle(command, async ct =>
+            {
+                var result = await uow.Handle(command, async inner =>
+                {
+                    var response = await handler.Handle(command, inner);
+                    if (failure == "after-handler") throw new InvalidOperationException("Injected after NO_SHOW and publication.");
+                    return response;
+                }, ct);
+                if (failure == "release") await redis.CloseAsync();
+                return result;
+            }, cancellationToken);
+        }
+    }
+
+    private sealed class FailingUnitOfWork(BadmintonDbContext db, string? failure) : LegendsTeamVN.Core.Domain.Repositories.IUnitOfWork
+    {
+        public Task<IDisposable> BeginTransactionAsync(System.Data.IsolationLevel isolationLevel = System.Data.IsolationLevel.ReadCommitted,
+            CancellationToken cancellationToken = default) => db.BeginTransactionAsync(isolationLevel, cancellationToken);
+        public async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+        {
+            var count = await db.SaveChangesAsync(cancellationToken);
+            if (failure == "after-save") throw new InvalidOperationException("Injected after SaveChanges.");
+            return count;
+        }
+        public async Task CommitTransactionAsync(CancellationToken cancellationToken = default)
+        {
+            if (failure == "before-commit") throw new InvalidOperationException("Injected before commit.");
+            await db.CommitTransactionAsync(cancellationToken);
+            if (failure == "response-lost") throw new IOException("Injected lost commit acknowledgement.");
+        }
+        public Task RollbackTransactionAsync(CancellationToken cancellationToken = default) => db.RollbackTransactionAsync(cancellationToken);
+    }
+
+    [SettlementIntegrationFact]
+    public async Task DownArtifactRefusesToRemoveCommittedPublicationAndKeepsAllData()
+    {
+        var fixture = await SeedAsync(true);
+        var workflow = new ApprovalWorkflow(this, fixture.SessionId, fixture.UserId);
+        var command = await workflow.Preview();
+        Assert.True((await workflow.Approve(command)).IsSuccess);
+        var before = await StoredState();
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync();
+        var error = await Assert.ThrowsAsync<PostgresException>(() => ExecuteAsync(connection, ReadSql("UC16-BE.Down.sql")));
+        Assert.Equal(PostgresErrorCodes.RaiseException, error.SqlState);
+        Assert.Contains("publication snapshots must be preserved", error.MessageText);
+        await ExecuteAsync(connection, "ROLLBACK");
+        Assert.Equal(before, await StoredState());
+        await ExecuteAsync(connection, "CREATE TABLE IF NOT EXISTS \"__EFMigrationsHistory\" (\"MigrationId\" character varying(150) PRIMARY KEY, \"ProductVersion\" character varying(32) NOT NULL)");
+        await ExecuteAsync(connection, "INSERT INTO \"__EFMigrationsHistory\" (\"MigrationId\", \"ProductVersion\") VALUES ('20261029135900_AddSettlementPublicationSnapshot', '10.0.10')");
+        await ExecuteAsync(connection, ReadSql("UC16-BE.Postflight.sql"));
+        Assert.True((await workflow.Approve(command)).IsSuccess);
     }
 
     private async Task AssertBlockedAsync(BadmintonDbContext context)

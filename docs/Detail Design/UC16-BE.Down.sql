@@ -1,4 +1,15 @@
 ﻿START TRANSACTION;
+SET LOCAL lock_timeout = '3s';
+LOCK TABLE badminton_session, session_fee IN ACCESS EXCLUSIVE MODE;
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM badminton_session WHERE published_preview_id IS NOT NULL
+        OR published_at IS NOT NULL OR published_request_hash IS NOT NULL OR total_cost IS NOT NULL)
+        OR EXISTS (SELECT 1 FROM session_fee WHERE is_published OR published_at IS NOT NULL
+            OR court_share IS NOT NULL OR adjustment_reason IS NOT NULL) THEN
+        RAISE EXCEPTION 'UC16 rollback blocked: publication snapshots must be preserved';
+    END IF;
+END $$;
 ALTER TABLE session_fee DROP COLUMN adjusted_at;
 
 ALTER TABLE session_fee DROP COLUMN adjusted_by;
