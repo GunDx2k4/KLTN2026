@@ -1,3 +1,5 @@
+using LegendsTeamVN.BadmintonClub.Application.DTOs.Settlement.Responses;
+using LegendsTeamVN.BadmintonClub.Application.Features.Settlement.Approve;
 using LegendsTeamVN.BadmintonClub.Application.DependencyInjection.Options;
 using LegendsTeamVN.Core.Application.DependencyInjection.Extensions;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,9 +15,15 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
         services.AddMessageHandler(Assembly.GetExecutingAssembly());
+        var transactionIndex = services.ToList().FindIndex(descriptor =>
+            descriptor.ServiceType == typeof(MediatR.IPipelineBehavior<,>) &&
+            descriptor.ImplementationType == typeof(LegendsTeamVN.Core.Application.Behaviors.UnitOfWorkBehavior<,>));
+        services.Insert(transactionIndex, ServiceDescriptor.Transient(typeof(MediatR.IPipelineBehavior<ApproveSettlementCommand, LegendsTeamVN.Core.Utilities.Results.Result<SessionSettlementResponse>>),
+            typeof(SettlementLockBehavior)));
         services.TryAddSingleton<TimeProvider>(TimeProvider.System);
         services.AddScoped<AttendanceService>();
         services.AddScoped<RotationService>();
+        services.AddScoped<Features.Rotation.Personal.PersonalScheduleService>();
         services.AddOptions<SessionRotationOptions>()
             .BindConfiguration(SessionRotationOptions.SectionName);
 

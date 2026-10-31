@@ -1,4 +1,5 @@
 using LegendsTeamVN.BadmintonClub.Domain.Enums;
+using LegendsTeamVN.BadmintonClub.Domain.Services;
 using LegendsTeamVN.Core.Domain.Aggregates;
 
 namespace LegendsTeamVN.BadmintonClub.Domain.Entities;
@@ -32,6 +33,25 @@ public class SessionFee : AggregateRoot<Guid>
 
     public DateTime? PaidAt { get; private set; }
 
+    public bool IsPublished { get; private set; }
+    public short? Gender { get; private set; }
+    public string? MemberType { get; private set; }
+    public DateTime? MonthlyExpiryDate { get; private set; }
+    public decimal? CourtShare { get; private set; }
+    public decimal? ShuttleShare { get; private set; }
+    public decimal? ExtraShare { get; private set; }
+    public decimal? MonthlyFundCovered { get; private set; }
+    public decimal? BaseAmount { get; private set; }
+    public decimal? RawAmount { get; private set; }
+    public decimal? CalculatedAmount { get; private set; }
+    public decimal? RoundingDelta { get; private set; }
+    public decimal? AdjustmentDelta { get; private set; }
+    public string? AdjustmentReason { get; private set; }
+    public Guid? AdjustedBy { get; private set; }
+    public DateTime? AdjustedAt { get; private set; }
+    public Guid? PublishedBy { get; private set; }
+    public DateTime? PublishedAt { get; private set; }
+
     public virtual BadmintonSession Session { get; private set; } = default!;
     public virtual AppUser User { get; private set; } = default!;
     public virtual AppUser? CashCollector { get; private set; }
@@ -50,6 +70,11 @@ public class SessionFee : AggregateRoot<Guid>
         decimal discountApplied = 0,
         PaymentStatus paymentStatus = PaymentStatus.UNPAID)
     {
+        if (!SettlementAllocationEngine.IsValidAmount(amount) || !SettlementAllocationEngine.IsValidAmount(discountApplied))
+            throw new ArgumentOutOfRangeException(nameof(amount), "Số tiền không hợp lệ.");
+        if (!Enum.IsDefined(priceType) || !Enum.IsDefined(paymentStatus) ||
+            paymentMethod.HasValue && !Enum.IsDefined(paymentMethod.Value))
+            throw new ArgumentException("Phân loại hoặc trạng thái khoản thu không hợp lệ.");
         Id = Guid.NewGuid();
         SessionId = sessionId;
         UserId = userId;
@@ -76,23 +101,66 @@ public class SessionFee : AggregateRoot<Guid>
     {
     }
 
+    public static string CreatePaymentCode(Guid sessionId, Guid userId) =>
+        $"CLB {sessionId.ToString("N")[..12].ToUpperInvariant()} {userId.ToString("N")[..12].ToUpperInvariant()}";
+
+    internal static SessionFee CreatePublished(Guid sessionId, SettlementMemberAllocation allocation, Guid actorId, DateTime now)
+    {
+        return new SessionFee(sessionId, allocation.UserId, allocation.FinalAmount, allocation.PriceType,
+            CreatePaymentCode(sessionId, allocation.UserId), string.Empty,
+            paymentStatus: allocation.FinalAmount == 0 ? PaymentStatus.EXEMPT : PaymentStatus.UNPAID,
+            discountApplied: allocation.DiscountApplied)
+        {
+            IsPublished = true,
+            Gender = allocation.Gender,
+            MemberType = allocation.MemberType,
+            MonthlyExpiryDate = allocation.MonthlyExpiryDate,
+            CourtShare = allocation.CourtShare,
+            ShuttleShare = allocation.ShuttleShare,
+            ExtraShare = allocation.ExtraShare,
+            MonthlyFundCovered = allocation.MonthlyFundCovered,
+            BaseAmount = allocation.BaseAmount,
+            RawAmount = allocation.RawAmount,
+            CalculatedAmount = allocation.CalculatedAmount,
+            RoundingDelta = allocation.RoundingDelta,
+            AdjustmentDelta = allocation.AdjustmentDelta,
+            AdjustmentReason = allocation.AdjustmentReason,
+            AdjustedBy = allocation.AdjustmentReason is null ? null : actorId,
+            AdjustedAt = allocation.AdjustmentReason is null ? null : now,
+            PublishedBy = actorId,
+            PublishedAt = now
+        };
+    }
+
+    private void EnsurePriceMutable()
+    {
+        if (IsPublished || PaymentStatus == PaymentStatus.PAID)
+            throw new InvalidOperationException("Không thể thay đổi khoản thu đã phát hành hoặc thanh toán.");
+    }
+
     public void UpdatePriceType(PriceType priceType)
     {
+        EnsurePriceMutable();
+        if (!Enum.IsDefined(priceType)) throw new ArgumentOutOfRangeException(nameof(priceType));
         PriceType = priceType;
     }
 
     public void UpdatePriceType(string priceType)
     {
-        PriceType = ParsePriceType(priceType);
+        UpdatePriceType(ParsePriceType(priceType));
     }
 
     private static PriceType ParsePriceType(string priceType)
     {
-        return Enum.TryParse<PriceType>(priceType, true, out var result) ? result : PriceType.DAILY_MEMBER;
+        return Enum.TryParse<PriceType>(priceType, out var result) && Enum.IsDefined(result) && result.ToString() == priceType
+            ? result : throw new ArgumentException("Loại giá không hợp lệ.", nameof(priceType));
     }
 
     public void MarkAsPaid(PaymentMethod paymentMethod, Guid? cashCollectedBy = null)
     {
+        if (PaymentStatus == PaymentStatus.PAID) return;
+        if (PaymentStatus == PaymentStatus.EXEMPT || Amount == 0 || !Enum.IsDefined(paymentMethod))
+            throw new InvalidOperationException("Khoản miễn thu hoặc phương thức thanh toán không hợp lệ.");
         PaymentStatus = PaymentStatus.PAID;
         PaymentMethod = paymentMethod;
         CashCollectedBy = cashCollectedBy;
@@ -101,47 +169,60 @@ public class SessionFee : AggregateRoot<Guid>
 
     public void MarkAsExempt()
     {
+        EnsurePriceMutable();
         PaymentStatus = PaymentStatus.EXEMPT;
     }
 
     public void UpdatePaymentStatus(PaymentStatus paymentStatus)
     {
+        if (!Enum.IsDefined(paymentStatus)) throw new ArgumentOutOfRangeException(nameof(paymentStatus));
+        if (PaymentStatus == paymentStatus) return;
+        if (IsPublished || PaymentStatus == PaymentStatus.PAID || paymentStatus == PaymentStatus.PAID)
+            throw new InvalidOperationException("Hãy sử dụng thao tác thanh toán hợp lệ, không đặt lại trạng thái khoản thu đã khóa.");
         PaymentStatus = paymentStatus;
     }
 
     public void UpdatePaymentStatus(string paymentStatus)
     {
-        PaymentStatus = ParsePaymentStatus(paymentStatus);
+        UpdatePaymentStatus(ParsePaymentStatus(paymentStatus));
     }
 
     private static PaymentStatus ParsePaymentStatus(string paymentStatus)
     {
-        return Enum.TryParse<PaymentStatus>(paymentStatus, true, out var result) ? result : PaymentStatus.UNPAID;
+        return Enum.TryParse<PaymentStatus>(paymentStatus, out var result) && Enum.IsDefined(result) && result.ToString() == paymentStatus
+            ? result : throw new ArgumentException("Trạng thái thanh toán không hợp lệ.", nameof(paymentStatus));
     }
 
     public void MarkAsPaid(string paymentMethod, Guid? cashCollectedBy = null)
     {
-        MarkAsPaid(ParsePaymentMethod(paymentMethod) ?? Enums.PaymentMethod.BANK_TRANSFER, cashCollectedBy);
+        MarkAsPaid(ParsePaymentMethod(paymentMethod) ?? throw new ArgumentException("Phương thức thanh toán không hợp lệ.", nameof(paymentMethod)), cashCollectedBy);
     }
 
     public void UpdatePaymentMethod(PaymentMethod? paymentMethod)
     {
+        if (paymentMethod.HasValue && !Enum.IsDefined(paymentMethod.Value)) throw new ArgumentOutOfRangeException(nameof(paymentMethod));
+        if (PaymentStatus == PaymentStatus.PAID)
+            throw new InvalidOperationException("Không thể đổi phương thức của khoản thu đã thanh toán.");
         PaymentMethod = paymentMethod;
     }
 
     public void UpdatePaymentMethod(string? paymentMethod)
     {
-        PaymentMethod = ParsePaymentMethod(paymentMethod);
+        UpdatePaymentMethod(ParsePaymentMethod(paymentMethod));
     }
 
     private static PaymentMethod? ParsePaymentMethod(string? paymentMethod)
     {
-        if (string.IsNullOrWhiteSpace(paymentMethod)) return null;
-        return Enum.TryParse<PaymentMethod>(paymentMethod, true, out var result) ? result : null;
+        if (paymentMethod is null) return null;
+        return Enum.TryParse<PaymentMethod>(paymentMethod, out var result) && Enum.IsDefined(result) && result.ToString() == paymentMethod
+            ? result : throw new ArgumentException("Phương thức thanh toán không hợp lệ.", nameof(paymentMethod));
     }
 
     public void UpdateAmount(decimal amount, decimal discountApplied)
     {
+        EnsurePriceMutable();
+        if (!SettlementAllocationEngine.IsValidAmount(amount) || !SettlementAllocationEngine.IsValidAmount(discountApplied))
+            throw new ArgumentOutOfRangeException(nameof(amount), "Số tiền không hợp lệ.");
         Amount = amount;
         DiscountApplied = discountApplied;
     }

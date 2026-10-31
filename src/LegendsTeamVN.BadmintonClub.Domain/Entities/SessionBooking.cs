@@ -20,6 +20,8 @@ public class SessionBooking : AggregateRoot<Guid>
     public DateTime? AttendanceMarkedAt { get; private set; }
     public Guid? AttendanceMarkedBy { get; private set; }
     public bool IsRotationPaused { get; private set; }
+    public RotationPauseSource? RotationPauseSource { get; private set; }
+    public Guid? SelfPauseTargetMatchId { get; private set; }
 
     public virtual BadmintonSession Session { get; private set; } = default!;
     public virtual AppUser User { get; private set; } = default!;
@@ -105,7 +107,26 @@ public class SessionBooking : AggregateRoot<Guid>
 
     public void AssignRecruitment(Guid? recruitmentId) => RecruitmentId = recruitmentId;
 
-    internal void SetRotationPaused(bool isPaused) => IsRotationPaused = isPaused;
+    internal void SetRotationPaused(bool isPaused, RotationPauseSource source)
+    {
+        IsRotationPaused = isPaused;
+        RotationPauseSource = isPaused ? source : null;
+        SelfPauseTargetMatchId = null;
+    }
+
+    internal void BindSelfPauseTarget(Guid matchId)
+    {
+        if (!IsRotationPaused || RotationPauseSource != Enums.RotationPauseSource.Self ||
+            SelfPauseTargetMatchId.HasValue || matchId == Guid.Empty)
+            throw new InvalidOperationException("Only an unbound self pause can acquire a target.");
+        SelfPauseTargetMatchId = matchId;
+    }
+
+    internal bool HasValidPauseMetadata() =>
+        (!RotationPauseSource.HasValue || Enum.IsDefined(RotationPauseSource.Value)) &&
+        (IsRotationPaused || (!RotationPauseSource.HasValue && !SelfPauseTargetMatchId.HasValue)) &&
+        (!SelfPauseTargetMatchId.HasValue || IsRotationPaused &&
+            RotationPauseSource == Enums.RotationPauseSource.Self && SelfPauseTargetMatchId != Guid.Empty);
 
     private static BookingStatus ParseStatus(string status)
     {

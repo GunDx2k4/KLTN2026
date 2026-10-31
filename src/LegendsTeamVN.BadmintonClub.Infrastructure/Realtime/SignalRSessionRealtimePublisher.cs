@@ -6,6 +6,14 @@ namespace LegendsTeamVN.BadmintonClub.Infrastructure.Realtime;
 
 public sealed class SignalRSessionRealtimePublisher(IHubContext<SessionHub> hub) : ISessionRealtimePublisher
 {
+    public Task MyMatchesChangedAsync(Guid eventId, Guid userId, RotationChangedDomainEvent change, CancellationToken ct) =>
+        hub.Clients.User(userId.ToString()).SendAsync("MyMatchesChanged", new
+        {
+            EventId = eventId, change.SessionId, RotationVersion = change.Version, change.OccurredAt
+        }, ct);
+
+    public Task PersonalInviteAsync(Guid userId, Application.DTOs.Rotation.Responses.MatchInvitationResponse invitation, CancellationToken ct) =>
+        hub.Clients.User(userId.ToString()).SendAsync("MatchStarted", invitation, ct);
     public Task RotationChangedAsync(Guid eventId, RotationChangedDomainEvent change, CancellationToken ct) =>
         hub.Clients.Group(SessionHub.SessionGroup(change.SessionId)).SendAsync("RotationChanged", new
         {

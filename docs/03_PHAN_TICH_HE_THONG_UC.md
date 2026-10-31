@@ -199,27 +199,45 @@ graph TD
 - Trận chỉ bắt đầu khi đủ 4 người hợp lệ, mỗi đội 2 người; start lấy giờ server và mời đúng đội hình cuối. Phần Flutter kéo thả không nằm trong đợt BE.
 
 ### UC15: Theo dõi lịch thi đấu cá nhân theo thời gian thực
-- **FR đáp ứng**: FR17 (F3.5) | **Tác nhân**: Hội viên, Khách tại sân.
-- **Tiền điều kiện**: Người chơi đã được điểm danh `CHECKED_IN`.
-- **Luồng chính**: Người chơi mở màn hình Live Match trên điện thoại ➔ Xem vị trí sân đang đấu, ai là bạn cùng chơi, ai là đối thủ ở lượt kế tiếp và thời gian nghỉ dự kiến mà không cần hỏi Host.
-- **Hậu điều kiện**: Người chơi chủ động chuẩn bị vào sân đúng giờ.
+- **FR đáp ứng**: FR17 (F3.5) | **Tác nhân**: Hội viên cố định, khách vãng lai tại sân.
+- **Trạng thái**: **BE A–E hoàn tất trên sandbox ngày 27/10/2026**: Domain/migration, API/delivery và hồi quy cuối/reconnect/tải đọc. FE người khác làm; DB đích/deploy/push thật chưa thực hiện.
+- **Tiền điều kiện**: JWT hợp lệ, booking của chính người gọi CHECKED_IN/chưa xóa, user/group hoạt động. Guest không cần membership; LEAVED xét booking như guest, BANNED bị chặn. Không cấp quyền điều phối cho người chơi.
+- **Luồng chính**:
+  1. Người chơi mở **Lịch thi đấu của tôi**; client kiểm tra mạng, gọi GET my-matches của buổi; BE xác minh participant và đọc snapshot nhất quán, không thay dữ liệu.
+  2. Trả Ready/Resting/Proposed/Playing/Paused, phase AwaitingRotation/Active/Closed, version và serverTime UTC.
+  3. Ngoài sân: hiển thị đoạn nghỉ hiện tại từ FINISHED gần nhất/check-in, mốc hết nghỉ tối thiểu 5 phút và rank trong tập Candidates. Không dùng QueueOrder booking; cooldown/Paused/Proposed/Playing không có rank khả dụng.
+  4. Đã có WAITING chứa self: trả nextMatch gồm sân/bạn cặp/hai đối thủ. Chưa có proposal thì chưa xác định đội hình; ETA không biết trả null/reason, không coi cooldown là giờ vào sân.
+  5. Người chơi tiếp tục sẵn sàng hoặc xin nghỉ lượt tới theo nhánh 6a.
+  6. BE nhận thay đổi từ UC13/14, phát MyMatchesChanged theo participant hiện hành; client GET lại. Giữ nguyên quyền/group JoinSession của Host.
+  7. Host start/confirm đội hình cuối: transaction ghi trận/bốn MATCH notifications/outbox; worker sau commit gửi MatchStarted/FCM tới bốn người, gồm sân, một bạn cặp và hai đối thủ. Không mời tại proposal hoặc chỉ tự hết nghỉ.
+  8. Người chơi nhận thông tin và chủ động di chuyển vào sân; không thêm bước BE xác nhận di chuyển.
+- **Ngoại lệ 2a — Mất mạng**: Client hiển thị cache có mốc cập nhật và “Đang kết nối lại”, không giả xác nhận xin nghỉ. Có mạng/reconnect luôn GET mới và lắng nghe; không tự replay command stale. BE cung cấp version/time; cache/banner/timer do FE làm.
+- **Nhánh 4a — Đang thi đấu**: currentMatch có sân/bạn/đối thủ/timeStart để client tính đồng hồ theo serverTime; nextMatch=null. Không tự nghỉ/resume giữa trận. Quá EndTime nhưng chưa FINISHED vẫn hiển thị Playing thực tế, không sinh lượt mới.
+- **Nhánh 6a — Xin nghỉ lượt tới**:
+  1. Người chưa Playing POST self-pause chỉ gửi expectedRotationVersion. BE khóa session và kiểm tra lại ownership/version/trạng thái, đặt nguồn Self/target=null. Nếu thuộc WAITING thì SKIPPED cả proposal rồi reconcile; CHECKED_IN/cooldown không đổi.
+  2. **Trận đầu tiên thực sự start sau yêu cầu, bất kỳ sân nào**, được lưu làm target. Trận đã Playing trước yêu cầu, WAITING/SKIPPED và retry start không tính; start đồng thời theo thứ tự row lock.
+  3. Khi đúng target FINISHED, BE tự bỏ Self pause trước reconcile trong cùng transaction, giữ cooldown của người xin nghỉ. Trận khác finish trước không tính; chưa có trận mới thì chưa có lượt để tính, không dùng timer giả.
+- **Nhánh 6b — Sẵn sàng trở lại sớm**: Self-resume chỉ bỏ Self pause và xóa target, vẫn đủ cooldown mới được chọn. Không bỏ Host/LegacyHost pause. Host tiếp quản Self đổi nguồn Host/xóa target/tăng version; target cũ không được bỏ pause Host hoặc pause mới.
+- **Ngoại lệ tranh chấp/đóng buổi**: Stale version, Playing, chưa initialize hoặc POST ngoài thời gian vận hành trả 409, không ghi một phần. GET không tự expiry; Host resume phục hồi theo UC14. Tắt tính năng UC15 không làm mất auto-expiry đã nhận.
+- **Hậu điều kiện**: Người chơi biết trạng thái/sân/đội hình của mình, khoảng nghỉ/rank và giới hạn ETA; không bị xếp khi pause. Self pause tự hết một lượt hoặc resume sớm, không vượt cooldown; Host pause không tự hết. Lời mời đúng người sau start/commit, retry không sinh thêm thông báo nghiệp vụ.
+- **Hợp đồng/kiểm chứng**: [UC15-BE.md](Detail%20Design/UC15-BE.md), [ma trận test](Detail%20Design/UC15-TEST-MATRIX.md), [handoff](Detail%20Design/UC15-BE.md). Suite cuối 347/347, D 48 check hai host/Redis/fake FCM, C 114 HTTP/PG, E 57 check. GET cố định 9 SQL, 480 mẫu p95 39,50–309,08 ms <500 ms trên sandbox đã công bố; không chứng minh SLA production hoặc FE/thiết bị thật. Hai cờ UC15 mặc định false.
 
 ---
 
-### UC16: Chốt sổ buổi chơi & Phân bổ chi phí đa hệ số
-- **FR đáp ứng**: FR18, FR19 (F4.1, F4.2) | **Tác nhân**: Host, Thủ quỹ.
-- **Tiền điều kiện**: Buổi sinh hoạt kết thúc khung giờ thuê sân.
+### UC16: Chốt sổ buổi chơi & Phân bổ chi phí
+
+- **FR đáp ứng**: FR18, FR19 (F4.1, F4.2). Người thao tác có quyền FeeManage trong chính nhóm của buổi chơi.
+- **Tiền điều kiện phát hành**: Đã đến EndTime, không còn trận PLAYING; các CONFIRMED chưa đến cần xác nhận chuyển NO_SHOW. Chỉ CHECKED_IN được thu phí.
 - **Luồng chính**:
-  1. Host nhập: Số quả cầu lông bóc mới thực tế trong buổi (`shuttlecock_used`) và các phụ phí phát sinh (`extra_expense` như tiền nước, tiền thảm phát sinh).
-  2. Chuyển trạng thái buổi chơi sang `CALCULATED`.
-  3. Hệ thống nạp biểu phí của nhóm (`group_fee_rule`) và tự động tính toán theo công thức đa hệ số:
-     - Tính tổng chi phí buổi: `Tổng_chi_phí = Tiền_thuê_sân + (Số_cầu * Đơn_giá_cầu) + Phụ_phí`.
-     - Phân bổ theo loại người chơi: Hội viên tháng (đã đóng trọn gói), Hội viên ngày, Khách vãng lai.
-     - Áp dụng chính sách ưu đãi giảm trừ cho người chơi Nữ: Hội viên ngày (`female_discount_daily`), Khách vãng lai (`female_discount_guest`).
-     - Áp dụng quy tắc làm tròn tiền lẻ (`round_rule`, ví dụ làm tròn lên 1.000đ).
-  4. Hệ thống tự động sinh các bản ghi Khoản thu buổi chơi (`session_fee`) cho từng người tham gia ở trạng thái `UNPAID`.
-  5. Đồng thời sinh mã định danh chuyển khoản duy nhất (`payment_code`, ví dụ: `BC12627_A8F1`).
-- **Hậu điều kiện**: Bảng chi phí của từng người chơi được ban hành.
+  1. Mở form để đọc người có mặt, chi phí và biểu phí; nhập chi phí sân, số cầu, đơn giá cầu và phụ phí thường.
+  2. Gửi preview gồm toàn bộ input và overrides. BE tính trong bộ nhớ, ký token HMAC có hạn 15 phút; không ghi chi phí, phí hay trạng thái.
+  3. DYNAMIC chia đều từng khoản sân/cầu/phụ phí trên toàn bộ người có mặt, giữ phần dư 0,01 đồng theo UserId. MONTHLY có expiry >= StartTime được quỹ tháng bao; expiry trước StartTime tính DAILY_MEMBER; null báo lỗi kèm người cần xử lý.
+  4. FIXED dùng DailyMemberFee/GuestFee làm giá cuối buổi thường. Ưu đãi Nữ là giảm tiền cố định đúng loại; không cộng phụ phí thường lần nữa. Làm tròn lên theo RoundRule. Override là số cuối có lý do, không làm tròn lại.
+  5. Người quản lý xem, điều chỉnh rồi preview lại hoặc hủy tại client. Approve gửi đúng input và token; BE kiểm quyền hiện hành, khóa nguồn và đối chiếu chữ ký/nguồn/kết quả trước mọi mutation.
+  6. Phát hành nguyên tử snapshot, khoản thu, mã chuyển khoản, đóng điểm danh/buổi và notification/outbox. Phí >0 là UNPAID, =0 là EXEMPT; session chuyển CALCULATED. Mã `CLB {12 ký tự đầu SessionId:N viết hoa} {12 ký tự đầu UserId:N viết hoa}`.
+- **Ngoại lệ**: Nguồn đổi trả PreviewStale; hết hạn trả PreviewExpired; phát hành khác identity trả AlreadyPublished. Retry cùng identity trả snapshot hiện hữu và payment status hiện tại, kể cả đã PAID/hết hạn sau commit; không tạo lại phí hoặc thông báo.
+- **Hậu điều kiện**: Snapshot phát hành bất biến; FCM được worker gửi sau commit. QR thuộc UC17, UC16 trả payload rỗng khi chưa có; không dùng ngân hàng mặc định. Fees cũ không có marker được đọc ở state LEGACY và không được tái phát hành.
+- Hợp đồng và kiểm chứng: [UC16-BE](Detail%20Design/UC16-BE.md).
 
 ---
 

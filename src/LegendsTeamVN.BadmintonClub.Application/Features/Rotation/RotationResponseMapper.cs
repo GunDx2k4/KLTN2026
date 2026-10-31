@@ -27,7 +27,12 @@ public static class RotationResponseMapper
                 false, b.IsRotationPaused,
                 canEditManually && !b.IsRotationPaused && assigned?.Status != MatchStatus.PLAYING &&
                     session.RotationStartedAt.HasValue && session.CanEditAttendance(now) && session.StartTime <= now,
-                canResumePaused && b.IsRotationPaused && !session.IsDeleted);
+                canResumePaused && b.IsRotationPaused && !session.IsDeleted,
+                PersonalMatchSchedulePolicy.PauseSource(b),
+                !b.IsRotationPaused ? null : b.RotationPauseSource == RotationPauseSource.Self ? "AutoAfterNextStartedMatchFinishes" : "HostOnly",
+                b.SelfPauseTargetMatchId,
+                b.RotationPauseSource == RotationPauseSource.Self && b.IsRotationPaused
+                    ? b.SelfPauseTargetMatchId.HasValue ? "AwaitingTargetFinish" : "AwaitingNextStart" : null);
         }
         RotationMatchResponse Match(SessionMatch m)
         {

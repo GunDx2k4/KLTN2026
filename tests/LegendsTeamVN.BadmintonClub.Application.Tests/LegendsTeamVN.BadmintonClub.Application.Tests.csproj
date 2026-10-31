@@ -24,7 +24,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\Hosts\LegendsTeamVN.BadmintonClub.Migrator\LegendsTeamVN.BadmintonClub.Migrator.csproj" />
     <ProjectReference Include="..\..\src\LegendsTeamVN.BadmintonClub.Application\LegendsTeamVN.BadmintonClub.Application.csproj" />
+    <ProjectReference Include="..\..\src\LegendsTeamVN.BadmintonClub.Infrastructure\LegendsTeamVN.BadmintonClub.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\LegendsTeamVN.BadmintonClub.Presentation\LegendsTeamVN.BadmintonClub.Presentation.csproj" />
     <ProjectReference Include="..\..\src\LegendsTeamVN.BadmintonClub.Domain\LegendsTeamVN.BadmintonClub.Domain.csproj" />
     <ProjectReference Include="..\..\src\LegendsTeamVN.BadmintonClub.Persistence\LegendsTeamVN.BadmintonClub.Persistence.csproj" />

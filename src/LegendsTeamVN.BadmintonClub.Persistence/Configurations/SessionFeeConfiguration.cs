@@ -74,6 +74,25 @@ public class SessionFeeConfiguration : IEntityTypeConfiguration<SessionFee>
         builder.Property(f => f.PaidAt)
             .HasColumnName("paid_at");
 
+        builder.Property(f => f.CourtShare).HasColumnName("court_share").HasPrecision(18, 2);
+        builder.Property(f => f.ShuttleShare).HasColumnName("shuttle_share").HasPrecision(18, 2);
+        builder.Property(f => f.ExtraShare).HasColumnName("extra_share").HasPrecision(18, 2);
+        builder.Property(f => f.MonthlyFundCovered).HasColumnName("monthly_fund_covered").HasPrecision(18, 2);
+        builder.Property(f => f.BaseAmount).HasColumnName("base_amount").HasPrecision(18, 2);
+        builder.Property(f => f.RawAmount).HasColumnName("raw_amount").HasPrecision(18, 2);
+        builder.Property(f => f.CalculatedAmount).HasColumnName("calculated_amount").HasPrecision(18, 2);
+        builder.Property(f => f.RoundingDelta).HasColumnName("rounding_delta").HasPrecision(18, 2);
+        builder.Property(f => f.AdjustmentDelta).HasColumnName("adjustment_delta").HasPrecision(18, 2);
+        builder.Property(f => f.IsPublished).HasColumnName("is_published");
+        builder.Property(f => f.Gender).HasColumnName("gender");
+        builder.Property(f => f.MonthlyExpiryDate).HasColumnName("monthly_expiry_date");
+        builder.Property(f => f.AdjustedBy).HasColumnName("adjusted_by");
+        builder.Property(f => f.AdjustedAt).HasColumnName("adjusted_at");
+        builder.Property(f => f.PublishedBy).HasColumnName("published_by");
+        builder.Property(f => f.PublishedAt).HasColumnName("published_at");
+        builder.Property(f => f.MemberType).HasColumnName("member_type").HasMaxLength(50);
+        builder.Property(f => f.AdjustmentReason).HasColumnName("adjustment_reason").HasMaxLength(2000);
+
         builder.HasIndex(f => new { f.SessionId, f.UserId })
             .IsUnique();
 

@@ -5,6 +5,8 @@
 > **Ngày cập nhật**: 14/10/2026  
 > **Đối tượng sử dụng**: Đội ngũ Backend (.NET Core Minimal APIs) & Đội ngũ Mobile (Flutter App)
 
+> **FR17 cập nhật 27/10/2026 — BE A–E hoàn tất trên sandbox:** đã có GET `/api/v1/sessions/{sessionId}/my-matches`, POST `.../my-matches/pause` và POST `.../my-matches/resume`; hai POST chỉ nhận expectedRotationVersion. JWT + CHECKED_IN của self, member/guest/LEAVED hợp lệ, BANNED bị chặn. PersonalScheduleEnabled/SelfPauseEnabled mặc định false. MyMatchesChanged theo UserId; MatchStarted/push có teammate/opponents, kiểm chứng hai host/Redis với fake FCM. Suite cuối 347/347; E đo GET 9 SQL, p95 39,50–309,08 ms ở sandbox. [Contract](Detail%20Design/UC15-BE.md), [matrix](Detail%20Design/UC15-TEST-MATRIX.md), [handoff/runbook](Detail%20Design/UC15-BE.md). FE/thiết bị/FCM thật và DB đích/deploy chưa thực hiện; không coi số đo local là SLA production.
+
 ---
 
 ## 📌 1. Thông Tin Mạng & Quy Ước Kết Nối Toàn Hệ Thống
@@ -1372,3 +1374,38 @@ Bảng mã quyền hạn chuẩn hóa theo hệ thống phân quyền đa nhóm 
 
 ---
 *(Tài liệu này là đặc tả kỹ thuật chính thức phiên bản 2.1 của dự án LegendsTeamVN.BadmintonClub).*
+
+## UC16 — Form, xem trước và phê duyệt khoản thu
+
+Prefix: `/api/v1/sessions/{sessionId}/settlement`. Tất cả yêu cầu JWT hợp lệ theo policy `SessionOperations`, kiểm chữ ký, issuer, audience và lifetime; token hết hạn/sai ngữ cảnh trả 401 trước khi tải dữ liệu tài chính. Handler kiểm quyền theo session.GroupId và membership/role hiện hành, độc lập với global-admin bypass.
+
+| Method | Hậu tố | Quyền | Kết quả |
+|---|---|---|---|
+| GET | `/form` | FINANCE.FEE.MANAGE | Người CHECKED_IN, chi phí hiện có, biểu phí và số CONFIRMED cần xác nhận |
+| POST | `/preview` | FINANCE.FEE.MANAGE | Allocation decimal, PreviewToken, ExpiresAt; không ghi DB |
+| POST | `/approve` | FINANCE.FEE.MANAGE | Snapshot khoản thu sau commit; cùng identity có thể retry |
+| GET | rỗng | FINANCE.FEE.VIEW | State UNPUBLISHED/LEGACY/PUBLISHED; phí và payment status hiện tại |
+| POST | `/members/{userId}/pay` | FINANCE.FEE.MANAGE | Thao tác tiền mặt hiện hữu; từ chối EXEMPT |
+
+Body preview:
+
+```json
+{
+  "shuttlecockUsed": 2,
+  "shuttlecockPrice": 25000.00,
+  "courtRentalCost": 300000.00,
+  "extraExpense": 0,
+  "overrides": [],
+  "confirmRemainingNoShows": false
+}
+```
+
+Mỗi override: `{ "userId": "<guid>", "finalAmount": 50000.00, "reason": "Phụ phí liên hoan" }`. Approve body: `{ "input": <body preview đầy đủ>, "previewToken": "<token>" }`. Overrides luôn là danh sách đầy đủ, không phải patch. Tiền không âm, tối đa 2 chữ số thập phân và miền decimal(18,2); reason bắt buộc, tối đa 2000 ký tự.
+
+Preview chứa chi tiết phần sân/cầu/phụ phí, miễn tháng, giảm trừ, trước/sau làm tròn, override và các delta; token gắn actor/group/session/input/source/result, hạn 15 phút. Không lưu draft hoặc preview vào DB/Redis.
+
+GET/approve trả `SessionSettlementResponse`: State, chi phí, TotalCost/TotalReceivable/TotalCollected/MonthlyFundCovered, PolicyDelta/RoundingDelta/AdjustmentDelta/BalanceDifference, PublishedAt/By và MemberFees. Mỗi fee có FeeId/UserId, FinalFee decimal, PriceType, PaymentStatus chuẩn UNPAID/PAID/EXEMPT, PaymentCode, PaidAt/PaymentMethod và Breakdown snapshot. Với legacy, các snapshot mới và Breakdown là null; không suy lại biểu phí hoặc hardcode giá cầu. QrCodePayload chưa tạo là chuỗi rỗng.
+
+Lỗi: 400 validation/token sai hoặc thiếu policy/membership, 401 chưa đăng nhập, 403 sai quyền/người duyệt/nhóm, 404 không tồn tại, 409 PreviewStale/PreviewExpired/AlreadyPublished/LegacyFees/PaymentCodeConflict/Busy/LockUnavailable/WritesDisabled/chưa EndTime/trận PLAYING/chưa xác nhận NO_SHOW. Các lỗi dữ liệu nghiệp vụ hiện dùng Error.Validation nên được ánh xạ 400 theo cơ chế chung (thay cho 422 dự kiến); FE đọc thuộc tính `code` ở cấp gốc của Problem Details, ví dụ `Settlement.PreviewStale`, không suy loại lỗi từ `detail`.
+
+Endpoint POST không hậu tố tính và phát hành một bước đã bỏ. Không có alias URL lặp `api/v1/sessions/api/v1/sessions`. Xem [báo cáo UC16](Detail%20Design/UC16-BE.md) và SQL chỉ dùng sau khi duyệt môi trường đích.

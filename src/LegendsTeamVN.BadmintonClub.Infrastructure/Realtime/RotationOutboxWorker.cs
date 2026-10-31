@@ -7,12 +7,15 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using LegendsTeamVN.BadmintonClub.Application.Features.Rotation.Personal;
+using LegendsTeamVN.BadmintonClub.Application.DTOs.Rotation.Responses;
 
 namespace LegendsTeamVN.BadmintonClub.Infrastructure.Realtime;
 
 public sealed class RotationOutboxWorker(IServiceScopeFactory scopes, IOptionsMonitor<SessionRotationOptions> options,
     TimeProvider clock, ILogger<RotationOutboxWorker> logger) : BackgroundService
 {
+    private static readonly JsonSerializerOptions WireJson = new(JsonSerializerDefaults.Web);
     private static readonly IReadOnlyCollection<string> SupportedKinds =
         Array.AsReadOnly(new[] { "RotationChanged", "InvitationRealtime", "InvitationPush" });
 
@@ -44,15 +47,27 @@ public sealed class RotationOutboxWorker(IServiceScopeFactory scopes, IOptionsMo
                     var ct = sendTimeout.Token;
                     var change = JsonSerializer.Deserialize<RotationChangedDomainEvent>(message.Payload)
                         ?? throw new InvalidOperationException("Invalid rotation outbox payload.");
+                    var sessions = scope.ServiceProvider.GetRequiredService<ISessionRepository>();
+                    MatchInvitationResponse? invitation = null;
                     // Delayed/retried invitations must not summon people to an already finished game.
                     if (message.Kind is "InvitationRealtime" or "InvitationPush")
                     {
-                        var sessions = scope.ServiceProvider.GetRequiredService<ISessionRepository>();
                         if (!change.StartedMatchId.HasValue || !await sessions.CanReceiveMatchInvitationAsync(
                                 change.SessionId, change.StartedMatchId.Value, message.DestinationId, ct))
                         {
                             await outbox.CompleteAsync(message.Id, leaseId, clock.GetUtcNow().UtcDateTime, stoppingToken);
                             continue;
+                        }
+                        if (options.CurrentValue.PersonalScheduleEnabled)
+                        {
+                            var roster = await sessions.GetMatchInvitationRosterAsync(change.SessionId, change.StartedMatchId.Value, true, ct);
+                            if (roster is null || !await sessions.CanReceiveMatchInvitationAsync(change.SessionId,
+                                    change.StartedMatchId.Value, message.DestinationId, ct))
+                            {
+                                await outbox.CompleteAsync(message.Id, leaseId, clock.GetUtcNow().UtcDateTime, stoppingToken);
+                                continue;
+                            }
+                            invitation = MatchInvitationMapper.Map(change, roster, message.DestinationId);
                         }
                     }
                     var realtime = scope.ServiceProvider.GetRequiredService<ISessionRealtimePublisher>();
@@ -60,22 +75,36 @@ public sealed class RotationOutboxWorker(IServiceScopeFactory scopes, IOptionsMo
                     {
                         case "RotationChanged":
                             await realtime.RotationChangedAsync(change.Id, change, ct);
+                            if (options.CurrentValue.PersonalScheduleEnabled)
+                                foreach (var userId in await sessions.FindPersonalScheduleRecipientsAsync(change.SessionId, ct))
+                                    if (options.CurrentValue.PersonalScheduleEnabled &&
+                                        await sessions.CanAccessPersonalScheduleAsync(change.SessionId, userId, ct))
+                                        await realtime.MyMatchesChangedAsync(change.Id, userId, change, ct);
                             break;
                         case "InvitationRealtime":
-                            await realtime.InviteAsync(change.Id, message.DestinationId, change, ct);
+                            if (invitation is not null) await realtime.PersonalInviteAsync(message.DestinationId, invitation, ct);
+                            else await realtime.InviteAsync(change.Id, message.DestinationId, change, ct);
                             break;
                         case "InvitationPush":
                             var devices = scope.ServiceProvider.GetRequiredService<IDeviceRepository>();
                             var notification = scope.ServiceProvider.GetRequiredService<INotificationService>();
                             var tokens = await devices.GetActiveTokensAsync(message.DestinationId, ct);
+                            var data = new Dictionary<string, string>
+                            {
+                                ["eventId"] = change.Id.ToString(), ["sessionId"] = change.SessionId.ToString(),
+                                ["matchId"] = change.StartedMatchId.ToString()!, ["courtNumber"] = change.CourtNumber.ToString()!
+                            };
+                            if (invitation is not null)
+                            {
+                                data["teammate"] = JsonSerializer.Serialize(invitation.Teammate, WireJson);
+                                data["opponents"] = JsonSerializer.Serialize(invitation.Opponents, WireJson);
+                                data["timeStart"] = invitation.TimeStart.ToString("O");
+                                data["rotationVersion"] = change.Version.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                            }
                             foreach (var batch in tokens.Chunk(500))
                             {
                                 var sent = await notification.SendMulticastNotificationAsync(batch, "Đến lượt vào sân",
-                                    $"Mời bạn vào sân {change.CourtNumber}.", new Dictionary<string, string>
-                                    {
-                                        ["eventId"] = change.Id.ToString(), ["sessionId"] = change.SessionId.ToString(),
-                                        ["matchId"] = change.StartedMatchId.ToString()!, ["courtNumber"] = change.CourtNumber.ToString()!
-                                    }, ct);
+                                    invitation is null ? $"Mời bạn vào sân {change.CourtNumber}." : MatchInvitationMapper.Body(invitation), data, ct);
                                 if (sent != batch.Length) throw new InvalidOperationException("Some invitation deliveries failed.");
                             }
                             break;

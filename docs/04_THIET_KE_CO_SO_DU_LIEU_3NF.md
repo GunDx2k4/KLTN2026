@@ -355,6 +355,19 @@ Lưu danh sách người đăng ký tham gia buổi chơi và hàng đợi.
 
 *Ràng buộc*: Cặp `(id_session, id_user)` là duy nhất.
 
+**UC15 — đợt B hoàn tất trên sandbox (22/10/2026).** Entity/mapping và migration `20261021173243_AddRotationPauseSource` đã có hai cột sau; DB đích chưa nâng cấp. Không thêm bảng hoặc lượt chung toàn buổi:
+
+| Cột bổ sung B | Kiểu / mặc định | Ý nghĩa / ràng buộc |
+|---|---|---|
+| `rotation_pause_source` | VARCHAR(10), NULL mặc định | SELF/HOST, enum Domain Self/Host. CHECK SQL NULL hoặc SELF/HOST. Bool pause=true + nguồn null đọc LegacyHost, không cho self-resume. |
+| `self_pause_target_match_id` | UUID, NULL mặc định | Self chưa có trận tiếp theo start thì null; sau start gắn đúng MatchId; FINISHED đúng target tự bỏ Self pause. FK đơn tới session_match.id_match, ON DELETE NO ACTION; index khi khác null. |
+
+Domain giữ bool/source/target nhất quán, kiểm tra target cùng session và lịch sử hợp lệ; FK đơn không chứng minh cùng session. Metadata sai trả conflict, không tự bỏ pause. Không thêm CHECK bool↔source bắt buộc để tự phá compatibility legacy; writer mới xóa nguồn/target khi không pause, Host/LegacyHost không có auto-expiry target. Không chạy writer UC14 cũ song song khi bật C5.
+
+Backfill B: bool=true cũ thành HOST/target=null; false để nguồn/target null. Không sửa migration UC14, BookingStatus/QueueOrder/check-in/giờ trận/phí. Down migration UC15 mới chặn còn SELF hoặc target IS NOT NULL, không clear dữ liệu để ép Down; đủ điều kiện thì chỉ bỏ FK/index/check/hai cột UC15, giữ bool/schema UC14. Schema phải sẵn trước binary map cột. B đã kiểm chứng fresh/upgrade UC14, Up/Down/backfill, restart, ràng buộc và rollback trên DB sandbox riêng; không áp dụng DB đích. Chi tiết expiry/rollout tại [UC15-BE.md](Detail%20Design/UC15-BE.md).
+
+**Mốc cuối E, 27/10/2026:** BE A–E hoàn tất trên sandbox, C–E không bổ sung migration/schema. Probe E xác minh migration B hiện hành, giữ nguyên booking/queue/check-in và fee/payment/ledger trong chuỗi UC12–15, GET lặp không đổi digest chín bảng. DB đích chưa nâng cấp. [Handoff/rollback](Detail%20Design/UC15-BE.md).
+
 ---
 
 ### 3.17. Bảng `guest_recruitment` (Yêu Cầu Tìm Giao Lưu Lân Cận)
@@ -483,3 +496,24 @@ Bổ sung ngoài 22 bảng nghiệp vụ ban đầu để giao nhận SignalR/FC
 | `last_error` | VARCHAR(2000), NULL | Loại lỗi gần nhất, không lưu token |
 
 Có thêm các cột audit/soft-delete theo AggregateRoot hiện tại. Index trên `(next_attempt_at, created_at)` cho bản ghi chưa delivered, attempts < 10. Worker claim bằng SKIP LOCKED; network chạy ngoài transaction claim. Xem hợp đồng và vận hành tại [UC13-BE.md](Detail%20Design/UC13-BE.md).
+
+## Bổ sung UC16 — Snapshot phát hành trên bảng hiện hữu
+
+Migration `AddSettlementPublicationSnapshot` chỉ bổ sung cột cho `badminton_session` và `session_fee`; không tạo bảng draft hoặc thay unique payment_code và (id_session,id_user).
+
+| Bảng | Cột mới | Kiểu và nullability |
+|---|---|---|
+| badminton_session | shuttlecock_price; published_daily_member_fee, published_guest_fee, published_female_discount_daily, published_female_discount_guest; total_cost, total_receivable, monthly_fund_covered, total_discount, policy_delta, rounding_delta, adjustment_delta, balance_difference | numeric(18,2), NULL cho dữ liệu cũ |
+| badminton_session | published_preview_id, published_by, published_fee_rule_id | uuid, NULL |
+| badminton_session | published_at, published_fee_rule_applied_at | timestamptz, NULL |
+| badminton_session | published_request_hash, published_fee_mode, published_round_rule | varchar(64), varchar(50), integer; NULL |
+| session_fee | court_share, shuttle_share, extra_share, monthly_fund_covered, base_amount, raw_amount, calculated_amount, rounding_delta, adjustment_delta | numeric(18,2), NULL |
+| session_fee | gender, member_type, monthly_expiry_date | smallint, varchar(50), timestamptz; NULL |
+| session_fee | adjustment_reason, adjusted_by, adjusted_at, published_by, published_at | varchar(2000), uuid, timestamptz, uuid, timestamptz; NULL |
+| session_fee | is_published | boolean, false cho khoản cũ |
+
+PublishedPreviewId/PublishedAt là dấu phát hành; status đơn lẻ không thay thế marker. Khoản cũ không được backfill/recompute. Amount/payment status/payment code/bank references hiện hữu được giữ nguyên. Publication chỉ ghi snapshot lần đầu; thanh toán về sau chỉ đổi payment metadata qua hành vi hợp lệ.
+
+Preview đọc RepeatableRead. Approve khóa club → session → users/members/rules và giữ tới cuối transaction; parent FK immediate chặn insert nguồn mới. Redis lease 5 giây chỉ giảm cạnh tranh; DB locks và approval identity bảo vệ sau khi lease hết. Thay đổi schema được quản lý bằng EF Core migration `AddSettlementPublicationSnapshot`; Down chặn rollback khi đã có snapshot phát hành.
+
+Integration tests sinh SQL trực tiếp từ EF Core migration để kiểm tra nâng cấp, rollback, lỗi DDL và bảo toàn dữ liệu khoản thu. Không phụ thuộc file SQL trong thư mục tài liệu.

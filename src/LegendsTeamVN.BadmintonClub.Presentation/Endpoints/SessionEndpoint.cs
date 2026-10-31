@@ -1,4 +1,13 @@
-using LegendsTeamVN.BadmintonClub.Application.Features.Sessions.Settlement;
+using LegendsTeamVN.BadmintonClub.Application.DTOs.Settlement.Requests;
+using LegendsTeamVN.BadmintonClub.Application.DTOs.Settlement.Responses;
+using LegendsTeamVN.BadmintonClub.Application.Features.Rotation.Personal.Resume;
+using LegendsTeamVN.BadmintonClub.Application.Features.Rotation.Personal.Pause;
+using LegendsTeamVN.BadmintonClub.Application.Features.Rotation.Personal.Get;
+using LegendsTeamVN.BadmintonClub.Application.Features.Settlement.GetForm;
+using LegendsTeamVN.BadmintonClub.Application.Features.Settlement.Preview;
+using LegendsTeamVN.BadmintonClub.Application.Features.Settlement.Approve;
+using LegendsTeamVN.BadmintonClub.Application.Features.Settlement.Get;
+using LegendsTeamVN.BadmintonClub.Application.Features.Settlement.MarkMemberPaid;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Rotation.Responses;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Sessions.Requests;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Sessions.Responses;
@@ -61,30 +70,7 @@ public class SessionEndpoint : EndpointGroupBase
         var fr14Group = group.MapGroup("").WithTags("FR14 - Điểm danh tại sân");
         var fr15Group = group.MapGroup("").WithTags("FR15 - Điều phối xoay tua sân");
         var fr16Group = group.MapGroup("").WithTags("FR16 - Can thiệp đội hình thủ công");
-        fr16Group.MapPost("{sessionId:guid}/matches/{matchId:guid}/confirm-manual-start", ConfirmManualMatch)
-            .WithName("ConfirmManualMatch")
-            .WithSummary("Host xác nhận đội hình và bắt đầu trận kèm version (FR16)")
-            .Produces<RotationResponse>()
-            .RequireAuthorization("SessionOperations")
-            .RequireGroupPermission(GroupPermissions.Operations.MatchManage);
-        fr16Group.MapPut("{sessionId:guid}/rotation/players/{userId:guid}/pause", SetRotationPause)
-            .WithName("SetRotationPause")
-            .WithSummary("Host đặt tạm nghỉ hoặc sẵn sàng trở lại (FR16)")
-            .Produces<RotationResponse>()
-            .RequireAuthorization("SessionOperations")
-            .RequireGroupPermission(GroupPermissions.Operations.MatchManage);
-        fr16Group.MapPost("{sessionId:guid}/matches/{matchId:guid}/restore-proposal", RestoreManualLineup)
-            .WithName("RestoreManualLineup")
-            .WithSummary("Host khôi phục gợi ý đội hình ban đầu (FR16)")
-            .Produces<RotationResponse>()
-            .RequireAuthorization("SessionOperations")
-            .RequireGroupPermission(GroupPermissions.Operations.MatchManage);
-        fr16Group.MapPut("{sessionId:guid}/matches/{matchId:guid}/manual-lineup", UpdateManualLineup)
-            .WithName("UpdateManualLineup")
-            .WithSummary("Host điều chỉnh đội hình trước khi bắt đầu (FR16)")
-            .Produces<RotationResponse>()
-            .RequireAuthorization("SessionOperations")
-            .RequireGroupPermission(GroupPermissions.Operations.MatchManage);
+        var fr17Group = group.MapGroup("").WithTags("FR17 - Lịch thi đấu cá nhân");
 
         // ==========================================
         // --- FR13: KHỞI TẠO & CẤU HÌNH BUỔI CHƠI ---
@@ -254,23 +240,79 @@ public class SessionEndpoint : EndpointGroupBase
             .RequireAuthorization("SessionOperations")
             .RequireGroupPermission(GroupPermissions.Operations.MatchManage);
 
+        // --- FR16: CAN THIỆP ĐỘI HÌNH THỦ CÔNG ---
+        fr16Group.MapPost("{sessionId:guid}/matches/{matchId:guid}/confirm-manual-start", ConfirmManualMatch)
+            .WithName("ConfirmManualMatch")
+            .WithSummary("Host xác nhận đội hình và bắt đầu trận kèm version (FR16)")
+            .Produces<RotationResponse>()
+            .RequireAuthorization("SessionOperations")
+            .RequireGroupPermission(GroupPermissions.Operations.MatchManage);
+
+        fr16Group.MapPut("{sessionId:guid}/rotation/players/{userId:guid}/pause", SetRotationPause)
+            .WithName("SetRotationPause")
+            .WithSummary("Host đặt tạm nghỉ hoặc sẵn sàng trở lại (FR16)")
+            .Produces<RotationResponse>()
+            .RequireAuthorization("SessionOperations")
+            .RequireGroupPermission(GroupPermissions.Operations.MatchManage);
+
+        fr16Group.MapPost("{sessionId:guid}/matches/{matchId:guid}/restore-proposal", RestoreManualLineup)
+            .WithName("RestoreManualLineup")
+            .WithSummary("Host khôi phục gợi ý đội hình ban đầu (FR16)")
+            .Produces<RotationResponse>()
+            .RequireAuthorization("SessionOperations")
+            .RequireGroupPermission(GroupPermissions.Operations.MatchManage);
+
+        fr16Group.MapPut("{sessionId:guid}/matches/{matchId:guid}/manual-lineup", UpdateManualLineup)
+            .WithName("UpdateManualLineup")
+            .WithSummary("Host điều chỉnh đội hình trước khi bắt đầu (FR16)")
+            .Produces<RotationResponse>()
+            .RequireAuthorization("SessionOperations")
+            .RequireGroupPermission(GroupPermissions.Operations.MatchManage);
+
+        // --- FR17: LỊCH THI ĐẤU CÁ NHÂN ---
+        fr17Group.MapGet("{sessionId:guid}/my-matches", GetMyMatches)
+            .WithName("GetMyMatches")
+            .Produces<MyMatchesResponse>()
+            .RequireAuthorization("SessionOperations");
+
+        fr17Group.MapPost("{sessionId:guid}/my-matches/pause", PauseMyMatches)
+            .WithName("PauseMyMatches")
+            .Produces<MyMatchesResponse>()
+            .RequireAuthorization("SessionOperations");
+
+        fr17Group.MapPost("{sessionId:guid}/my-matches/resume", ResumeMyMatches)
+            .WithName("ResumeMyMatches")
+            .Produces<MyMatchesResponse>()
+            .RequireAuthorization("SessionOperations");
+
         // ======================================
         // FR18 - FR20: Hạch toán & Quyết toán chi phí đa hệ số (Settlement)
         // ======================================
-        var fr18Group = group.MapGroup("api/v1/sessions")
+        var fr18Group = group.MapGroup("")
             .WithTags("Session Operations - FR18-FR20 Settlement")
-            .RequireAuthorization();
+            .RequireAuthorization("SessionOperations");
 
-        fr18Group.MapPost("{sessionId:guid}/settlement", CalculateSessionSettlement)
-            .WithName("CalculateSessionSettlement")
-            .WithSummary("Hạch toán chi phí đa hệ số và chốt quyết toán buổi chơi (FR18-FR20)")
+
+        fr18Group.MapGet("{sessionId:guid}/settlement/form", GetSettlementForm)
+            .WithName("GetSettlementForm")
+            .Produces<SettlementFormResponse>()
+            .RequireGroupPermission(GroupPermissions.Finance.FeeManage);
+
+        fr18Group.MapPost("{sessionId:guid}/settlement/preview", PreviewSettlement)
+            .WithName("PreviewSettlement")
+            .Produces<SettlementPreviewResponse>()
+            .RequireGroupPermission(GroupPermissions.Finance.FeeManage);
+
+        fr18Group.MapPost("{sessionId:guid}/settlement/approve", ApproveSettlement)
+            .WithName("ApproveSettlement")
             .Produces<SessionSettlementResponse>()
             .RequireGroupPermission(GroupPermissions.Finance.FeeManage);
 
         fr18Group.MapGet("{sessionId:guid}/settlement", GetSessionSettlement)
             .WithName("GetSessionSettlement")
             .WithSummary("Xem thông tin quyết toán chi phí buổi chơi (FR18-FR20)")
-            .Produces<SessionSettlementResponse>();
+            .Produces<SessionSettlementResponse>()
+            .RequireGroupPermission(GroupPermissions.Finance.FeeView);
 
         fr18Group.MapPost("{sessionId:guid}/settlement/members/{userId:guid}/pay", MarkMemberSettlementPaid)
             .WithName("MarkMemberSettlementPaid")
@@ -529,36 +571,6 @@ public class SessionEndpoint : EndpointGroupBase
         return result.Match(Results.Ok);
     }
 
-    private static async Task<IResult> ConfirmManualMatch(Guid sessionId, Guid matchId,
-        [FromBody] ConfirmManualMatchRequest request, ISender sender, CancellationToken cancellationToken)
-    {
-        var result = await sender.Send(new ConfirmManualMatchCommand(sessionId, matchId, request.ExpectedRotationVersion), cancellationToken);
-        return result.Match(onSuccess: data => Results.Ok(data));
-    }
-
-    private static async Task<IResult> SetRotationPause(Guid sessionId, Guid userId,
-        [FromBody] SetRotationPauseRequest request, ISender sender, CancellationToken cancellationToken)
-    {
-        var result = await sender.Send(new SetRotationPauseCommand(sessionId, userId, request.IsPaused,
-            request.ExpectedRotationVersion, request.ReplacementUserId), cancellationToken);
-        return result.Match(onSuccess: data => Results.Ok(data));
-    }
-
-    private static async Task<IResult> RestoreManualLineup(Guid sessionId, Guid matchId,
-        [FromBody] RestoreManualLineupRequest request, ISender sender, CancellationToken cancellationToken)
-    {
-        var result = await sender.Send(new RestoreManualLineupCommand(sessionId, matchId, request.ExpectedRotationVersion), cancellationToken);
-        return result.Match(onSuccess: data => Results.Ok(data));
-    }
-
-    private static async Task<IResult> UpdateManualLineup(Guid sessionId, Guid matchId,
-        [FromBody] UpdateManualLineupRequest request, ISender sender, CancellationToken cancellationToken)
-    {
-        var result = await sender.Send(new UpdateManualLineupCommand(sessionId, matchId, request.TeamA,
-            request.TeamB, request.ExpectedRotationVersion), cancellationToken);
-        return result.Match(onSuccess: data => Results.Ok(data));
-    }
-
     private static async Task<IResult> StartRotationMatch(
         [FromRoute] Guid sessionId,
         [FromRoute] Guid matchId,
@@ -581,22 +593,113 @@ public class SessionEndpoint : EndpointGroupBase
         return result.Match(Results.Ok);
     }
 
-    // --- FR18 - FR20 Handlers ---
-    private static async Task<IResult> CalculateSessionSettlement(
+    // --- FR16 Handlers ---
+    private static async Task<IResult> ConfirmManualMatch(
         [FromRoute] Guid sessionId,
-        [FromBody] CalculateSettlementRequest request,
+        [FromRoute] Guid matchId,
+        [FromBody] ConfirmManualMatchRequest request,
         ISender sender,
         CancellationToken cancellationToken)
     {
-        var command = new CalculateSessionSettlementCommand(
-            sessionId,
-            request.ShuttlecockUsed,
-            request.ShuttlecockPrice,
-            request.ExtraFee,
-            request.CourtFee
-        );
+        var command = new ConfirmManualMatchCommand(sessionId, matchId, request.ExpectedRotationVersion);
         var result = await sender.Send(command, cancellationToken);
-        return result.Match(Results.Ok);
+        return result.Match(onSuccess: data => Results.Ok(data));
+    }
+
+    private static async Task<IResult> SetRotationPause(
+        [FromRoute] Guid sessionId,
+        [FromRoute] Guid userId,
+        [FromBody] SetRotationPauseRequest request,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var command = new SetRotationPauseCommand(sessionId, userId, request.IsPaused,
+            request.ExpectedRotationVersion, request.ReplacementUserId);
+        var result = await sender.Send(command, cancellationToken);
+        return result.Match(onSuccess: data => Results.Ok(data));
+    }
+
+    private static async Task<IResult> RestoreManualLineup(
+        [FromRoute] Guid sessionId,
+        [FromRoute] Guid matchId,
+        [FromBody] RestoreManualLineupRequest request,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var command = new RestoreManualLineupCommand(sessionId, matchId, request.ExpectedRotationVersion);
+        var result = await sender.Send(command, cancellationToken);
+        return result.Match(onSuccess: data => Results.Ok(data));
+    }
+
+    private static async Task<IResult> UpdateManualLineup(
+        [FromRoute] Guid sessionId,
+        [FromRoute] Guid matchId,
+        [FromBody] UpdateManualLineupRequest request,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var command = new UpdateManualLineupCommand(sessionId, matchId, request.TeamA,
+            request.TeamB, request.ExpectedRotationVersion);
+        var result = await sender.Send(command, cancellationToken);
+        return result.Match(onSuccess: data => Results.Ok(data));
+    }
+
+    // --- FR17 Handlers ---
+    private static async Task<IResult> GetMyMatches(
+        [FromRoute] Guid sessionId,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var query = new GetMyMatchesQuery(sessionId);
+        var result = await sender.Send(query, cancellationToken);
+        return result.Match(onSuccess: data => Results.Ok(data));
+    }
+
+    private static async Task<IResult> PauseMyMatches(
+        [FromRoute] Guid sessionId,
+        [FromBody] PauseMyMatchesRequest request,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var command = new PauseMyMatchesCommand(sessionId, request.ExpectedRotationVersion);
+        var result = await sender.Send(command, cancellationToken);
+        return result.Match(onSuccess: data => Results.Ok(data));
+    }
+
+    private static async Task<IResult> ResumeMyMatches(
+        [FromRoute] Guid sessionId,
+        [FromBody] ResumeMyMatchesRequest request,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var command = new ResumeMyMatchesCommand(sessionId, request.ExpectedRotationVersion);
+        var result = await sender.Send(command, cancellationToken);
+        return result.Match(onSuccess: data => Results.Ok(data));
+    }
+
+    // --- FR18 - FR20 Handlers ---
+
+    private static async Task<IResult> GetSettlementForm(
+        [FromRoute] Guid sessionId, ISender sender, CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(new GetSettlementFormQuery(sessionId), cancellationToken);
+        return result.Match(onSuccess: data => Results.Ok(data));
+    }
+
+    private static async Task<IResult> PreviewSettlement(
+        [FromRoute] Guid sessionId, [FromBody] PreviewSettlementRequest request,
+        ISender sender, CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(new PreviewSettlementQuery(sessionId, request), cancellationToken);
+        return result.Match(onSuccess: data => Results.Ok(data));
+    }
+
+    private static async Task<IResult> ApproveSettlement(
+        [FromRoute] Guid sessionId, [FromBody] ApproveSettlementRequest request,
+        ISender sender, CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(new ApproveSettlementCommand(sessionId, request.Input, request.PreviewToken), cancellationToken);
+        return result.Match(onSuccess: data => Results.Ok(data));
     }
 
     private static async Task<IResult> GetSessionSettlement(

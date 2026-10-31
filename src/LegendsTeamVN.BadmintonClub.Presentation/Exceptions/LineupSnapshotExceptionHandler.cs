@@ -11,6 +11,17 @@ internal sealed class LineupSnapshotExceptionHandler(ILogger<LineupSnapshotExcep
 {
     public async ValueTask<bool> TryHandleAsync(HttpContext context, Exception exception, CancellationToken cancellationToken)
     {
+        if (exception is InvalidRotationPauseMetadataException pause)
+        {
+            logger.LogWarning("Invalid rotation pause in session {SessionId}, user {UserId}", pause.SessionId, pause.UserId);
+            context.Response.StatusCode = StatusCodes.Status409Conflict;
+            await context.Response.WriteAsJsonAsync(new ProblemDetails
+            {
+                Status = StatusCodes.Status409Conflict, Title = "Stored rotation pause conflict",
+                Detail = "Dữ liệu tạm nghỉ không hợp lệ. Cần kiểm tra buổi chơi trước khi tiếp tục."
+            }, cancellationToken);
+            return true;
+        }
         if (exception is not InvalidLineupSnapshotException integrity) return false;
 
         logger.LogWarning("Invalid original lineup in session {SessionId}, match {MatchId}", integrity.SessionId, integrity.MatchId);
