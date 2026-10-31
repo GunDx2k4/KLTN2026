@@ -1,3 +1,4 @@
+using LegendsTeamVN.BadmintonClub.Application.DTOs.Settlement.Responses;
 using LegendsTeamVN.BadmintonClub.Application.Abstractions;
 using LegendsTeamVN.BadmintonClub.Application.DependencyInjection.Options;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Sessions.Responses;
@@ -8,7 +9,7 @@ using LegendsTeamVN.Core.Identity.Abstractions;
 using LegendsTeamVN.Core.Utilities.Results;
 using Microsoft.Extensions.Options;
 
-namespace LegendsTeamVN.BadmintonClub.Application.Features.Sessions.Settlement;
+namespace LegendsTeamVN.BadmintonClub.Application.Features.Settlement.Approve;
 
 public sealed class ApproveSettlementCommandHandler(ISessionRepository sessions, ICurrentUserService currentUser,
     ISettlementPreviewTokenService tokens, TimeProvider clock, IOptionsMonitor<SettlementOptions> options)

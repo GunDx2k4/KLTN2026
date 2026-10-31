@@ -1,6 +1,7 @@
+using LegendsTeamVN.BadmintonClub.Application.Features.Settlement.Validation;
 using FluentValidation;
 
-namespace LegendsTeamVN.BadmintonClub.Application.Features.Sessions.Settlement;
+namespace LegendsTeamVN.BadmintonClub.Application.Features.Settlement.Approve;
 
 public sealed class ApproveSettlementCommandValidator : AbstractValidator<ApproveSettlementCommand>
 {

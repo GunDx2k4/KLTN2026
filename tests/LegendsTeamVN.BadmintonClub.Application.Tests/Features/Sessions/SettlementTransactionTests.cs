@@ -1,9 +1,20 @@
+using LegendsTeamVN.BadmintonClub.Migrator.Migrations;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Microsoft.EntityFrameworkCore.Migrations.Operations;
+using LegendsTeamVN.BadmintonClub.Application.DTOs.Settlement.Requests;
+using LegendsTeamVN.BadmintonClub.Application.DTOs.Settlement.Responses;
+using LegendsTeamVN.BadmintonClub.Application.DTOs.Settlement.Notifications;
 using System.Diagnostics;
 using LegendsTeamVN.BadmintonClub.Application.DependencyInjection.Options;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Sessions.Requests;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Sessions.Responses;
-using LegendsTeamVN.BadmintonClub.Application.Features.Sessions.Settlement;
-using LegendsTeamVN.BadmintonClub.Application.Features.Sessions.Settlement.Events;
+using LegendsTeamVN.BadmintonClub.Application.Features.Settlement.GetForm;
+using LegendsTeamVN.BadmintonClub.Application.Features.Settlement.Preview;
+using LegendsTeamVN.BadmintonClub.Application.Features.Settlement.Approve;
+using LegendsTeamVN.BadmintonClub.Application.Features.Settlement.Get;
+using LegendsTeamVN.BadmintonClub.Application.Features.Settlement.MarkMemberPaid;
+using LegendsTeamVN.BadmintonClub.Application.Features.Settlement.Events;
 using LegendsTeamVN.BadmintonClub.Domain.Constants;
 using LegendsTeamVN.BadmintonClub.Domain.Events;
 using LegendsTeamVN.Core.Application.Behaviors;
@@ -226,12 +237,10 @@ public sealed class SettlementTransactionTests : IAsyncLifetime
         await using var connection = new NpgsqlConnection(connectionString);
         await connection.OpenAsync();
         await ExecuteAsync(connection, "CREATE TABLE IF NOT EXISTS \"__EFMigrationsHistory\" (\"MigrationId\" character varying(150) PRIMARY KEY, \"ProductVersion\" character varying(32) NOT NULL)");
-        await ExecuteAsync(connection, ReadSql("UC16-BE.Down.sql"));
+        await ExecuteAsync(connection, GenerateMigrationSql(false));
         var before = await ReadLegacyAsync(connection, feeId, bankId);
         await ExecuteAsync(connection, "INSERT INTO \"__EFMigrationsHistory\" (\"MigrationId\", \"ProductVersion\") VALUES ('20261026090341_AddFemaleDiscountGuestToFeeRule', '10.0.10')");
-        await ExecuteAsync(connection, ReadSql("UC16-BE.Preflight.sql"));
-        await ExecuteAsync(connection, ReadSql("UC16-BE.Up.sql"));
-        await ExecuteAsync(connection, ReadSql("UC16-BE.Postflight.sql"));
+        await ExecuteAsync(connection, GenerateMigrationSql(true));
         var after = await ReadLegacyAsync(connection, feeId, bankId);
         Assert.Equal(before, after);
         Assert.Contains("123456.78", after);
@@ -241,9 +250,9 @@ public sealed class SettlementTransactionTests : IAsyncLifetime
         Assert.False(legacy.IsPublished);
         Assert.Null(legacy.PublishedAt);
         Assert.Equal(paidAt!.Value.Ticks / 10, legacy.PaidAt!.Value.Ticks / 10);
-        await ExecuteAsync(connection, ReadSql("UC16-BE.Down.sql"));
+        await ExecuteAsync(connection, GenerateMigrationSql(false));
         Assert.Equal(before, await ReadLegacyAsync(connection, feeId, bankId));
-        await ExecuteAsync(connection, ReadSql("UC16-BE.Up.sql"));
+        await ExecuteAsync(connection, GenerateMigrationSql(true));
     }
 
     [SettlementIntegrationFact]
@@ -469,11 +478,9 @@ public sealed class SettlementTransactionTests : IAsyncLifetime
         await using var connection = new NpgsqlConnection(connectionString);
         await connection.OpenAsync();
         await ExecuteAsync(connection, "CREATE TABLE IF NOT EXISTS \"__EFMigrationsHistory\" (\"MigrationId\" character varying(150) PRIMARY KEY, \"ProductVersion\" character varying(32) NOT NULL)");
-        await ExecuteAsync(connection, ReadSql("UC16-BE.Down.sql"));
-        var original = ReadSql("UC16-BE.Up.sql");
-        var broken = original.Replace("ALTER TABLE session_fee ADD adjusted_at timestamp with time zone;",
-            "ALTER TABLE session_fee ADD adjusted_at timestamp with time zone;\nSELECT 1 / 0;");
-        Assert.NotEqual(original, broken);
+        await ExecuteAsync(connection, GenerateMigrationSql(false));
+        var original = GenerateMigrationSql(true);
+        var broken = GenerateMigrationSql(true, injectFailure: true);
         var error = await Assert.ThrowsAsync<PostgresException>(() => ExecuteAsync(connection, broken));
         Assert.Equal(PostgresErrorCodes.DivisionByZero, error.SqlState);
         await ExecuteAsync(connection, "ROLLBACK");
@@ -1196,7 +1203,7 @@ public sealed class SettlementTransactionTests : IAsyncLifetime
     }
 
     [SettlementIntegrationFact]
-    public async Task DownArtifactRefusesToRemoveCommittedPublicationAndKeepsAllData()
+    public async Task MigrationDownRefusesToRemoveCommittedPublicationAndKeepsAllData()
     {
         var fixture = await SeedAsync(true);
         var workflow = new ApprovalWorkflow(this, fixture.SessionId, fixture.UserId);
@@ -1205,14 +1212,13 @@ public sealed class SettlementTransactionTests : IAsyncLifetime
         var before = await StoredState();
         await using var connection = new NpgsqlConnection(connectionString);
         await connection.OpenAsync();
-        var error = await Assert.ThrowsAsync<PostgresException>(() => ExecuteAsync(connection, ReadSql("UC16-BE.Down.sql")));
+        var error = await Assert.ThrowsAsync<PostgresException>(() => ExecuteAsync(connection, GenerateMigrationSql(false)));
         Assert.Equal(PostgresErrorCodes.RaiseException, error.SqlState);
         Assert.Contains("publication snapshots must be preserved", error.MessageText);
         await ExecuteAsync(connection, "ROLLBACK");
         Assert.Equal(before, await StoredState());
         await ExecuteAsync(connection, "CREATE TABLE IF NOT EXISTS \"__EFMigrationsHistory\" (\"MigrationId\" character varying(150) PRIMARY KEY, \"ProductVersion\" character varying(32) NOT NULL)");
         await ExecuteAsync(connection, "INSERT INTO \"__EFMigrationsHistory\" (\"MigrationId\", \"ProductVersion\") VALUES ('20261029135900_AddSettlementPublicationSnapshot', '10.0.10')");
-        await ExecuteAsync(connection, ReadSql("UC16-BE.Postflight.sql"));
         Assert.True((await workflow.Approve(command)).IsSuccess);
     }
 
@@ -1279,12 +1285,24 @@ public sealed class SettlementTransactionTests : IAsyncLifetime
         public override DateTimeOffset GetUtcNow() => new(Current);
     }
 
-    private static string ReadSql(string name)
+    private string GenerateMigrationSql(bool up, bool injectFailure = false)
     {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !Directory.Exists(Path.Combine(directory.FullName, "docs", "Detail Design"))) directory = directory.Parent;
-        if (directory is null) throw new InvalidOperationException("Repository SQL artifacts were not found.");
-        return File.ReadAllText(Path.Combine(directory.FullName, "docs", "Detail Design", name));
+        using var db = CreateContext();
+        var migration = new AddSettlementPublicationSnapshot
+        {
+            ActiveProvider = db.Database.ProviderName!
+        };
+        var operations = (up ? migration.UpOperations : migration.DownOperations).ToList();
+        if (injectFailure)
+            operations.Insert(1, new SqlOperation { Sql = "SELECT 1 / 0;" });
+        var commands = db.GetService<IMigrationsSqlGenerator>().Generate(operations, up ? migration.TargetModel : null);
+        var history = db.GetService<IHistoryRepository>();
+        const string migrationId = "20261029135900_AddSettlementPublicationSnapshot";
+        var historyChange = up
+            ? history.GetInsertScript(new HistoryRow(migrationId, "10.0.10"))
+            : history.GetDeleteScript(migrationId);
+        return "START TRANSACTION;\n" + history.GetCreateIfNotExistsScript() + "\n" +
+            string.Join("\n", commands.Select(command => command.CommandText)) + "\n" + historyChange + "\nCOMMIT;";
     }
 
     private static async Task ExecuteAsync(NpgsqlConnection connection, string sql)

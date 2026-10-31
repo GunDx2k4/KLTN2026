@@ -1,3 +1,4 @@
+using LegendsTeamVN.BadmintonClub.Application.DTOs.Settlement.Responses;
 using LegendsTeamVN.BadmintonClub.Application.Abstractions;
 using LegendsTeamVN.BadmintonClub.Application.DependencyInjection.Options;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Sessions.Responses;
@@ -6,7 +7,7 @@ using LegendsTeamVN.Core.Utilities.Results;
 using MediatR;
 using Microsoft.Extensions.Options;
 
-namespace LegendsTeamVN.BadmintonClub.Application.Features.Sessions.Settlement;
+namespace LegendsTeamVN.BadmintonClub.Application.Features.Settlement.Approve;
 
 public sealed class SettlementLockBehavior(ISettlementLock settlementLock, IOptionsMonitor<SettlementOptions> options)
     : IPipelineBehavior<ApproveSettlementCommand, Result<SessionSettlementResponse>>

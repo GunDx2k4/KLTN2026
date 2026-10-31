@@ -1,3 +1,4 @@
+using LegendsTeamVN.BadmintonClub.Application.DTOs.Settlement.Responses;
 using LegendsTeamVN.BadmintonClub.Application.Abstractions;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Sessions.Responses;
 using LegendsTeamVN.BadmintonClub.Domain.Repositories;
@@ -6,7 +7,7 @@ using LegendsTeamVN.Core.Application.Messaging.CQRS;
 using LegendsTeamVN.Core.Identity.Abstractions;
 using LegendsTeamVN.Core.Utilities.Results;
 
-namespace LegendsTeamVN.BadmintonClub.Application.Features.Sessions.Settlement;
+namespace LegendsTeamVN.BadmintonClub.Application.Features.Settlement.Preview;
 
 public sealed class PreviewSettlementQueryHandler(ISessionRepository sessions, ICurrentUserService currentUser,
     ISettlementPreviewTokenService tokens, TimeProvider clock) : IQueryHandler<PreviewSettlementQuery, SettlementPreviewResponse>

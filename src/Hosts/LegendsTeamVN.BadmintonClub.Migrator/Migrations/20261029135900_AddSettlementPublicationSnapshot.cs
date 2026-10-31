@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -298,6 +298,20 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.Sql("""
+                SET LOCAL lock_timeout = '3s';
+                LOCK TABLE badminton_session, session_fee IN ACCESS EXCLUSIVE MODE;
+                DO $$
+                BEGIN
+                    IF EXISTS (SELECT 1 FROM badminton_session WHERE published_preview_id IS NOT NULL
+                        OR published_at IS NOT NULL OR published_request_hash IS NOT NULL OR total_cost IS NOT NULL)
+                        OR EXISTS (SELECT 1 FROM session_fee WHERE is_published OR published_at IS NOT NULL
+                            OR court_share IS NOT NULL OR adjustment_reason IS NOT NULL) THEN
+                        RAISE EXCEPTION 'UC16 rollback blocked: publication snapshots must be preserved';
+                    END IF;
+                END $$;
+                """);
+
             migrationBuilder.DropColumn(
                 name: "adjusted_at",
                 table: "session_fee");

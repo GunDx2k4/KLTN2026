@@ -1,6 +1,6 @@
 using LegendsTeamVN.BadmintonClub.Domain.Services;
 
-namespace LegendsTeamVN.BadmintonClub.Application.DTOs.Sessions.Responses;
+namespace LegendsTeamVN.BadmintonClub.Application.DTOs.Settlement.Responses;
 
 public sealed record MemberSettlementFeeResponse(Guid FeeId, Guid UserId, string FullName, string? AvatarUrl,
     string PriceType, decimal FinalFee, string PaymentStatus, string QrCodePayload, string PaymentCode,

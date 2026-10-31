@@ -1,7 +1,12 @@
+using LegendsTeamVN.BadmintonClub.Application.DTOs.Settlement.Requests;
 using LegendsTeamVN.BadmintonClub.Application.Abstractions;
 using LegendsTeamVN.BadmintonClub.Application.DependencyInjection.Options;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Sessions.Requests;
-using LegendsTeamVN.BadmintonClub.Application.Features.Sessions.Settlement;
+using LegendsTeamVN.BadmintonClub.Application.Features.Settlement.GetForm;
+using LegendsTeamVN.BadmintonClub.Application.Features.Settlement.Preview;
+using LegendsTeamVN.BadmintonClub.Application.Features.Settlement.Approve;
+using LegendsTeamVN.BadmintonClub.Application.Features.Settlement.Get;
+using LegendsTeamVN.BadmintonClub.Application.Features.Settlement.MarkMemberPaid;
 using LegendsTeamVN.BadmintonClub.Application.Tests.Common;
 using LegendsTeamVN.BadmintonClub.Domain.Entities;
 using LegendsTeamVN.BadmintonClub.Domain.Enums;

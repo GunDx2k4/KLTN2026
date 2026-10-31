@@ -1,9 +1,11 @@
+using LegendsTeamVN.BadmintonClub.Application.DTOs.Settlement.Requests;
+using LegendsTeamVN.BadmintonClub.Application.DTOs.Settlement.Responses;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Sessions.Requests;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Sessions.Responses;
 using LegendsTeamVN.BadmintonClub.Domain.Entities;
 using LegendsTeamVN.BadmintonClub.Domain.Services;
 
-namespace LegendsTeamVN.BadmintonClub.Application.Features.Sessions.Settlement;
+namespace LegendsTeamVN.BadmintonClub.Application.Features.Settlement;
 
 internal static class SessionSettlementMapper
 {

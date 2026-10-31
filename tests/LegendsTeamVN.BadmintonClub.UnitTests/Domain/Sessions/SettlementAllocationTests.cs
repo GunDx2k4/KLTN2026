@@ -21,7 +21,7 @@ public sealed class SettlementAllocationTests
         public SettlementCosts Costs { get; set; } = new(0, 0, 300000, 0);
         public List<SettlementAdjustment> Adjustments { get; } = [];
         public Fixture() => Rule = new(Session.GroupId);
-        public Guid Add(string? memberType = "DAILY", short gender = 0, DateTime? expiry = null, Guid? id = null,
+        public Guid Add(string? memberType = "DAILY", short gender = (short)Gender.Male, DateTime? expiry = null, Guid? id = null,
             BookingStatus status = BookingStatus.CHECKED_IN)
         {
             var userId = id ?? Guid.NewGuid();
@@ -42,7 +42,7 @@ public sealed class SettlementAllocationTests
     {
         var f = new Fixture { Costs = new(3, 30000, 300000, 0) };
         var monthly = f.Add("MONTHLY", expiry: Now);
-        var male = f.Add(); var female = f.Add(gender: 1);
+        var male = f.Add(); var female = f.Add(gender: (short)Gender.Female);
         f.Rule = new(f.Session.GroupId, femaleDiscountDaily: 10000);
         var r = f.Calculate().Value;
         Assert.Equal(390000m, r.TotalCost); Assert.Equal(250000m, r.TotalReceivable);
@@ -50,6 +50,33 @@ public sealed class SettlementAllocationTests
         Assert.Equal(0m, r.Members.Single(m => m.UserId == monthly).FinalAmount);
         Assert.Equal(130000m, r.Members.Single(m => m.UserId == male).FinalAmount);
         Assert.Equal(120000m, r.Members.Single(m => m.UserId == female).FinalAmount);
+    }
+
+    [Theory]
+    [InlineData((short)0, 40000)]
+    [InlineData((short)1, 40000)]
+    [InlineData((short)2, 35000)]
+    public void ProfileGenderValuesApplyDiscountOnlyToFemale(short gender, int expected)
+    {
+        var f = new Fixture();
+        f.Add(gender: gender);
+        f.Rule = new(f.Session.GroupId, FeeMode.FIXED, dailyMemberFee: 40000, femaleDiscountDaily: 5000);
+
+        var result = f.Calculate();
+
+        Assert.True(result.IsSuccess, result.Error.Message);
+        Assert.Equal(expected, result.Value.Members.Single().FinalAmount);
+    }
+
+    [Theory]
+    [InlineData((short)-1)]
+    [InlineData((short)3)]
+    public void UnsupportedGenderIsRejected(short gender)
+    {
+        var f = new Fixture();
+        f.Add(gender: gender);
+
+        Assert.Equal("Settlement.InvalidUser", f.Calculate().Error.Code);
     }
 
     [Theory]
@@ -90,7 +117,7 @@ public sealed class SettlementAllocationTests
     public void ModeAndDiscountUseDailyAndGuestSeparately(FeeMode mode, int expectedDaily, int expectedGuest)
     {
         var f = new Fixture { Costs = new(3, 20000, 300000, 40000) };
-        var daily = f.Add(gender: 1); var guest = f.Add(null, 1);
+        var daily = f.Add(gender: (short)Gender.Female); var guest = f.Add(null, (short)Gender.Female);
         f.Rule = new(f.Session.GroupId, mode, dailyMemberFee: 40000, guestFee: 60000,
             femaleDiscountDaily: 5000, femaleDiscountGuest: 10000);
         var r = f.Calculate().Value;
@@ -105,7 +132,7 @@ public sealed class SettlementAllocationTests
     public void AllMonthlyRemainExemptIncludingOrdinaryExtraExpense(FeeMode mode)
     {
         var f = new Fixture { Costs = new(1, 30000, 300000, 30000) };
-        f.Add("MONTHLY", 1, Now); f.Add("MONTHLY", 0, Now);
+        f.Add("MONTHLY", (short)Gender.Female, Now); f.Add("MONTHLY", (short)Gender.Male, Now);
         f.Rule = new(f.Session.GroupId, mode, femaleDiscountMonthly: 100000, femaleDiscountDaily: 999999);
         var r = f.Calculate().Value;
         Assert.Equal(0m, r.TotalReceivable); Assert.Equal(360000m, r.MonthlyFundCovered);
@@ -115,7 +142,7 @@ public sealed class SettlementAllocationTests
     [Fact]
     public void FemaleDiscountCannotCreateNegativeMoney()
     {
-        var f = new Fixture(); f.Add(gender: 1);
+        var f = new Fixture(); f.Add(gender: (short)Gender.Female);
         f.Rule = new(f.Session.GroupId, FeeMode.FIXED, dailyMemberFee: 10000, femaleDiscountDaily: 20000);
         var r = f.Calculate().Value.Members.Single();
         Assert.Equal(10000m, r.DiscountApplied); Assert.Equal(0m, r.FinalAmount);
@@ -181,7 +208,7 @@ public sealed class SettlementAllocationTests
         foreach (var cents in new[] { 0, 1, 2, 7, 99, 100, 10001, 999999 })
         {
             var f = new Fixture { Costs = new(3, cents / 100m, (cents + 1) / 100m, (cents + 2) / 100m) };
-            for (var i = 0; i < count; i++) f.Add(gender: (short)(i % 2));
+            for (var i = 0; i < count; i++) f.Add(gender: (short)(1 + i % 2));
             var r = f.Calculate().Value;
             Assert.Equal(f.Costs.CourtRentalCost, r.Members.Sum(m => m.CourtShare));
             Assert.Equal(3 * f.Costs.ShuttlecockPrice, r.Members.Sum(m => m.ShuttleShare));

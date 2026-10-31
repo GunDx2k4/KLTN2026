@@ -1,17 +1,8 @@
 using FluentValidation;
-using LegendsTeamVN.BadmintonClub.Application.DTOs.Sessions.Requests;
+using LegendsTeamVN.BadmintonClub.Application.DTOs.Settlement.Requests;
 using LegendsTeamVN.BadmintonClub.Domain.Services;
 
-namespace LegendsTeamVN.BadmintonClub.Application.Features.Sessions.Settlement;
-
-public sealed class PreviewSettlementQueryValidator : AbstractValidator<PreviewSettlementQuery>
-{
-    public PreviewSettlementQueryValidator()
-    {
-        RuleFor(x => x.SessionId).NotEmpty();
-        RuleFor(x => x.Input).NotNull().SetValidator(new SettlementInputValidator());
-    }
-}
+namespace LegendsTeamVN.BadmintonClub.Application.Features.Settlement.Validation;
 
 public sealed class SettlementInputValidator : AbstractValidator<PreviewSettlementRequest>
 {

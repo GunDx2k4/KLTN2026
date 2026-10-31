@@ -1,3 +1,5 @@
+using LegendsTeamVN.BadmintonClub.Application.DTOs.Settlement.Requests;
+using LegendsTeamVN.BadmintonClub.Application.DTOs.Settlement.Responses;
 using System.Data;
 using System.Net;
 using System.Net.Http.Json;

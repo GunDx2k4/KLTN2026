@@ -1,3 +1,4 @@
+using LegendsTeamVN.BadmintonClub.Application.DTOs.Settlement.Notifications;
 using System.Text.Json;
 using LegendsTeamVN.BadmintonClub.Domain.Entities;
 using LegendsTeamVN.BadmintonClub.Domain.Enums;
@@ -5,9 +6,7 @@ using LegendsTeamVN.BadmintonClub.Domain.Events;
 using LegendsTeamVN.BadmintonClub.Domain.Repositories;
 using MediatR;
 
-namespace LegendsTeamVN.BadmintonClub.Application.Features.Sessions.Settlement.Events;
-
-public sealed record SettlementPaymentPush(Guid EventId, Guid SessionId, Guid FeeId, Guid UserId, decimal Amount, string PaymentCode);
+namespace LegendsTeamVN.BadmintonClub.Application.Features.Settlement.Events;
 
 public sealed class SettlementPublishedDomainEventHandler(ISessionRepository sessions,
     INotificationRepository notifications, IOutboxRepository outbox) : INotificationHandler<SettlementPublishedDomainEvent>

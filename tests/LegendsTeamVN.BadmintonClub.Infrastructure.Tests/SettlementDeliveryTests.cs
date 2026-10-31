@@ -1,7 +1,7 @@
+using LegendsTeamVN.BadmintonClub.Application.DTOs.Settlement.Notifications;
 using System.Text.Json;
 using LegendsTeamVN.BadmintonClub.Application.Abstractions;
 using LegendsTeamVN.BadmintonClub.Application.DependencyInjection.Options;
-using LegendsTeamVN.BadmintonClub.Application.Features.Sessions.Settlement.Events;
 using LegendsTeamVN.BadmintonClub.Domain.Entities;
 using LegendsTeamVN.BadmintonClub.Domain.Enums;
 using LegendsTeamVN.BadmintonClub.Domain.Repositories;

@@ -1,10 +1,11 @@
+using LegendsTeamVN.BadmintonClub.Application.DTOs.Settlement.Responses;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Sessions.Responses;
 using LegendsTeamVN.BadmintonClub.Domain.Repositories;
 using LegendsTeamVN.Core.Application.Messaging.CQRS;
 using LegendsTeamVN.Core.Identity.Abstractions;
 using LegendsTeamVN.Core.Utilities.Results;
 
-namespace LegendsTeamVN.BadmintonClub.Application.Features.Sessions.Settlement;
+namespace LegendsTeamVN.BadmintonClub.Application.Features.Settlement.Get;
 
 public sealed class GetSessionSettlementQueryHandler(ISessionRepository sessions, ICurrentUserService currentUser)
     : IQueryHandler<GetSessionSettlementQuery, SessionSettlementResponse>
