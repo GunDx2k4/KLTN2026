@@ -54,6 +54,24 @@ public sealed class UserEndpointRouteTests
             Assert.NotEmpty(route.Metadata.GetOrderedMetadata<IAuthorizeData>());
             Assert.DoesNotContain(route.Metadata.GetOrderedMetadata<IAuthorizeData>(), a => a.Policy == "SessionOperations");
         }
-        Assert.Equal(expected.Length, routes.Length);
+        var expectedPayments = new (string Name, string Method, string Suffix)[]
+        {
+            ("ListMyFees", "GET", "me/fees"),
+            ("GetMyFee", "GET", "me/fees/{feeId:guid}"),
+            ("GetMyFeeQrImage", "GET", "me/fees/{feeId:guid}/qr.png"),
+            ("RequestCashPayment", "POST", "me/fees/{feeId:guid}/cash-request"),
+            ("PrepareBankTransfer", "POST", "me/fees/{feeId:guid}/bank-transfer"),
+            ("ReportBankTransfer", "POST", "me/fees/{feeId:guid}/transfer-notice")
+        };
+
+        foreach (var (name, method, suffix) in expectedPayments)
+        {
+            var route = Assert.Single(routes, e => e.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName == name);
+            Assert.Equal("api/v{version:apiversion}/user/" + suffix, route.RoutePattern.RawText!.Trim('/'));
+            Assert.Equal(method, Assert.Single(route.Metadata.GetMetadata<HttpMethodMetadata>()!.HttpMethods));
+            Assert.Equal("SessionOperations", Assert.Single(route.Metadata.GetOrderedMetadata<IAuthorizeData>()).Policy);
+            Assert.Null(route.Metadata.GetMetadata<IAllowAnonymous>());
+        }
+        Assert.Equal(expected.Length + expectedPayments.Length, routes.Length);
     }
 }
