@@ -32,6 +32,101 @@ public class SessionFee : AggregateRoot<Guid>
     public PaymentStatus PaymentStatus { get; private set; } = PaymentStatus.UNPAID;
 
     public DateTime? PaidAt { get; private set; }
+    public PaymentProgress? PaymentProgress { get; private set; }
+    public Guid? PaymentRequestId { get; private set; }
+    public DateTime? PaymentRequestedAt { get; private set; }
+    public DateTime? TransferReportedAt { get; private set; }
+    public Guid? QrBankAccountId { get; private set; }
+    public string? QrBankBin { get; private set; }
+    public string? QrBankName { get; private set; }
+    public string? QrAccountNumber { get; private set; }
+    public string? QrAccountHolder { get; private set; }
+    public DateTime? QrCreatedAt { get; private set; }
+
+    public LegendsTeamVN.Core.Utilities.Results.Result ValidatePaymentRequest(PaymentMethod method)
+    {
+        if (PaymentStatus == PaymentStatus.PAID)
+            return PaymentFailure("AlreadyPaid", "Khoản thu đã thanh toán. Vui lòng xem biên lai.");
+        if (PaymentStatus == PaymentStatus.EXEMPT || Amount <= 0)
+            return PaymentFailure("Exempt", "Khoản thu được miễn thanh toán.");
+        if (!IsPublished || PublishedAt is null)
+            return PaymentFailure("NotPublished", "Khoản thu chưa được phát hành.");
+        if (!Enum.IsDefined(method))
+            return PaymentFailure("InvalidMethod", "Phương thức thanh toán không hợp lệ.");
+        if (PaymentRequestId.HasValue && PaymentMethod != method)
+            return PaymentFailure("PaymentMethodLocked", "Khoản thu đã chọn phương thức thanh toán khác.");
+        return LegendsTeamVN.Core.Utilities.Results.Result.Success();
+    }
+
+    public LegendsTeamVN.Core.Utilities.Results.Result RequestCash(DateTime now)
+    {
+        var valid = ValidatePaymentRequest(Enums.PaymentMethod.CASH);
+        if (valid.IsFailure || PaymentRequestId.HasValue) return valid;
+        PaymentMethod = Enums.PaymentMethod.CASH;
+        PaymentProgress = Enums.PaymentProgress.CASH_CONFIRMATION_REQUESTED;
+        PaymentRequestId = Guid.NewGuid();
+        PaymentRequestedAt = PaymentTimestamp(now);
+        RaiseDomainEvent(new Events.CashPaymentRequestedDomainEvent(Id, SessionId, UserId, PaymentRequestId.Value, PaymentRequestedAt.Value));
+        return valid;
+    }
+
+    public LegendsTeamVN.Core.Utilities.Results.Result PrepareBankTransfer(PaymentBankSnapshot bank, string payload, DateTime now)
+    {
+        var valid = ValidateBankTransferPreparation();
+        if (valid.IsFailure || PaymentRequestId.HasValue) return valid;
+        if (bank is null || !bank.IsValid || string.IsNullOrWhiteSpace(payload))
+            return PaymentFailure("InvalidQrInput", "Thông tin tạo mã thanh toán không hợp lệ.");
+        PaymentMethod = Enums.PaymentMethod.BANK_TRANSFER;
+        PaymentProgress = Enums.PaymentProgress.QR_READY;
+        PaymentRequestId = Guid.NewGuid();
+        PaymentRequestedAt = QrCreatedAt = PaymentTimestamp(now);
+        QrBankAccountId = bank.BankAccountId;
+        QrBankBin = bank.BankBin;
+        QrBankName = bank.BankName;
+        QrAccountNumber = bank.AccountNumber;
+        QrAccountHolder = bank.AccountHolder;
+        QrCodePayload = payload;
+        return valid;
+    }
+
+    public LegendsTeamVN.Core.Utilities.Results.Result ValidateBankTransferPreparation()
+    {
+        var valid = ValidatePaymentRequest(Enums.PaymentMethod.BANK_TRANSFER);
+        if (valid.IsFailure) return valid;
+        return Amount != decimal.Truncate(Amount) || Amount > 9999999999999m
+            ? PaymentFailure("InvalidQrInput", "Số tiền không phù hợp để tạo VietQR.") : valid;
+    }
+
+    public PaymentBankSnapshot? GetPaymentBankSnapshot() =>
+        QrBankAccountId is Guid id && QrBankBin is string bin && QrBankName is string name &&
+        QrAccountNumber is string account && QrAccountHolder is string holder
+            ? new(id, bin, name, account, holder) : null;
+
+    public LegendsTeamVN.Core.Utilities.Results.Result ValidateQrAccess()
+    {
+        var valid = ValidateBankTransferPreparation();
+        if (valid.IsFailure) return valid;
+        return !PaymentRequestId.HasValue ||
+            PaymentProgress is not (Enums.PaymentProgress.QR_READY or Enums.PaymentProgress.AWAITING_RECONCILIATION) ||
+            string.IsNullOrWhiteSpace(QrCodePayload) || GetPaymentBankSnapshot() is not { IsValid: true }
+            ? PaymentFailure("QrNotPrepared", "Bạn chưa có mã chuyển khoản hợp lệ.") : valid;
+    }
+
+    public LegendsTeamVN.Core.Utilities.Results.Result ReportTransfer(DateTime now)
+    {
+        var valid = ValidatePaymentRequest(Enums.PaymentMethod.BANK_TRANSFER);
+        if (valid.IsFailure) return valid;
+        if (!PaymentRequestId.HasValue || string.IsNullOrWhiteSpace(QrCodePayload))
+            return PaymentFailure("QrNotPrepared", "Bạn chưa khởi tạo mã chuyển khoản.");
+        PaymentProgress = Enums.PaymentProgress.AWAITING_RECONCILIATION;
+        TransferReportedAt ??= PaymentTimestamp(now);
+        return valid;
+    }
+
+    private static LegendsTeamVN.Core.Utilities.Results.Result PaymentFailure(string code, string message) =>
+        LegendsTeamVN.Core.Utilities.Results.Result.Failure(LegendsTeamVN.Core.Utilities.Results.Error.Conflict($"Payments.{code}", message));
+
+    private static DateTime PaymentTimestamp(DateTime value) => value.AddTicks(-(value.Ticks % TimeSpan.TicksPerMicrosecond));
 
     public bool IsPublished { get; private set; }
     public short? Gender { get; private set; }
@@ -159,6 +254,8 @@ public class SessionFee : AggregateRoot<Guid>
     public void MarkAsPaid(PaymentMethod paymentMethod, Guid? cashCollectedBy = null)
     {
         if (PaymentStatus == PaymentStatus.PAID) return;
+        if (PaymentRequestId.HasValue && PaymentMethod == Enums.PaymentMethod.BANK_TRANSFER && paymentMethod == Enums.PaymentMethod.CASH)
+            throw new InvalidOperationException("Không thể xác nhận tiền mặt cho khoản đã chọn chuyển khoản.");
         if (PaymentStatus == PaymentStatus.EXEMPT || Amount == 0 || !Enum.IsDefined(paymentMethod))
             throw new InvalidOperationException("Khoản miễn thu hoặc phương thức thanh toán không hợp lệ.");
         PaymentStatus = PaymentStatus.PAID;
@@ -201,7 +298,7 @@ public class SessionFee : AggregateRoot<Guid>
     public void UpdatePaymentMethod(PaymentMethod? paymentMethod)
     {
         if (paymentMethod.HasValue && !Enum.IsDefined(paymentMethod.Value)) throw new ArgumentOutOfRangeException(nameof(paymentMethod));
-        if (PaymentStatus == PaymentStatus.PAID)
+        if (PaymentRequestId.HasValue || PaymentStatus == PaymentStatus.PAID)
             throw new InvalidOperationException("Không thể đổi phương thức của khoản thu đã thanh toán.");
         PaymentMethod = paymentMethod;
     }
@@ -226,4 +323,12 @@ public class SessionFee : AggregateRoot<Guid>
         Amount = amount;
         DiscountApplied = discountApplied;
     }
+}
+
+public sealed record PaymentBankSnapshot(Guid BankAccountId, string BankBin, string BankName, string AccountNumber, string AccountHolder)
+{
+    public bool IsValid => BankAccountId != Guid.Empty && BankBin is { Length: 6 } && BankBin.All(char.IsAsciiDigit) &&
+        !string.IsNullOrWhiteSpace(BankName) && BankName.Length <= 100 &&
+        !string.IsNullOrWhiteSpace(AccountHolder) && AccountHolder.Length <= 255 &&
+        AccountNumber is { Length: >= 1 and <= 19 } && AccountNumber.All(char.IsAsciiDigit);
 }

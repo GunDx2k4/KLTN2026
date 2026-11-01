@@ -24,6 +24,10 @@ public static class ServiceCollectionExtensions
     {
         services.AddCoreInfrastructure(configuration);
         services.Configure<SettlementOptions>(configuration.GetSection(SettlementOptions.SectionName));
+        services.Configure<PaymentsOptions>(configuration.GetSection(PaymentsOptions.SectionName));
+        services.AddSingleton<IVietQrImageRenderer, Payments.VietQrImageRenderer>();
+        services.AddSingleton<IVietQrPayloadGenerator, Payments.VietQrPayloadGenerator>();
+        services.AddHostedService<Payments.CashPaymentNotificationWorker>();
         services.TryAddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(
             configuration.GetConnectionString("Redis") ?? throw new InvalidOperationException("Thiếu ConnectionStrings:Redis cho khóa quyết toán.")));
         services.AddScoped<ISettlementLock, RedisSettlementLock>();

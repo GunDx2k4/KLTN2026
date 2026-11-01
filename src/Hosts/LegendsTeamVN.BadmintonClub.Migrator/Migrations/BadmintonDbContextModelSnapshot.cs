@@ -19,9 +19,6 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
 #pragma warning disable 612, 618
             modelBuilder
                 .HasAnnotation("ProductVersion", "10.0.10")
-                .HasAnnotation("Proxies:ChangeTracking", false)
-                .HasAnnotation("Proxies:CheckEquality", false)
-                .HasAnnotation("Proxies:LazyLoading", true)
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -577,6 +574,11 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("account_number");
 
+                    b.Property<string>("BankBin")
+                        .HasMaxLength(6)
+                        .HasColumnType("character varying(6)")
+                        .HasColumnName("bank_bin");
+
                     b.Property<string>("BankName")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -600,9 +602,15 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("GroupId");
+                    b.HasIndex("GroupId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_group_bank_account_active")
+                        .HasFilter("is_active");
 
-                    b.ToTable("group_bank_account", (string)null);
+                    b.ToTable("group_bank_account", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_group_bank_account_bin", "bank_bin IS NULL OR bank_bin ~ '^[0-9]{6}$'");
+                        });
                 });
 
             modelBuilder.Entity("LegendsTeamVN.BadmintonClub.Domain.Entities.GroupFeeRule", b =>
@@ -1713,6 +1721,19 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                         .HasColumnName("payment_method")
                         .HasComment("Phương thức thanh toán của khoản thu. Miền giá trị: BANK_TRANSFER, CASH.");
 
+                    b.Property<string>("PaymentProgress")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("payment_progress");
+
+                    b.Property<Guid?>("PaymentRequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("payment_request_id");
+
+                    b.Property<DateTime?>("PaymentRequestedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("payment_requested_at");
+
                     b.Property<string>("PaymentStatus")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -1737,10 +1758,38 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("published_by");
 
+                    b.Property<string>("QrAccountHolder")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("qr_account_holder");
+
+                    b.Property<string>("QrAccountNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("qr_account_number");
+
+                    b.Property<Guid?>("QrBankAccountId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("qr_bank_account_id");
+
+                    b.Property<string>("QrBankBin")
+                        .HasMaxLength(6)
+                        .HasColumnType("character varying(6)")
+                        .HasColumnName("qr_bank_bin");
+
+                    b.Property<string>("QrBankName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("qr_bank_name");
+
                     b.Property<string>("QrCodePayload")
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("qr_code_payload");
+
+                    b.Property<DateTime?>("QrCreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("qr_created_at");
 
                     b.Property<decimal?>("RawAmount")
                         .HasPrecision(18, 2)
@@ -1761,6 +1810,10 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                         .HasColumnType("numeric(18,2)")
                         .HasColumnName("shuttle_share");
 
+                    b.Property<DateTime?>("TransferReportedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("transfer_reported_at");
+
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid")
                         .HasColumnName("id_user");
@@ -1772,12 +1825,17 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                     b.HasIndex("PaymentCode")
                         .IsUnique();
 
+                    b.HasIndex("QrBankAccountId");
+
                     b.HasIndex("UserId");
 
                     b.HasIndex("SessionId", "UserId")
                         .IsUnique();
 
-                    b.ToTable("session_fee", (string)null);
+                    b.ToTable("session_fee", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_session_fee_payment_progress", "payment_progress IS NULL OR payment_progress IN ('QR_READY','AWAITING_RECONCILIATION','CASH_CONFIRMATION_REQUESTED')");
+                        });
                 });
 
             modelBuilder.Entity("LegendsTeamVN.BadmintonClub.Domain.Entities.SessionMatch", b =>
@@ -2189,6 +2247,11 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                         .WithMany()
                         .HasForeignKey("CashCollectedBy")
                         .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("LegendsTeamVN.BadmintonClub.Domain.Entities.GroupBankAccount", null)
+                        .WithMany()
+                        .HasForeignKey("QrBankAccountId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("LegendsTeamVN.BadmintonClub.Domain.Entities.BadmintonSession", "Session")
                         .WithMany("Fees")

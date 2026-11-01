@@ -5,6 +5,8 @@
 > **Ngày cập nhật**: 14/10/2026  
 > **Đối tượng sử dụng**: Đội ngũ Backend (.NET Core Minimal APIs) & Đội ngũ Mobile (Flutter App)
 
+> **UC17/FR20 cập nhật 01/11/2026:** xem mục UC17 cuối tài liệu và [bàn giao FE theo mẫu UC16](Detail%20Design/UC17-BE.md). Đã áp migration vào DB dùng chung local BadmintonClub, API54796 bật UC17 REST; FCM tắt, UC18 chưa làm. Người dùng xác nhận quét đúng trên hai app ngân hàng; POC/decoder độc lập đạt.
+
 > **FR17 cập nhật 27/10/2026 — BE A–E hoàn tất trên sandbox:** đã có GET `/api/v1/sessions/{sessionId}/my-matches`, POST `.../my-matches/pause` và POST `.../my-matches/resume`; hai POST chỉ nhận expectedRotationVersion. JWT + CHECKED_IN của self, member/guest/LEAVED hợp lệ, BANNED bị chặn. PersonalScheduleEnabled/SelfPauseEnabled mặc định false. MyMatchesChanged theo UserId; MatchStarted/push có teammate/opponents, kiểm chứng hai host/Redis với fake FCM. Suite cuối 347/347; E đo GET 9 SQL, p95 39,50–309,08 ms ở sandbox. [Contract](Detail%20Design/UC15-BE.md), [matrix](Detail%20Design/UC15-TEST-MATRIX.md), [handoff/runbook](Detail%20Design/UC15-BE.md). FE/thiết bị/FCM thật và DB đích/deploy chưa thực hiện; không coi số đo local là SLA production.
 
 ---
@@ -1409,3 +1411,63 @@ GET/approve trả `SessionSettlementResponse`: State, chi phí, TotalCost/TotalR
 Lỗi: 400 validation/token sai hoặc thiếu policy/membership, 401 chưa đăng nhập, 403 sai quyền/người duyệt/nhóm, 404 không tồn tại, 409 PreviewStale/PreviewExpired/AlreadyPublished/LegacyFees/PaymentCodeConflict/Busy/LockUnavailable/WritesDisabled/chưa EndTime/trận PLAYING/chưa xác nhận NO_SHOW. Các lỗi dữ liệu nghiệp vụ hiện dùng Error.Validation nên được ánh xạ 400 theo cơ chế chung (thay cho 422 dự kiến); FE đọc thuộc tính `code` ở cấp gốc của Problem Details, ví dụ `Settlement.PreviewStale`, không suy loại lỗi từ `detail`.
 
 Endpoint POST không hậu tố tính và phát hành một bước đã bỏ. Không có alias URL lặp `api/v1/sessions/api/v1/sessions`. Xem [báo cáo UC16](Detail%20Design/UC16-BE.md) và SQL chỉ dùng sau khi duyệt môi trường đích.
+
+## UC17 — Khoản đóng cá nhân, tiền mặt và chuẩn bị chuyển khoản
+
+Cập nhật 01/11/2026: dùng source Anpero.Payment.QrPayload `1.0.1-uc17.1` vá metadata được duyệt, giữ nguyên encoder/CRC. POC/ảnh round-trip độc lập đạt; người dùng xác nhận quét đúng trên hai app ngân hàng. Migration UC17 đã áp vào DB dùng chung local, API54796 bật Enabled/WritesEnabled, DispatchEnabled=false. UC18/webhook chưa triển khai; không tự PAID từ self-report. [Contract bàn giao FE](Detail%20Design/UC17-BE.md).
+
+| Method | URL sau `/api/v1` | Điều kiện / trạng thái hiện tại |
+|---|---|---|
+| GET | `/user/me/fees` | Strict JWT SessionOperations, UserId từ JWT; page=1, pageSize=20 mặc định, tối đa 100; lọc groupId/sessionId/paymentStatus trong tập sở hữu |
+| GET | `/user/me/fees/{feeId}` | Ownership tại DB, 404 cho người khác kể cả Admin; GET không ghi |
+| POST | `/user/me/fees/{feeId}/cash-request` | Enabled/WritesEnabled, UNPAID đã phát hành, recipient FeeManage hợp lệ; giữ UNPAID + CASH_CONFIRMATION_REQUESTED |
+| POST | `/user/me/fees/{feeId}/transfer-notice` | Yêu cầu BANK_TRANSFER đã lưu có payload; giữ UNPAID + AWAITING_RECONCILIATION; không sinh QR hoặc bằng chứng đã thu |
+| POST | `/user/me/fees/{feeId}/bank-transfer` | JWT/ownership, Enabled/WritesEnabled, UNPAID đã phát hành; 200 chi tiết + instructions, QR_READY; retry giữ payload/snapshot/RequestId |
+| GET | `/user/me/fees/{feeId}/qr.png` | JWT/ownership/no-store, Enabled; 200 image/png từ payload đã cấp, không ghi; chưa có QR/PAID/EXEMPT trả 409 |
+| GET/PUT | `/clubs/{clubId}/payment-bank-account` | BankManage thật trong DB; PUT cần Enabled/WritesEnabled, group lock, một bank active |
+
+Không có alias `/me/fees` hoặc GET `/sessions/{sessionId}/fees/me/qr`. Người có nghĩa vụ active/chưa xóa được đọc phí của mình dù là guest không membership/đã LEAVED/BANNED. Header X-Group-Id không mở rộng ownership. Khi Payments.Enabled=false, GET list/detail/trạng thái/receipt vẫn đọc; actions rỗng và không có instructions/ảnh QR.
+
+Ba POST cá nhân không nhận body chứa amount/paymentCode/status/UserId. FeeId từ route là định danh idempotency; tiền/mã lấy nguyên snapshot UC16. Chọn một phương thức sau lần xác nhận cấp QR/cash-request; không có API đổi/hủy. Request lặp không tạo thêm notification/outbox; tự báo giữ timestamp đầu.
+
+GET list trả `{ "items": [<PersonalFeeResponse>], "total": 1, "page": 1, "pageSize": 20 }`. Ví dụ PersonalFeeResponse khi yêu cầu tiền mặt đã lưu:
+
+```json
+{
+  "feeId": "10000000-0000-0000-0000-000000000001",
+  "sessionId": "20000000-0000-0000-0000-000000000001",
+  "groupId": "30000000-0000-0000-0000-000000000001",
+  "groupName": "CLB test",
+  "sessionStart": "2026-10-31T10:00:00Z",
+  "publicationState": "PUBLISHED",
+  "amount": 50000,
+  "currency": "VND",
+  "paymentCode": "CLB 200000000000 400000000000",
+  "paymentStatus": "UNPAID",
+  "paymentProgress": "CASH_CONFIRMATION_REQUESTED",
+  "paymentMethod": "CASH",
+  "paymentRequestedAt": "2026-11-01T03:00:00Z",
+  "transferReportedAt": null,
+  "breakdown": {
+    "courtShare": 50000, "shuttleShare": 0, "extraShare": 0,
+    "discountApplied": 0, "monthlyFundCovered": 0, "baseAmount": 50000,
+    "calculatedAmount": 50000, "roundingDelta": 0, "adjustmentDelta": 0,
+    "adjustmentReason": null
+  },
+  "availableActions": ["CASH_REQUEST"],
+  "paymentInstructions": null,
+  "receipt": null
+}
+```
+
+PAID: actions rỗng, receipt có receiptId=feeId/amount/paymentCode/paidAt/method/cashCollectedBy/metadataIncomplete. Legacy thiếu metadata giữ null và MetadataIncomplete=true; Breakdown=null nếu không có snapshot, không tính lại hoặc bịa PaidAt. EXEMPT không khởi tạo thanh toán.
+
+PUT bank body: `{ "bankBin": "970436", "bankName": "Tên ngân hàng", "accountNumber": "00123456789", "accountHolder": "Tên chủ tài khoản" }`. BIN 6 chữ số; account là chuỗi 1–19 chữ số giữ 0 đầu; tên bank tối đa 100, holder 255. Response `{ id, bankBin, bankName, accountNumber, accountHolder }`, không có secret. Cùng cấu hình no-op; đổi thì deactivate cũ, thêm bank mới và giữ lịch sử. Secret bank mới null, không sao chép/xóa/thay secret cũ; UC18 cấu hình webhook mới/cũ.
+
+Lỗi chuẩn ProblemDetails: 400 input, 401 JWT, 404 ownership/not-found, 403 bank/pay permission, 409 Payments.WritesDisabled/Disabled/AlreadyPaid/Exempt/NotPublished/PaymentMethodLocked/QrNotPrepared/NoCashRecipient/SessionUnavailable/BankUnavailable/BankAmbiguous/Busy/InvalidQrInput/QrGenerationFailed theo từng route. FE đọc `code` ở cấp gốc; Busy là lỗi tranh chấp có thể tải lại/thử lại, không được coi đã thanh toán.
+
+API pay UC16 cũ chỉ cho người có FeeManage thật xác nhận CASH; BANK_TRANSFER UC17 bị chặn 409 PaymentMethodLocked. PAID retry không đổi metadata. UC18/webhook/hoàn tiền/thu trùng và ledger hoàn chỉnh chưa thuộc UC17; cash PAID hiện hữu chưa đồng nghĩa đã ghi sổ quỹ.
+
+`paymentInstructions` gồm `{ payload, bank: { bankAccountId, bankBin, bankName, accountNumber, accountHolder }, imagePath }`. imagePath tương đối `/api/v1/user/me/fees/{feeId}/qr.png`. Flutter dùng HTTP client ghép base URL với imagePath, gửi `Authorization: Bearer <token>`, kiểm 200 và `image/png` rồi đưa response bytes vào `Image.memory`. Không gắn JWT vào query string hoặc dùng URL public; 401/404/409 là lỗi JSON, không đưa vào Image.memory. WritesEnabled=false vẫn cho lấy ảnh đã cấp khi Enabled=true; Enabled=false ẩn instructions/ảnh nhưng giữ GET lịch sử và receipt. GET `no-store` không thu hồi được ảnh người dùng đã chụp/lưu.
+
+Ba cờ Payments.Enabled/WritesEnabled/DispatchEnabled mặc định false trong options. Development local hiện Enabled/WritesEnabled=true, DispatchEnabled=false; DB chung BadmintonClub:5432 đã có migration 20261031155325_AddPersonalFeePayment. Seeding:Enabled=false để restart API không chạy demo seeder. Bank cũ chưa có BIN cần người có BankManage cấu hình, không tự backfill/copy bank UAT. Thu tiền/đối soát ngân hàng hoàn chỉnh vẫn thuộc UC18; chưa deploy môi trường production bên ngoài. Không chạy Migrator worker/seeder hoặc bộ test phá dữ liệu trên DB chung.

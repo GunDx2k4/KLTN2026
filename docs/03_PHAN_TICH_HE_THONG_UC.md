@@ -40,7 +40,7 @@ Hệ thống được tổ chức thành 5 phân hệ nghiệp vụ cốt lõi b
 Hệ thống tương tác với 4 tác nhân ngoài chính:
 1. **Người chơi (Hội viên cố định & Khách vãng lai)**: Cung cấp thông tin đăng ký, yêu cầu giữ chỗ, thanh toán chuyển khoản, đánh giá uy tín; nhận thông báo đôn hàng đợi, lịch thi đấu sân và mã QR thanh toán.
 2. **Ban điều hành nhóm (Host & Thủ quỹ)**: Cung cấp thông tin nhóm, lịch sinh hoạt, thông số buổi chơi, điểm danh tại sân, số quả cầu bóc mới; nhận danh sách giữ chỗ, đề xuất xoay sân và báo cáo quỹ.
-3. **Cổng thông tin ngân hàng (SePay / VietQR)**: Tiếp nhận yêu cầu sinh mã VietQR và gửi tín hiệu Webhook biến động số dư.
+3. **Cổng thông tin ngân hàng (SePay)**: Gửi Webhook biến động số dư theo mục tiêu UC18; UC17 thiết kế tự sinh payload/ảnh QR tại BE, không gọi API Generate bên ngoài.
 4. **Dịch vụ Bản đồ & GPS**: Cung cấp tọa độ và tính toán khoảng cách bán kính tìm kiếm.
 
 ```mermaid
@@ -241,13 +241,22 @@ graph TD
 
 ---
 
-### UC17: Thanh toán khoản thu cá nhân qua mã VietQR
-- **FR đáp ứng**: FR20 (F4.3) | **Tác nhân**: Người chơi.
-- **Tiền điều kiện**: Buổi chơi đã chốt sổ; khoản thu cá nhân đang ở trạng thái `UNPAID`.
-- **Luồng chính**: Người chơi mở chi tiết khoản thu ➔ Màn hình hiển thị mã VietQR động chuẩn ngân hàng NAPAS đã **nhúng sẵn số tiền chính xác** và **nội dung chuyển khoản định danh (`payment_code`)** ➔ Người chơi dùng ứng dụng ngân hàng bất kỳ quét mã và xác nhận chuyển tiền.
-- **Hậu điều kiện**: Giao dịch chuyển tiền được thực hiện thành công.
+### UC17: Thanh toán khoản thu cá nhân
+- **FR đáp ứng**: FR20 (F4.3) | **Tác nhân**: Hội viên cố định, khách vãng lai có tài khoản đăng nhập.
+- **Tiền điều kiện khởi tạo**: Buổi chơi đã chốt sổ/phát hành UC16; khoản của chính người gọi ở trạng thái `UNPAID`, số tiền dương. GET vẫn đọc lịch sử/biên lai khi tắt Payments, kể cả chủ khoản đã rời/bị chặn nhóm; tài khoản người dùng phải active/chưa xóa.
+- **Luồng chính theo thiết kế**:
+  1. Mở thông báo chứa feeId hoặc Khoản đóng của tôi; GET danh sách/chi tiết chỉ dữ liệu sở hữu, không yêu cầu quyền xem tài chính cả nhóm.
+  2. Đọc snapshot tiền sân/cầu/phụ phí, giảm trừ/làm tròn/điều chỉnh và Amount do UC16 phát hành; không tính lại theo biểu phí mới.
+  3. Người chơi xác nhận phương thức. Chuyển khoản qua POST bank-transfer sẽ lấy một bank active của CLB, giữ nguyên Amount và PaymentCode G04 dài 29 ký tự, lưu payload/snapshot tài khoản để retry. Sinh payload dự kiến bằng Anpero.Payment.QrPayload, PNG bằng QRCoder tại BE.
+  4. Người chơi chuyển trong ứng dụng ngân hàng; lệnh transfer-notice chỉ ghi `AWAITING_RECONCILIATION`, vẫn `UNPAID`. UC18 xử lý bằng chứng tiền nhận độc lập với thao tác tự báo.
+  5. GET theo dõi trạng thái/biên lai. Chỉ xác nhận hợp lệ từ người thu hoặc đối soát mới chuyển `PAID`.
+- **Luồng tiền mặt**: POST cash-request giữ `UNPAID` + `CASH_CONFIRMATION_REQUESTED`, lưu notification/outbox cùng transaction cho người có FeeManage thật. Thủ quỹ xác nhận qua API pay hiện hữu; retry không đổi PaidAt/method/collector. Chưa hoàn thiện ghi sổ quỹ tiền mặt trong UC17.
+- **Đã trả/miễn thu/legacy**: PAID trả biên lai JSON, không trả QR để thu lại; EXEMPT không thanh toán. Legacy thiếu snapshot hiển thị phần có thật; legacy UNPAID chưa phát hành chỉ đọc. Sau cấp QR/gửi cash-request khóa phương thức, API pay cũ cũng không được gạch PAID/CASH cho BANK_TRANSFER UC17.
+- **Hậu điều kiện**: Xem được khoản/biên lai; yêu cầu và tiến trình được lưu nguyên tử/idempotent. Tự báo chuyển khoản không chứng minh ngân hàng nhận tiền, không tự ghi bank transaction/ledger.
+- **Hiện trạng 01/11/2026**: Backend UC17 hoàn thiện, dùng Anpero `1.0.1-uc17.1` vá metadata được duyệt; POC/decoder ảnh độc lập đạt, người dùng xác nhận quét đúng trên hai app. Đã backup/restore kiểm chứng và áp migration vào DB dùng chung local BadmintonClub; API54796 bật REST UC17, FCM tắt. Không đổi encoder/PaymentCode hoặc bank cũ; UC18 chưa triển khai, self-report vẫn chờ đối soát. [Hợp đồng bàn giao FE và vận hành](Detail%20Design/UC17-BE.md).
 
 ### UC18: Đối soát & Tự động gạch nợ qua Webhook ngân hàng
+- **Giới hạn hiện trạng**: Luồng bên dưới là mục tiêu FR21, chưa được nghiệm thu trong UC17. Test writer mô phỏng không thay bằng chứng webhook thật. Chưa bật chuyển khoản thật khi thiếu UC18 hoặc quy trình đối soát thủ công được phê duyệt.
 - **FR đáp ứng**: FR21 (F4.4) | **Tác nhân**: Cổng thanh toán ngân hàng (SePay), Hệ thống.
 - **Tiền điều kiện**: Người chơi đã chuyển khoản; bản ghi `session_fee` đang ở trạng thái `UNPAID`.
 - **Luồng chính**:

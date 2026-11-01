@@ -29,12 +29,12 @@
 | **FR17** | Người chơi theo dõi lượt thi đấu cá nhân theo thời gian thực | Vận hành Buổi chơi & Điều phối (F3) | BE A–E hoàn tất sandbox 27/10/2026; FE/thiết bị/FCM thật và DB đích chưa triển khai | 3 API đã triển khai, cờ UC15 mặc định tắt |
 | **FR18** | Ghi nhận số cầu, chi phí sân và phụ phí thực tế | Hạch toán Vật tư & Sổ quỹ (F4) | BE kiểm chứng Đợt 5 ngày 30/10/2026; gói triển khai Đợt 6 đã chuẩn bị; FE/DB đích chưa triển khai | 4 API quyết toán |
 | **FR19** | Phân bổ chi phí theo rule và loại hội viên | Hạch toán Vật tư & Sổ quỹ (F4) | BE kiểm chứng Domain/API/transaction/Redis/outbox; xem báo cáo UC16 và runbook | 4 API quyết toán + API biểu phí |
-| **FR20** | Khởi tạo mã VietQR thanh toán nhúng sẵn tiền & mã duy nhất | Hạch toán Vật tư & Sổ quỹ (F4) | ⏳ *Sẵn sàng DB, cần thêm Engine* | 0 API |
+| **FR20** | Khởi tạo mã VietQR thanh toán nhúng sẵn tiền & mã duy nhất | Hạch toán Vật tư & Sổ quỹ (F4) | BE hoàn thiện, POC/decoder đạt; người dùng xác nhận hai app quét đúng; đã nối DB chung local và bàn giao FE | 8 route triển khai, Enabled/WritesEnabled bật trên API54796; FCM tắt, UC18 riêng |
 | **FR21** | Tiếp nhận biến động số dư ngân hàng để tự động xác nhận thanh toán | Hạch toán Vật tư & Sổ quỹ (F4) | ⏳ *Sẵn sàng DB, cần thêm Webhook* | 0 API |
 | **FR22** | Quản trị Sổ quỹ mở nội bộ minh bạch (Thu, Chi, Dư nợ) | Hạch toán Vật tư & Sổ quỹ (F4) | ⏳ *Sẵn sàng DB, cần thêm Endpoint* | 0 API |
 | **FR23** | Đánh giá tín nhiệm hai chiều (Điểm thành viên & Điểm CLB) | Đánh giá & Tín nhiệm (F5) | ⏳ *Sẵn sàng DB, cần thêm Endpoint* | 0 API |
 
-> **Thống kê hiện tại**:
+> **Thống kê tổng hợp cũ** (không dùng làm bằng chứng UC17/UC18; cập nhật FR20 ngày 01/11/2026 tại dòng tương ứng và hợp đồng UC17):
 > - **Đã hoàn thành và chạy thực tế**: **16 / 23 FR** (FR01 → FR16).
 > - **Tổng số API Backend đã hoàn thiện**: **48 Endpoints RESTful**, kiểm thử tự động đạt 37/37 Architecture Tests, 312/312 bài test toàn hệ thống passed.
 > - **Các FR tiếp theo cần làm**: FR17 → FR23 (Giao diện Realtime lượt đấu, Hạch toán chi phí cầu/sân đa hệ số, VietQR, Webhook SePay, Sổ quỹ, Đánh giá).
@@ -249,7 +249,10 @@ Các phân hệ dưới đây đã có sẵn cấu trúc bảng và mô hình th
 - **FR20 - Khởi tạo mã thanh toán VietQR định danh**:
   - *Mục tiêu*: UC17 sinh VietQR từ khoản thu đã phát hành, dùng số tiền và mã `CLB {SessionIdShort} {UserIdShort}` chuẩn G04 của UC16 để quét chuyển khoản; không sinh QR giả khi chưa có cấu hình ngân hàng phù hợp.
   - *Bảng dữ liệu đã có*: `session_fee`, `group_bank_account`.
-  - *Endpoint dự kiến*: `GET /api/v1/sessions/{sessionId}/fees/me/qr`.
+  - *API canonical đã map*: GET `/api/v1/user/me/fees`, GET `.../{feeId}`, POST `.../{feeId}/cash-request`, POST `.../{feeId}/transfer-notice`; GET/PUT `/api/v1/clubs/{clubId}/payment-bank-account`. JWT/ownership cho cá nhân; BankManage/FeeManage thật theo DB.
+  - POST `.../{feeId}/bank-transfer` cấp/lấy lại payload và snapshot; GET `.../{feeId}/qr.png` trả PNG có JWT/ownership/no-store, không ghi DB. Dùng Anpero `1.0.1-uc17.1` vá metadata một dòng được duyệt, không đổi mã/encoder. Chưa quét hai bank apps. Không có alias GET `/sessions/{sessionId}/fees/me/qr` theo dự kiến cũ.
+  - Migration `20261031155325_AddPersonalFeePayment` additive chỉ kiểm DB test riêng; chưa áp DB chung/production. Không tự đổi PaymentCode UC16, viết encoder hoặc thay thư viện. QRCoder là renderer, không chứng minh payload chuẩn.
+  - *Giới hạn*: image round-trip tự động đạt, người dùng xác nhận hai bank apps quét đúng; UC18/ledger hoàn chỉnh/FE chưa được nghiệm thu. [Contract bàn giao FE UC17](Detail%20Design/UC17-BE.md). DB chung local đã migrate, REST bật; GET nghĩa vụ/receipt vẫn đọc khi Payments tắt. FCM tiền mặt vẫn tắt; không coi self-report là đã nhận tiền.
 - **FR21 - Đối soát & Xác nhận thanh toán ngân hàng tự động**:
   - *Mục tiêu*: Tiếp nhận webhook biến động số dư tài khoản ngân hàng (Casso / SePay / VietinBank), tự động khớp nội dung chuyển khoản với mã định danh hóa đơn, xác nhận thanh toán sang trạng thái `PAID` mà không cần thủ quỹ kiểm tra sao kê thủ công.
   - *Bảng dữ liệu đã có*: `bank_transaction`.

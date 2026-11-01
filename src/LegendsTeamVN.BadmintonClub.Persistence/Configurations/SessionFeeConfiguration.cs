@@ -10,6 +10,19 @@ public class SessionFeeConfiguration : IEntityTypeConfiguration<SessionFee>
     public void Configure(EntityTypeBuilder<SessionFee> builder)
     {
         builder.ToTable("session_fee");
+        builder.ToTable(t => t.HasCheckConstraint("ck_session_fee_payment_progress",
+            "payment_progress IS NULL OR payment_progress IN ('QR_READY','AWAITING_RECONCILIATION','CASH_CONFIRMATION_REQUESTED')"));
+        builder.Property(f => f.PaymentProgress).HasColumnName("payment_progress").HasConversion<string>().HasMaxLength(40);
+        builder.Property(f => f.PaymentRequestId).HasColumnName("payment_request_id");
+        builder.Property(f => f.PaymentRequestedAt).HasColumnName("payment_requested_at");
+        builder.Property(f => f.TransferReportedAt).HasColumnName("transfer_reported_at");
+        builder.Property(f => f.QrBankAccountId).HasColumnName("qr_bank_account_id");
+        builder.Property(f => f.QrBankBin).HasColumnName("qr_bank_bin").HasMaxLength(6);
+        builder.Property(f => f.QrBankName).HasColumnName("qr_bank_name").HasMaxLength(100);
+        builder.Property(f => f.QrAccountNumber).HasColumnName("qr_account_number").HasMaxLength(100);
+        builder.Property(f => f.QrAccountHolder).HasColumnName("qr_account_holder").HasMaxLength(255);
+        builder.Property(f => f.QrCreatedAt).HasColumnName("qr_created_at");
+        builder.HasOne<GroupBankAccount>().WithMany().HasForeignKey(f => f.QrBankAccountId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasKey(f => f.Id);
         builder.Property(f => f.Id)
