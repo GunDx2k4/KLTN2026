@@ -264,9 +264,9 @@ Lưu thông tin tài khoản thụ hưởng của nhóm để nhận tiền và 
 | `id_bank_account`| UUID | PK, NOT NULL | `gen_random_uuid()` | Khóa chính tài khoản ngân hàng |
 | `id_group` | UUID | FK, NOT NULL | - | Tham chiếu `club_group.id_group` |
 | `bank_name` | VARCHAR(100) | NOT NULL | - | Tên ngân hàng nhận (VD: `MBBank`) |
-| `account_number` | VARCHAR(50) | NOT NULL | - | Số tài khoản ngân hàng |
-| `account_holder` | VARCHAR(150) | NOT NULL | - | Tên chủ tài khoản (in hoa không dấu) |
-| `webhook_secret_key`| VARCHAR(255)| NULL | - | Khóa bí mật ký số Webhook từ SePay |
+| `account_number` | VARCHAR(100) | NOT NULL | - | Số tài khoản dạng chuỗi theo EF hiện hành |
+| `account_holder` | VARCHAR(255) | NOT NULL | - | Tên chủ tài khoản hiển thị, cần quản lý kiểm chứng |
+| `webhook_secret_key`| VARCHAR(500)| NULL | - | Secret webhook, UC17 không sao chép/xóa/thay đổi |
 | `is_active` | BOOLEAN | NOT NULL | `true` | Trạng thái kích hoạt (mỗi CLB chỉ có 1 TK active) |
 
 ---
@@ -355,6 +355,19 @@ Lưu danh sách người đăng ký tham gia buổi chơi và hàng đợi.
 
 *Ràng buộc*: Cặp `(id_session, id_user)` là duy nhất.
 
+**UC15 — đợt B hoàn tất trên sandbox (22/10/2026).** Entity/mapping và migration `20261021173243_AddRotationPauseSource` đã có hai cột sau; DB đích chưa nâng cấp. Không thêm bảng hoặc lượt chung toàn buổi:
+
+| Cột bổ sung B | Kiểu / mặc định | Ý nghĩa / ràng buộc |
+|---|---|---|
+| `rotation_pause_source` | VARCHAR(10), NULL mặc định | SELF/HOST, enum Domain Self/Host. CHECK SQL NULL hoặc SELF/HOST. Bool pause=true + nguồn null đọc LegacyHost, không cho self-resume. |
+| `self_pause_target_match_id` | UUID, NULL mặc định | Self chưa có trận tiếp theo start thì null; sau start gắn đúng MatchId; FINISHED đúng target tự bỏ Self pause. FK đơn tới session_match.id_match, ON DELETE NO ACTION; index khi khác null. |
+
+Domain giữ bool/source/target nhất quán, kiểm tra target cùng session và lịch sử hợp lệ; FK đơn không chứng minh cùng session. Metadata sai trả conflict, không tự bỏ pause. Không thêm CHECK bool↔source bắt buộc để tự phá compatibility legacy; writer mới xóa nguồn/target khi không pause, Host/LegacyHost không có auto-expiry target. Không chạy writer UC14 cũ song song khi bật C5.
+
+Backfill B: bool=true cũ thành HOST/target=null; false để nguồn/target null. Không sửa migration UC14, BookingStatus/QueueOrder/check-in/giờ trận/phí. Down migration UC15 mới chặn còn SELF hoặc target IS NOT NULL, không clear dữ liệu để ép Down; đủ điều kiện thì chỉ bỏ FK/index/check/hai cột UC15, giữ bool/schema UC14. Schema phải sẵn trước binary map cột. B đã kiểm chứng fresh/upgrade UC14, Up/Down/backfill, restart, ràng buộc và rollback trên DB sandbox riêng; không áp dụng DB đích. Chi tiết expiry/rollout tại [UC15-BE.md](Detail%20Design/UC15-BE.md).
+
+**Mốc cuối E, 27/10/2026:** BE A–E hoàn tất trên sandbox, C–E không bổ sung migration/schema. Probe E xác minh migration B hiện hành, giữ nguyên booking/queue/check-in và fee/payment/ledger trong chuỗi UC12–15, GET lặp không đổi digest chín bảng. DB đích chưa nâng cấp. [Handoff/rollback](Detail%20Design/UC15-BE.md).
+
 ---
 
 ### 3.17. Bảng `guest_recruitment` (Yêu Cầu Tìm Giao Lưu Lân Cận)
@@ -418,13 +431,13 @@ Lưu hóa đơn thu tiền cá nhân của từng người chơi sau khi chốt 
 | `id_session` | UUID | FK, NOT NULL | - | Tham chiếu `badminton_session.id_session` |
 | `id_user` | UUID | FK, NOT NULL | - | Người nộp tiền (`app_user.id_user`) |
 | `amount` | DECIMAL(18,2)| NOT NULL | - | Số tiền phải nộp sau khi áp dụng công thức |
-| `price_type` | VARCHAR(30) | NOT NULL | - | Loại giá: `MONTHLY_MEMBER`, `DAILY_MEMBER`, `GUEST` |
+| `price_type` | VARCHAR(50) | NOT NULL | - | Loại giá: `MONTHLY_MEMBER`, `DAILY_MEMBER`, `GUEST` |
 | `discount_applied`| DECIMAL(18,2)| NOT NULL | 0 | Mức giảm trừ áp dụng (VD: giảm giá Nữ) |
-| `payment_code` | VARCHAR(50) | UNIQUE, NOT NULL | - | Mã chuyển khoản định danh duy nhất (VD: `BC12627_A8F1`) |
-| `qr_code_payload`| TEXT | NOT NULL | - | Chuỗi dữ liệu VietQR chuẩn NAPAS |
-| `payment_method` | VARCHAR(30) | NULL | - | Phương thức: `BANK_TRANSFER`, `CASH` |
+| `payment_code` | VARCHAR(100) | UNIQUE, NOT NULL | - | G04 UC16: `CLB {12 ký tự SessionId:N viết hoa} {12 ký tự UserId:N viết hoa}`, 29 ký tự; giữ mã cũ |
+| `qr_code_payload`| TEXT | NOT NULL | - | Payload đã cấp; chưa có là chuỗi rỗng; dữ liệu demo không chứng minh QR chuẩn |
+| `payment_method` | VARCHAR(50) | NULL | - | Phương thức: `BANK_TRANSFER`, `CASH` |
 | `cash_collected_by`| UUID | FK, NULL | - | Người thu tiền mặt nếu không chuyển khoản |
-| `payment_status` | VARCHAR(20) | NOT NULL | `'UNPAID'` | Trạng thái: `UNPAID`, `PAID`, `EXEMPT` (Miễn phí) |
+| `payment_status` | VARCHAR(50) | NOT NULL | `'UNPAID'` | Trạng thái: `UNPAID`, `PAID`, `EXEMPT` (Miễn phí) |
 | `paid_at` | TIMESTAMP | NULL | - | Thời điểm thanh toán thành công |
 
 *Ràng buộc*: Cặp `(id_session, id_user)` là duy nhất; `payment_code` là duy nhất toàn hệ thống.
@@ -483,3 +496,46 @@ Bổ sung ngoài 22 bảng nghiệp vụ ban đầu để giao nhận SignalR/FC
 | `last_error` | VARCHAR(2000), NULL | Loại lỗi gần nhất, không lưu token |
 
 Có thêm các cột audit/soft-delete theo AggregateRoot hiện tại. Index trên `(next_attempt_at, created_at)` cho bản ghi chưa delivered, attempts < 10. Worker claim bằng SKIP LOCKED; network chạy ngoài transaction claim. Xem hợp đồng và vận hành tại [UC13-BE.md](Detail%20Design/UC13-BE.md).
+
+## Bổ sung UC16 — Snapshot phát hành trên bảng hiện hữu
+
+Migration `AddSettlementPublicationSnapshot` chỉ bổ sung cột cho `badminton_session` và `session_fee`; không tạo bảng draft hoặc thay unique payment_code và (id_session,id_user).
+
+| Bảng | Cột mới | Kiểu và nullability |
+|---|---|---|
+| badminton_session | shuttlecock_price; published_daily_member_fee, published_guest_fee, published_female_discount_daily, published_female_discount_guest; total_cost, total_receivable, monthly_fund_covered, total_discount, policy_delta, rounding_delta, adjustment_delta, balance_difference | numeric(18,2), NULL cho dữ liệu cũ |
+| badminton_session | published_preview_id, published_by, published_fee_rule_id | uuid, NULL |
+| badminton_session | published_at, published_fee_rule_applied_at | timestamptz, NULL |
+| badminton_session | published_request_hash, published_fee_mode, published_round_rule | varchar(64), varchar(50), integer; NULL |
+| session_fee | court_share, shuttle_share, extra_share, monthly_fund_covered, base_amount, raw_amount, calculated_amount, rounding_delta, adjustment_delta | numeric(18,2), NULL |
+| session_fee | gender, member_type, monthly_expiry_date | smallint, varchar(50), timestamptz; NULL |
+| session_fee | adjustment_reason, adjusted_by, adjusted_at, published_by, published_at | varchar(2000), uuid, timestamptz, uuid, timestamptz; NULL |
+| session_fee | is_published | boolean, false cho khoản cũ |
+
+PublishedPreviewId/PublishedAt là dấu phát hành; status đơn lẻ không thay thế marker. Khoản cũ không được backfill/recompute. Amount/payment status/payment code/bank references hiện hữu được giữ nguyên. Publication chỉ ghi snapshot lần đầu; thanh toán về sau chỉ đổi payment metadata qua hành vi hợp lệ.
+
+Preview đọc RepeatableRead. Approve khóa club → session → users/members/rules và giữ tới cuối transaction; parent FK immediate chặn insert nguồn mới. Redis lease 5 giây chỉ giảm cạnh tranh; DB locks và approval identity bảo vệ sau khi lease hết. Thay đổi schema được quản lý bằng EF Core migration `AddSettlementPublicationSnapshot`; Down chặn rollback khi đã có snapshot phát hành.
+
+Integration tests sinh SQL trực tiếp từ EF Core migration để kiểm tra nâng cấp, rollback, lỗi DDL và bảo toàn dữ liệu khoản thu. Không phụ thuộc file SQL trong thư mục tài liệu.
+
+## Bổ sung UC17 — Metadata yêu cầu và snapshot ngân hàng
+
+Migration source `20261031155325_AddPersonalFeePayment`, chỉ kiểm trên DB test riêng; chưa áp DB ứng dụng dùng chung/production. Không thêm bảng nghiệp vụ, không tính lại/backfill Amount/PaymentCode/PaymentStatus hoặc suy BIN từ BankName. Các độ dài bank/fee ở bảng trên đã đối chiếu EF hiện hữu; UC17 không có DDL thay đổi các độ dài cũ này.
+
+| Bảng | Cột mới, tất cả nullable | Kiểu / ý nghĩa |
+|---|---|---|
+| group_bank_account | bank_bin | varchar(6); CHECK NULL hoặc 6 chữ số ASCII |
+| session_fee | payment_progress | varchar(40); CHECK NULL hoặc QR_READY/AWAITING_RECONCILIATION/CASH_CONFIRMATION_REQUESTED |
+| session_fee | payment_request_id | uuid; định danh yêu cầu ổn định |
+| session_fee | payment_requested_at, transfer_reported_at, qr_created_at | timestamptz; writer UC17 chuẩn hóa microsecond |
+| session_fee | qr_bank_bin, qr_bank_name | varchar(6), varchar(100) |
+| session_fee | qr_account_number, qr_account_holder | varchar(100), varchar(255) |
+| session_fee | qr_bank_account_id | uuid; index và FK RESTRICT tới group_bank_account.id_bank_account |
+
+Unique partial index `ux_group_bank_account_active` trên `(id_group) WHERE is_active` bảo đảm một bank active/CLB cho mọi writer. Up khóa bank, timeout 3 giây, preflight trùng active thì dừng/rollback, không tự chọn hoặc deactivate dữ liệu. Không có is_vietqr_enabled. Đổi cấu hình giữ bank cũ inactive, insert bank mới có secret null; secret cũ giữ nguyên, webhook mới/cũ thuộc UC18.
+
+PaymentBankSnapshot là kiểu giá trị ở cuối SessionFee.cs; cột mapping nằm trực tiếp trên fee, không phải bảng riêng. Retry không thay snapshot theo bank active mới. Tiến trình không thay thế payment_status: self-report và cash-request đều giữ UNPAID.
+
+Notification PAYMENT tham chiếu `SessionFee/feeId`; outbox dùng bảng rotation_outbox hiện hữu, kind mới CashPaymentRequestedPush, payload EventId/RequestId/FeeId/RecipientId/GroupId/SessionId. Không ghi bank_transaction/ledger từ thao tác khởi tạo/tự báo.
+
+Down chặn nếu còn bất kỳ metadata UC17/snapshot/BIN; không xóa dữ liệu để ép rollback, không hạ UC16. Khi đã dùng, ưu tiên giữ schema và tắt ghi/dispatch; GET lịch sử vẫn đọc. [Hợp đồng và runbook](Detail%20Design/UC17-BE.md). Schema này không có nghĩa POC QR đã đạt hoặc DB đích đã được nâng cấp.

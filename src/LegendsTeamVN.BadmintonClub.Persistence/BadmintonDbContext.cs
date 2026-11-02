@@ -1,4 +1,6 @@
 using LegendsTeamVN.BadmintonClub.Domain.Entities;
+using LegendsTeamVN.BadmintonClub.Domain.Exceptions;
+using Npgsql;
 using LegendsTeamVN.Core.Persistence.DbContexts;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -33,6 +35,19 @@ public class BadmintonDbContext(DbContextOptions<BadmintonDbContext> options, IP
     public DbSet<GroupLedger> GroupLedgers => Set<GroupLedger>();
 
 
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await base.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException
+            { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: "IX_session_fee_payment_code" } &&
+            ChangeTracker.Entries<SessionFee>().Any(e => e.State == EntityState.Added && e.Entity.IsPublished))
+        {
+            throw new SettlementPublicationConflictException("Settlement.PaymentCodeConflict", "Mã thanh toán bị trùng, chưa phát hành khoản thu.", ex);
+        }
+    }
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

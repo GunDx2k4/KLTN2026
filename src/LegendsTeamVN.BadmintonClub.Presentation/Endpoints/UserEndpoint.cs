@@ -30,6 +30,18 @@ public class UserEndpoint : EndpointGroupBase
 
     protected override void Map(RouteGroupBuilder group)
     {
+        var payments = group.MapGroup("me/fees").WithTags("UC17 - Khoản đóng của tôi").RequireAuthorization("SessionOperations");
+        payments.AddEndpointFilter(async (context, next) =>
+        {
+            context.HttpContext.Response.Headers.CacheControl = "no-store";
+            return await next(context);
+        });
+        payments.MapGet("", ListMyFees).WithName("ListMyFees");
+        payments.MapGet("{feeId:guid}", GetMyFee).WithName("GetMyFee");
+        payments.MapGet("{feeId:guid}/qr.png", GetMyFeeQrImage).WithName("GetMyFeeQrImage");
+        payments.MapPost("{feeId:guid}/cash-request", RequestCashPayment).WithName("RequestCashPayment");
+        payments.MapPost("{feeId:guid}/bank-transfer", PrepareBankTransfer).WithName("PrepareBankTransfer");
+        payments.MapPost("{feeId:guid}/transfer-notice", ReportBankTransfer).WithName("ReportBankTransfer");
         var usersGroup = group.MapGroup("").WithTags("Users");
         var fr05Group = group.MapGroup("").WithTags("FR05 - Quản lý hồ sơ cá nhân & Trình độ");
 
@@ -115,6 +127,43 @@ public class UserEndpoint : EndpointGroupBase
     }
 
     // --- FR05 Handlers ---
+    private static async Task<IResult> ListMyFees(ISender sender, CancellationToken ct, int page = 1, int pageSize = 20,
+        Guid? groupId = null, Guid? sessionId = null, Domain.Enums.PaymentStatus? paymentStatus = null)
+    {
+        var result = await sender.Send(new Application.Features.Payments.ListMine.ListMyFeesQuery(page, pageSize, groupId, sessionId, paymentStatus), ct);
+        return result.Match(onSuccess: data => Results.Ok(data));
+    }
+
+    private static async Task<IResult> GetMyFee(Guid feeId, ISender sender, CancellationToken ct)
+    {
+        var result = await sender.Send(new Application.Features.Payments.GetMine.GetMyFeeQuery(feeId), ct);
+        return result.Match(onSuccess: data => Results.Ok(data));
+    }
+
+    private static async Task<IResult> GetMyFeeQrImage(Guid feeId, ISender sender, CancellationToken ct)
+    {
+        var result = await sender.Send(new Application.Features.Payments.GetMine.GetMyFeeQrImageQuery(feeId), ct);
+        return result.Match(onSuccess: data => Results.File(data, "image/png"));
+    }
+
+    private static async Task<IResult> RequestCashPayment(Guid feeId, ISender sender, CancellationToken ct)
+    {
+        var result = await sender.Send(new Application.Features.Payments.CashRequest.RequestCashPaymentCommand(feeId), ct);
+        return result.Match(onSuccess: data => Results.Ok(data));
+    }
+
+    private static async Task<IResult> PrepareBankTransfer(Guid feeId, ISender sender, CancellationToken ct)
+    {
+        var result = await sender.Send(new Application.Features.Payments.BankTransfer.PrepareBankTransferCommand(feeId), ct);
+        return result.Match(onSuccess: data => Results.Ok(data));
+    }
+
+    private static async Task<IResult> ReportBankTransfer(Guid feeId, ISender sender, CancellationToken ct)
+    {
+        var result = await sender.Send(new Application.Features.Payments.TransferNotice.ReportBankTransferCommand(feeId), ct);
+        return result.Match(onSuccess: data => Results.Ok(data));
+    }
+
     private static async Task<IResult> GetProfile(ISender sender)
     {
         var result = await sender.Send(new GetUserProfileQuery());

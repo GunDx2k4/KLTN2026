@@ -14,6 +14,7 @@ public static class ServiceCollectionExtensions
     {
         // The core catch-all is registered first by the host; specific failures must run before it.
         services.Insert(0, ServiceDescriptor.Singleton<IExceptionHandler, LineupSnapshotExceptionHandler>());
+        services.Insert(0, ServiceDescriptor.Singleton<IExceptionHandler, PaymentOperationExceptionHandler>());
         services.AddScoped<IAuthorizationHandler, GroupPermissionHandler>();
         services.AddEndpoints(Assembly.GetExecutingAssembly());
         return services;

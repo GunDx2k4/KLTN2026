@@ -103,12 +103,21 @@ Kiểm tra sự phối hợp đồng bộ giữa các tầng thành phần kỹ 
 | **UAT-03** | Duyệt đơn gia nhập CLB | 1. Host mở tab Join Requests.<br>2. Bấm "Chấp thuận". | Ứng viên trở thành Thành viên chính thức (`ACTIVE`), được gán vai trò mặc định. |  Đạt |
 | **UAT-04** | Giữ chỗ & Hàng đợi tự động | 1. Host mở buổi chơi 12 người.<br>2. 12 thành viên bấm giữ chỗ.<br>3. Người thứ 13 bấm giữ chỗ. | 12 người đầu tiên có vé `CONFIRMED`. Người thứ 13 vào hàng đợi `WAITING (Top 1)`. |  Đạt |
 | **UAT-05** | Phát radar tìm khách giao lưu | 1. Buổi chơi thiếu 2 người.<br>2. Host phát tín hiệu bán kính 5km.<br>3. Khách vãng lai lân cận nhận thông báo. | Khách vãng lai bấm tham gia trực tiếp, lấp đầy slot trống thành công. |  Đạt |
-| **UAT-06** | Hạch toán chia tiền & Quét VietQR | 1. Host nhập 3 quả cầu bóc mới.<br>2. Bấm chốt sổ buổi chơi.<br>3. Người chơi quét mã VietQR chuyển tiền. | Hệ thống tự động xác nhận thanh toán sang `PAID`, Sổ quỹ mở ghi nhận dòng tiền thu tức thì. |  Đạt |
+| **UAT-06** | Hạch toán chia tiền, thanh toán và đối soát | 1. UC16 phát hành khoản.<br>2. UC17 xem phí/chọn phương thức/quét QR.<br>3. UC18 đối soát bằng chứng ngân hàng. | Phân biệt phát hành, tự báo UNPAID và xác nhận PAID/ledger; QR giữ đúng tiền/tài khoản/nội dung trên hai bank apps. | UC17 Backend/test tự động đạt; người dùng xác nhận hai app quét đúng, đã nối DB chung local và smoke API chính. Chưa nghiệm thu toàn luồng vì UC18/ledger thật chưa triển khai. |
 
 ---
 
 ## 3. KẾT LUẬN ĐÁNH GIÁ CHẤT LƯỢNG HỆ THỐNG
 
 1. **Về độ ổn định & Tính toàn vẹn kiến trúc**: 100% các quy tắc phân tầng Clean Architecture, mã hóa mật khẩu, kiểm soát ngữ cảnh đa nhóm và đóng gói Entity đều được kiểm chứng tự động, không có bất kỳ vi phạm kiến trúc nào.
-2. **Về độ chính xác nghiệp vụ**: Hệ thống khép kín và tự động hóa thành công toàn bộ 4 bài toán điểm đau thực tế: Giữ chỗ không vượt trần, Xoay tua sân công bằng theo thời gian nghỉ, Hạch toán chi phí đa hệ số theo lượng cầu bóc mới và Tự động xác nhận thanh toán vào Sổ quỹ mở qua VietQR.
-3. **Mức độ hoàn thiện**: Sản phẩm đã sẵn sàng chuyển giao và nghiệm thu thực tế trên cả nền tảng Backend API và ứng dụng di động Flutter.
+2. **Về tài chính UC17**: Chỉ kết luận theo bằng chứng BE trên DB test riêng. Tự báo chuyển khoản/cash-request không chứng minh đã nhận tiền; test writer mô phỏng không phải webhook SePay. Không tuyên bố đã khép kín thanh toán/sổ quỹ qua VietQR.
+3. **Mức độ hoàn thiện UC17**: Chưa nghiệm thu toàn bộ khi P03 hoặc hai bank apps chưa đạt, UC18/quy trình đối soát chưa sẵn sàng. FE/thiết bị/FCM thật, DB dùng chung/production và deploy chưa thực hiện trong đợt này.
+
+## Bằng chứng UC17 Backend — cập nhật 01/11/2026
+
+Các mốc 37/37 và 44/44 đầu tài liệu là số liệu lịch sử, không thay báo cáo đợt UC17. Kết quả hiện hành và lệnh chạy tại [UC17-BE.md](Detail%20Design/UC17-BE.md), ma trận trạng thái nghiệm thu ở mục Wave 3 của báo cáo đó.
+
+- PostgreSQL riêng: migration thật từ baseline, Down sạch/Down bị guard, unique/FK/check, dữ liệu legacy và snapshot UC16, concurrency, lock timeout, lỗi SaveChanges và lỗi commit được chủ động tạo trong test.
+- HTTP thật: JWT/ownership, guest/LEAVED/BANNED/disabled, đọc lịch sử khi Payments tắt, biên lai, bank config và guard pay cũ; cash/notice không tự PAID/ledger.
+- Worker dùng provider mock: retry/partial failure/quyền bị thu hồi/PAID/dispatch/dead-letter và kind isolation. Không gửi FCM thật.
+- POC Anpero bản vá metadata `1.0.1-uc17.1` và ảnh round-trip độc lập đạt. Người dùng xác nhận hai bank apps quét đúng, đã chạy request07 và cung cấp phần response phù hợp; tên/phiên bản app chưa cung cấp. UC17 đã nối DB chung local, kiểm backup/restore/migration/smoke; không đánh UAT-06 toàn luồng đạt vì UC18/đối soát/ledger thật chưa triển khai.

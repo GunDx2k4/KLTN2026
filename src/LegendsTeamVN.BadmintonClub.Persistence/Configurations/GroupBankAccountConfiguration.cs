@@ -9,6 +9,9 @@ public class GroupBankAccountConfiguration : IEntityTypeConfiguration<GroupBankA
     public void Configure(EntityTypeBuilder<GroupBankAccount> builder)
     {
         builder.ToTable("group_bank_account");
+        builder.ToTable(t => t.HasCheckConstraint("ck_group_bank_account_bin", "bank_bin IS NULL OR bank_bin ~ '^[0-9]{6}$'"));
+        builder.Property(b => b.BankBin).HasColumnName("bank_bin").HasMaxLength(6);
+        builder.HasIndex(b => b.GroupId).IsUnique().HasDatabaseName("ux_group_bank_account_active").HasFilter("is_active");
 
         builder.HasKey(b => b.Id);
         builder.Property(b => b.Id)

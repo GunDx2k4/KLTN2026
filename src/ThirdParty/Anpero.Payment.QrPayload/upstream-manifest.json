@@ -1,0 +1,52 @@
+[
+    {
+        "path":  "Enums/CountryCode.cs",
+        "upstreamGitBlob":  "109935d0dd92989c61cf2e58d67b2281fff4e5d3",
+        "originalSha256":  "5C66D0CB3088F550D5AF5064E7236851F40406E46E912A8D92D2126E3C799EB6"
+    },
+    {
+        "path":  "Enums/CurrencyCode.cs",
+        "upstreamGitBlob":  "1aa0df41acb62d4d720f2e035e57dfeb9575d67d",
+        "originalSha256":  "DF7608BAA04BA5992928F251FDF5EB0AD5364F480A524EC760DC747242D3122A"
+    },
+    {
+        "path":  "Enums/PaymentProvider.cs",
+        "upstreamGitBlob":  "b662ece70c6fe6a7175de73fd55925570a1c9486",
+        "originalSha256":  "965E4BA516BE113CD84C99A1F4835A168DBEB41E6BD06D81A886FE1B70F09632"
+    },
+    {
+        "path":  "Enums/PaymentService.cs",
+        "upstreamGitBlob":  "17927f4c6e4774cea763c47a4357058580c43fc3",
+        "originalSha256":  "99AD6B8D38A5E6BFA68B8D213CBA05F9D560DB08117CCC7D5C645B3E6AF8AF5A"
+    },
+    {
+        "path":  "Helpers/Crc16.cs",
+        "upstreamGitBlob":  "229cc9849a285a53ac2221a4af03d8d23c7dcd04",
+        "originalSha256":  "1230860CA0873BBBB15CF9D1E73B4929AEE00ED93F3418FECB9489B9AFD0A9BB"
+    },
+    {
+        "path":  "Helpers/QrEnumHelper.cs",
+        "upstreamGitBlob":  "bacdb18ca77b1e2232c8098b2e63defdbe92ec9b",
+        "originalSha256":  "C6618CA1255666C2A2733270B2CE05E06BF031415A62DC4E662EF82208B3A63B"
+    },
+    {
+        "path":  "Interfaces/IQrConfig.cs",
+        "upstreamGitBlob":  "c2867bc7c23cbe0ce2faf85a7fc678117ac7dff7",
+        "originalSha256":  "A0253BDD944D968B94D35C65B10AA3FCA5A04CC22FC4863BEB1502C9EAF8B7E2"
+    },
+    {
+        "path":  "Models/QrPayloadResult.cs",
+        "upstreamGitBlob":  "f64fdbe561beb2ae7e4b2186b72efdd0df013f03",
+        "originalSha256":  "CDE6DCC63AE94F4970CEC05441A0347C25328A93909EDA1BF17362BB4D5A981C"
+    },
+    {
+        "path":  "Models/VnQrConfig.cs",
+        "upstreamGitBlob":  "c5eef21150bc4e0e5421316106c6e5514c51f495",
+        "originalSha256":  "5C201DC941E12A254295584BB512E505BE7811257AA8C1BF0AB1D5C9FC935BE7"
+    },
+    {
+        "path":  "QrPayloadGenerator.cs",
+        "upstreamGitBlob":  "71d34bcb25597776915f8f8984b178e167512f20",
+        "originalSha256":  "1D787C89D8CD0BDA49B3351E8F8FBBDB8AD25070FE86E66154F0BC995078BEBD"
+    }
+]

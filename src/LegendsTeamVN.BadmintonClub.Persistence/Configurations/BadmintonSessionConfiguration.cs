@@ -83,6 +83,28 @@ public class BadmintonSessionConfiguration : IEntityTypeConfiguration<BadmintonS
             .HasSentinel((Domain.Enums.SessionStatus)0)
             .HasComment("Trạng thái buổi chơi của buổi sinh hoạt. Miền giá trị: OPEN, LOCKED, PLAYING, CALCULATED, COMPLETED.");
 
+        builder.Property(s => s.ShuttlecockPrice).HasColumnName("shuttlecock_price").HasPrecision(18, 2);
+        builder.Property(s => s.PublishedDailyMemberFee).HasColumnName("published_daily_member_fee").HasPrecision(18, 2);
+        builder.Property(s => s.PublishedGuestFee).HasColumnName("published_guest_fee").HasPrecision(18, 2);
+        builder.Property(s => s.PublishedFemaleDiscountDaily).HasColumnName("published_female_discount_daily").HasPrecision(18, 2);
+        builder.Property(s => s.PublishedFemaleDiscountGuest).HasColumnName("published_female_discount_guest").HasPrecision(18, 2);
+        builder.Property(s => s.TotalCost).HasColumnName("total_cost").HasPrecision(18, 2);
+        builder.Property(s => s.TotalReceivable).HasColumnName("total_receivable").HasPrecision(18, 2);
+        builder.Property(s => s.MonthlyFundCovered).HasColumnName("monthly_fund_covered").HasPrecision(18, 2);
+        builder.Property(s => s.TotalDiscount).HasColumnName("total_discount").HasPrecision(18, 2);
+        builder.Property(s => s.PolicyDelta).HasColumnName("policy_delta").HasPrecision(18, 2);
+        builder.Property(s => s.RoundingDelta).HasColumnName("rounding_delta").HasPrecision(18, 2);
+        builder.Property(s => s.AdjustmentDelta).HasColumnName("adjustment_delta").HasPrecision(18, 2);
+        builder.Property(s => s.BalanceDifference).HasColumnName("balance_difference").HasPrecision(18, 2);
+        builder.Property(s => s.PublishedPreviewId).HasColumnName("published_preview_id");
+        builder.Property(s => s.PublishedAt).HasColumnName("published_at");
+        builder.Property(s => s.PublishedBy).HasColumnName("published_by");
+        builder.Property(s => s.PublishedFeeRuleId).HasColumnName("published_fee_rule_id");
+        builder.Property(s => s.PublishedFeeRuleAppliedAt).HasColumnName("published_fee_rule_applied_at");
+        builder.Property(s => s.PublishedRoundRule).HasColumnName("published_round_rule");
+        builder.Property(s => s.PublishedRequestHash).HasColumnName("published_request_hash").HasMaxLength(64);
+        builder.Property(s => s.PublishedFeeMode).HasColumnName("published_fee_mode").HasConversion<string>().HasMaxLength(50);
+
         builder.Ignore(s => s.FeePerMember);
 
         builder.HasOne(s => s.Group)
