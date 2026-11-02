@@ -17,7 +17,10 @@ public sealed class SettlementPersistenceModelTests
         foreach (var type in new[] { typeof(BadmintonSession), typeof(SessionFee) })
         {
             var entity = db.Model.FindEntityType(type)!;
-            foreach (var money in entity.GetProperties().Where(p => p.ClrType == typeof(decimal) || p.ClrType == typeof(decimal?)))
+            foreach (var money in entity.GetProperties().Where(p =>
+                (p.ClrType == typeof(decimal) || p.ClrType == typeof(decimal?)) &&
+                p.Name != nameof(BadmintonSession.Lat) &&
+                p.Name != nameof(BadmintonSession.Lng)))
             {
                 Assert.Equal(18, money.GetPrecision());
                 Assert.Equal(2, money.GetScale());
