@@ -45,6 +45,9 @@
     <Project Path="src/Hosts/LegendsTeamVN.BadmintonClub.API/LegendsTeamVN.BadmintonClub.API.csproj" />
     <Project Path="src/Hosts/LegendsTeamVN.BadmintonClub.Migrator/LegendsTeamVN.BadmintonClub.Migrator.csproj" />
   </Folder>
+  <Folder Name="/src/ThirdParty/">
+    <Project Path="src/ThirdParty/Anpero.Payment.QrPayload/Anpero.Payment.QrPayload.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/LegendsTeamVN.BadmintonClub.Infrastructure.Tests/LegendsTeamVN.BadmintonClub.Infrastructure.Tests.csproj" />
     <Project Path="tests/LegendsTeamVN.BadmintonClub.Application.Tests/LegendsTeamVN.BadmintonClub.Application.Tests.csproj" />

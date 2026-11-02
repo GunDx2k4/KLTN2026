@@ -6,6 +6,16 @@ public class GroupBankAccount : Entity<Guid>
 {
     public Guid GroupId { get; private set; }
     public string BankName { get; private set; } = default!;
+    public string? BankBin { get; private set; }
+
+    public static GroupBankAccount CreatePaymentAccount(Guid groupId, PaymentBankSnapshot bank)
+    {
+        if (!bank.IsValid || groupId == Guid.Empty) throw new ArgumentException("Thông tin ngân hàng không hợp lệ.");
+        return new GroupBankAccount(groupId, bank.BankName, bank.AccountNumber, bank.AccountHolder) { BankBin = bank.BankBin };
+    }
+
+    public bool Matches(PaymentBankSnapshot bank) => IsActive && BankBin == bank.BankBin && BankName == bank.BankName &&
+        AccountNumber == bank.AccountNumber && AccountHolder == bank.AccountHolder;
     public string AccountNumber { get; private set; } = default!;
     public string AccountHolder { get; private set; } = default!;
     public string? WebhookSecretKey { get; private set; }

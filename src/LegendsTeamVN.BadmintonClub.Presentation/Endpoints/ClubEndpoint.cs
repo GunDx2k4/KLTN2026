@@ -40,6 +40,10 @@ public class ClubEndpoint : EndpointGroupBase
 
     protected override void Map(RouteGroupBuilder group)
     {
+        var paymentBank = group.MapGroup("{clubId:guid}/payment-bank-account").WithTags("UC17 - Ngân hàng nhận tiền")
+            .RequireAuthorization("SessionOperations").RequireGroupPermission(Domain.Constants.GroupPermissions.Finance.BankManage);
+        paymentBank.MapGet("", GetPaymentBankAccount).WithName("GetPaymentBankAccount");
+        paymentBank.MapPut("", ConfigurePaymentBankAccount).WithName("ConfigurePaymentBankAccount");
         var generalGroup = group.MapGroup("").WithTags("Clubs");
         var fr03Group = group.MapGroup("").WithTags("FR03 - Quản lý CLB & Thành viên");
         var fr06Group = group.MapGroup("").WithTags("FR06 - Khám phá nhóm theo vị trí");
@@ -167,6 +171,19 @@ public class ClubEndpoint : EndpointGroupBase
     }
 
     // --- FR06 Handlers ---
+    private static async Task<IResult> GetPaymentBankAccount(Guid clubId, ISender sender, CancellationToken ct)
+    {
+        var result = await sender.Send(new Application.Features.Payments.BankAccount.Get.GetPaymentBankAccountQuery(clubId), ct);
+        return result.Match(onSuccess: data => Results.Ok(data));
+    }
+
+    private static async Task<IResult> ConfigurePaymentBankAccount(Guid clubId,
+        Application.DTOs.Payments.Requests.ConfigurePaymentBankAccountRequest request, ISender sender, CancellationToken ct)
+    {
+        var result = await sender.Send(new Application.Features.Payments.BankAccount.Configure.ConfigurePaymentBankAccountCommand(clubId, request), ct);
+        return result.Match(onSuccess: data => Results.Ok(data));
+    }
+
     private static async Task<IResult> ExploreClubs(
         [FromQuery] double? latitude,
         [FromQuery] double? longitude,

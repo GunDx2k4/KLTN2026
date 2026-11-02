@@ -84,8 +84,9 @@ app.MapHub<LegendsTeamVN.BadmintonClub.Infrastructure.Realtime.SessionHub>("/hub
     .RequireAuthorization("SessionOperations");
 
 // Seed initial data & sync permissions in AppPermissions & AppRolePermissions on startup
-using (var scope = app.Services.CreateScope())
+if (app.Configuration.GetValue("Seeding:Enabled", true))
 {
+    using var scope = app.Services.CreateScope();
     var seeders = scope.ServiceProvider.GetServices<LegendsTeamVN.Core.Application.Data.IDataSeeder>()
         .OrderBy(s => s.Order);
     foreach (var seeder in seeders)

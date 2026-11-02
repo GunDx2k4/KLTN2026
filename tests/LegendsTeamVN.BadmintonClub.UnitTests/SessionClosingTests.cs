@@ -7,6 +7,7 @@ using Moq;
 using Xunit;
 using LegendsTeamVN.BadmintonClub.Application.Abstractions;
 using LegendsTeamVN.BadmintonClub.Domain.Constants;
+using LegendsTeamVN.BadmintonClub.UnitTests.Domain.Sessions;
 
 namespace LegendsTeamVN.BadmintonClub.UnitTests;
 
@@ -26,13 +27,14 @@ public sealed class SessionClosingTests
     private sealed class Fixture
     {
         public Guid Actor { get; } = Guid.NewGuid();
-        public BadmintonSession Session { get; } = new(Guid.NewGuid(), "Closing test", Now.AddHours(-2), Now, "Court", maxPlayers: 6);
+        public BadmintonSession Session { get; }
         public Mock<ISessionRepository> Repository { get; } = new();
         public Mock<ICurrentUserService> User { get; } = new();
         public Mock<IGroupAuthorizationService> Authorization { get; } = new();
         public UpdateSessionStatusCommandHandler Handler { get; }
-        public Fixture()
+        public Fixture(SessionStatus status = SessionStatus.OPEN)
         {
+            Session = new(Guid.NewGuid(), "Closing test", Now.AddHours(-2), Now, "Court", maxPlayers: 6, status: status);
             Repository.Setup(r => r.GetAttendanceAsync(Session.Id, true, It.IsAny<CancellationToken>())).ReturnsAsync(Session);
             User.SetupGet(u => u.UserId).Returns(Actor);
             Authorization.Setup(a => a.HasPermissionAsync(Actor, Session.GroupId, GroupPermissions.Operations.SessionUpdate, It.IsAny<CancellationToken>())).ReturnsAsync(true);
@@ -49,11 +51,11 @@ public sealed class SessionClosingTests
     [Theory]
     [InlineData(SessionStatus.CALCULATED)]
     [InlineData(SessionStatus.COMPLETED)]
-    public async Task ClosingWithNotArrivedPlayersRequiresConfirmationWithoutChangingData(SessionStatus status)
+    public async Task ClosingRequiresSettlementApprovalWithoutChangingAttendance(SessionStatus status)
     {
         var f = new Fixture(); var pending = f.Add(BookingStatus.CONFIRMED);
         var result = await f.Handler.Handle(new(f.Session.Id, status), default);
-        Assert.Equal("Attendance.NoShowConfirmationRequired", result.Error.Code);
+        Assert.Equal("Settlement.ApprovalRequired", result.Error.Code);
         Assert.Equal(SessionStatus.OPEN, f.Session.Status);
         Assert.Equal(BookingStatus.CONFIRMED, pending.Status);
         Assert.Null(pending.AttendanceMarkedAt);
@@ -63,27 +65,18 @@ public sealed class SessionClosingTests
     [Theory]
     [InlineData(SessionStatus.CALCULATED)]
     [InlineData(SessionStatus.COMPLETED)]
-    public async Task ConfirmingClosingMarksOnlyNotArrivedPlayersAndPreservesAuditOnRepeat(SessionStatus status)
+    public async Task ConfirmingNoShowsCannotBypassSettlementApproval(SessionStatus status)
     {
         var f = new Fixture(); var pending = f.Add(BookingStatus.CONFIRMED);
         var present = f.Add(BookingStatus.CONFIRMED); present.MarkPresent(f.Actor, Now.AddHours(-1));
-        var waiting = f.Add(BookingStatus.WAITING); var cancelled = f.Add(BookingStatus.ABSENT);
-        var oldNoShow = f.Add(BookingStatus.CONFIRMED); oldNoShow.MarkNoShow(f.Actor, Now.AddMinutes(-30));
-        var deleted = new DeletedBooking(f.Session.Id); f.Session.Bookings.Add(deleted);
-        Assert.True((await f.Handler.Handle(new(f.Session.Id, status, true), default)).IsSuccess);
-        Assert.Equal(status, f.Session.Status);
-        Assert.Equal(BookingStatus.NO_SHOW, pending.Status);
-        Assert.Equal(f.Actor, pending.AttendanceMarkedBy);
-        Assert.Equal(Now, pending.AttendanceMarkedAt);
-        Assert.Null(pending.CheckinAt);
+        var result = await f.Handler.Handle(new(f.Session.Id, status, true), default);
+        Assert.Equal("Settlement.ApprovalRequired", result.Error.Code);
+        Assert.Equal(SessionStatus.OPEN, f.Session.Status);
+        Assert.Equal(BookingStatus.CONFIRMED, pending.Status);
+        Assert.Null(pending.AttendanceMarkedAt);
         Assert.Equal(BookingStatus.CHECKED_IN, present.Status);
         Assert.Equal(Now.AddHours(-1), present.CheckinAt);
-        Assert.Equal(BookingStatus.WAITING, waiting.Status);
-        Assert.Equal(BookingStatus.ABSENT, cancelled.Status);
-        Assert.Equal(BookingStatus.CONFIRMED, deleted.Status);
-        Assert.Equal(Now.AddMinutes(-30), oldNoShow.AttendanceMarkedAt);
-        Assert.True((await f.Handler.Handle(new(f.Session.Id, status, true), default)).IsSuccess);
-        Assert.Equal(Now, pending.AttendanceMarkedAt);
+        f.Repository.Verify(r => r.Update(It.IsAny<BadmintonSession>()), Times.Never);
     }
 
     [Fact]
@@ -98,6 +91,7 @@ public sealed class SessionClosingTests
     public async Task ClosingWithoutPendingPlayersNeedsNoConfirmation()
     {
         var f = new Fixture(); f.Add(BookingStatus.CHECKED_IN);
+        SettlementTestData.Publish(f.Session, f.Actor, Now);
         Assert.True((await f.Handler.Handle(new(f.Session.Id, SessionStatus.COMPLETED), default)).IsSuccess);
     }
 
@@ -108,7 +102,7 @@ public sealed class SessionClosingTests
         var match = new SessionMatch(f.Session.Id, 1, 1, Now.AddMinutes(-10), MatchStatus.PLAYING);
         f.Session.Matches.Add(match);
         var result = await f.Handler.Handle(new(f.Session.Id, SessionStatus.COMPLETED, true), default);
-        Assert.Equal("Session.ActiveMatches", result.Error.Code);
+        Assert.Equal("Settlement.ApprovalRequired", result.Error.Code);
         Assert.Equal(SessionStatus.OPEN, f.Session.Status);
         Assert.Equal(BookingStatus.CONFIRMED, pending.Status);
     }
@@ -144,7 +138,7 @@ public sealed class SessionClosingTests
     [InlineData(SessionStatus.COMPLETED, SessionStatus.CALCULATED)]
     public async Task ClosedSessionCannotBeReopened(SessionStatus current, SessionStatus target)
     {
-        var f = new Fixture(); f.Session.UpdateStatus(current);
+        var f = new Fixture(current);
         var result = await f.Handler.Handle(new(f.Session.Id, target), default);
         Assert.Equal("Session.InvalidTransition", result.Error.Code);
         Assert.Equal(current, f.Session.Status);
@@ -153,7 +147,7 @@ public sealed class SessionClosingTests
     [Fact]
     public async Task CalculatedSessionCanFinishWithoutReopeningAttendance()
     {
-        var f = new Fixture(); f.Session.UpdateStatus(SessionStatus.CALCULATED);
+        var f = new Fixture(); f.Add(BookingStatus.CHECKED_IN); SettlementTestData.Publish(f.Session, f.Actor, Now);
         Assert.True((await f.Handler.Handle(new(f.Session.Id, SessionStatus.COMPLETED), default)).IsSuccess);
         Assert.Equal(SessionStatus.COMPLETED, f.Session.Status);
     }

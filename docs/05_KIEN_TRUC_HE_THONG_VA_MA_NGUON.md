@@ -69,9 +69,10 @@ graph TD
   - Đảm bảo số lượng người chơi có vé chính thức (`status = CONFIRMED`) luôn luôn `<= max_players`. Bất kỳ yêu cầu nào đến sau đều được tự động chuyển sang hàng đợi (`WAITING`) với số thứ tự tăng dần.
 
 ### 2.3. Tự động hóa đối soát thanh toán (VietQR & Webhook SePay)
-- Khi chốt buổi chơi, hệ thống sinh mã thanh toán định danh duy nhất (ví dụ: `BC12627_A8F1`).
-- Chuỗi mã VietQR nhúng sẵn số tài khoản của nhóm, số tiền chính xác và mã chuyển khoản.
-- Người chơi quét mã và chuyển khoản ➔ Cổng thanh toán SePay gửi Webhook HTTP POST về máy chủ Backend ➔ Hệ thống trích xuất mã định danh, khớp đúng số tiền, tự động cập nhật `session_fee` sang `PAID`, ghi một dòng thu vào Sổ quỹ mở `group_ledger`, và gửi thông báo FCM xác nhận về điện thoại người chơi.
+- UC16 phát hành Amount/breakdown bất biến và mã G04 29 ký tự, ví dụ `CLB 0123456789AB FEDCBA987654`; UC17 không tính lại tiền hoặc đổi mã.
+- UC17 sinh raw payload qua adapter Anpero.Payment.QrPayload và PNG bằng QRCoder tại BE, snapshot một bank active cùng yêu cầu. Cập nhật 01/11/2026: source upstream được pin commit, giữ license và vá một dòng metadata theo phê duyệt; bản riêng `1.0.1-uc17.1` nằm tại src/ThirdParty. POC/decoder ảnh độc lập đạt; generator runtime đã tích hợp. Chưa nghiệm thu quét hai ứng dụng ngân hàng hoặc bật sử dụng thật.
+- Phần cá nhân/cash/self-report đã kiểm trên DB riêng: transaction, DB locks, notification/outbox và worker gửi sau commit; tự báo chỉ là UNPAID + chờ đối soát. API pay cũ có guard chống đổi BANK_TRANSFER UC17 thành PAID/CASH. GET nghĩa vụ/receipt vẫn đọc khi Payments tắt.
+- Mục tiêu UC18: nhận webhook xác thực, khớp bằng chứng ngân hàng, ghi PAID/bank_transaction/ledger nguyên tử và thông báo. Chưa được triển khai/nghiệm thu bởi test writer mô phỏng UC17. Cash PAID hiện hữu cũng chưa đồng nghĩa hoàn thiện sổ quỹ. [Contract và rollback UC17](Detail%20Design/UC17-BE.md).
 
 ---
 
