@@ -110,7 +110,10 @@ public sealed class GetSessionByIdQueryHandler(
             waitingBookings.Count,
             myBooking != null,
             myBooking?.Status,
-            myBooking?.QueueOrder ?? 0
+            myBooking?.QueueOrder ?? 0,
+            session.Address,
+            session.Lat,
+            session.Lng
         );
 
         return Result.Success(new SessionDetailResponse(sessionDto, confirmedBookings, waitingBookings, activeRecruitment));

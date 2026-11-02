@@ -33,7 +33,10 @@ public sealed class CreateSessionCommandHandler(
             maxPlayers: maxPlayers,
             deadlineBooking: deadline.UtcDateTime,
             courtRentalCost: req.CourtRentalCost,
-            status: SessionStatus.OPEN
+            status: SessionStatus.OPEN,
+            address: req.Address,
+            lat: req.Lat,
+            lng: req.Lng
         );
 
         sessionRepository.Add(session);

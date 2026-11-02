@@ -20,5 +20,8 @@ public sealed record SessionResponse(
     int WaitingCount,
     bool IsBookedByCurrentUser = false,
     BookingStatus? CurrentUserBookingStatus = null,
-    int CurrentUserQueueOrder = 0
+    int CurrentUserQueueOrder = 0,
+    string? Address = null,
+    decimal? Lat = null,
+    decimal? Lng = null
 );

@@ -10,6 +10,7 @@ namespace LegendsTeamVN.BadmintonClub.Application.Features.Recruitments.Explore;
 
 public sealed class ExploreRecruitmentsQueryHandler(
     IRecruitmentRepository recruitmentRepository,
+    IClubMemberRepository clubMemberRepository,
     ICurrentUserService currentUserService) 
     : IQueryHandler<ExploreRecruitmentsQuery, List<GuestRecruitmentResponse>>
 {
@@ -17,6 +18,27 @@ public sealed class ExploreRecruitmentsQueryHandler(
     {
         var now = DateTime.UtcNow;
         var currentUserId = currentUserService.UserId;
+
+        HashSet<Guid> organizerClubIds = [];
+        if (currentUserId.HasValue)
+        {
+            var memberships = await clubMemberRepository.FindAll(
+                    m => m.UserId == currentUserId.Value && m.Status == ClubMemberStatus.ACTIVE,
+                    m => m.RoleEntity)
+                .ToListAsync(cancellationToken);
+
+            foreach (var m in memberships)
+            {
+                if (m.RoleEntity != null && (m.RoleEntity.IsHostRole ||
+                    m.RoleEntity.GetRoleCode() == 3 ||
+                    m.RoleEntity.GetRoleCode() == 5 ||
+                    string.Equals(m.RoleEntity.RoleName, "Host", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(m.RoleEntity.RoleName, "Phó nhóm", StringComparison.OrdinalIgnoreCase)))
+                {
+                    organizerClubIds.Add(m.GroupId);
+                }
+            }
+        }
 
         var recruitments = await recruitmentRepository.FindAll(r => !r.IsDeleted && r.Status == RecruitmentStatus.ACTIVE)
             .Include(r => r.Session)
@@ -32,14 +54,18 @@ public sealed class ExploreRecruitmentsQueryHandler(
         {
             if (currentUserId.HasValue)
             {
-                var hasActiveBooking = r.Session.Bookings.Any(b =>
-                    !b.IsDeleted &&
-                    b.UserId == currentUserId.Value &&
-                    b.Status != BookingStatus.ABSENT);
-
-                if (hasActiveBooking)
+                var isOrganizer = organizerClubIds.Contains(r.Session.GroupId);
+                if (!isOrganizer)
                 {
-                    continue;
+                    var hasActiveBooking = r.Session.Bookings.Any(b =>
+                        !b.IsDeleted &&
+                        b.UserId == currentUserId.Value &&
+                        b.Status != BookingStatus.ABSENT);
+
+                    if (hasActiveBooking)
+                    {
+                        continue;
+                    }
                 }
             }
 
@@ -55,13 +81,15 @@ public sealed class ExploreRecruitmentsQueryHandler(
             }
 
             double? distanceKm = null;
-            if (request.Latitude.HasValue && request.Longitude.HasValue && r.Session.Group?.Lat.HasValue == true && r.Session.Group?.Lng.HasValue == true)
+            var sessionLat = r.Session.Lat ?? r.Session.Group?.Lat;
+            var sessionLng = r.Session.Lng ?? r.Session.Group?.Lng;
+            if (request.Latitude.HasValue && request.Longitude.HasValue && sessionLat.HasValue && sessionLng.HasValue)
             {
                 distanceKm = CalculateDistance(
                     request.Latitude.Value,
                     request.Longitude.Value,
-                    (double)r.Session.Group.Lat.Value,
-                    (double)r.Session.Group.Lng.Value
+                    (double)sessionLat.Value,
+                    (double)sessionLng.Value
                 );
 
                 if (distanceKm > request.RadiusKm)
