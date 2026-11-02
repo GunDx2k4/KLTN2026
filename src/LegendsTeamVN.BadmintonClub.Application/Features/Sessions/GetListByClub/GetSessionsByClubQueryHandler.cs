@@ -48,7 +48,10 @@ public sealed class GetSessionsByClubQueryHandler(
                 waitingCount,
                 myBooking != null,
                 myBooking?.Status,
-                myBooking?.QueueOrder ?? 0
+                myBooking?.QueueOrder ?? 0,
+                s.Address,
+                s.Lat,
+                s.Lng
             );
         }).ToList();
 

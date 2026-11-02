@@ -26,6 +26,9 @@ public class BadmintonSession : AggregateRoot<Guid>
     public int ShuttlecockUsed { get; private set; }
     public decimal CourtRentalCost { get; private set; }
     public decimal ExtraExpense { get; private set; }
+    public string? Address { get; private set; }
+    public decimal? Lat { get; private set; }
+    public decimal? Lng { get; private set; }
 
     /// <summary>
     /// Trạng thái buổi chơi của buổi sinh hoạt. Miền giá trị: OPEN, LOCKED, PLAYING, CALCULATED, COMPLETED.
@@ -56,7 +59,10 @@ public class BadmintonSession : AggregateRoot<Guid>
         int shuttlecockUsed = 0,
         decimal courtRentalCost = 0,
         decimal extraExpense = 0,
-        SessionStatus status = SessionStatus.OPEN)
+        SessionStatus status = SessionStatus.OPEN,
+        string? address = null,
+        decimal? lat = null,
+        decimal? lng = null)
     {
         Id = Guid.NewGuid();
         GroupId = groupId;
@@ -72,6 +78,9 @@ public class BadmintonSession : AggregateRoot<Guid>
         CourtRentalCost = courtRentalCost;
         ExtraExpense = extraExpense;
         Status = status;
+        Address = address;
+        Lat = lat;
+        Lng = lng;
     }
 
     public BadmintonSession(
@@ -87,7 +96,10 @@ public class BadmintonSession : AggregateRoot<Guid>
         int shuttlecockUsed,
         decimal courtRentalCost,
         decimal extraExpense,
-        string status)
+        string status,
+        string? address = null,
+        decimal? lat = null,
+        decimal? lng = null)
         : this(
             groupId,
             title,
@@ -101,7 +113,10 @@ public class BadmintonSession : AggregateRoot<Guid>
             shuttlecockUsed,
             courtRentalCost,
             extraExpense,
-            ParseStatus(status))
+            ParseStatus(status),
+            address,
+            lat,
+            lng)
     {
     }
 

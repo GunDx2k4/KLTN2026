@@ -9,5 +9,8 @@ public sealed record CreateSessionRequest(
     int TargetPlayerPerCourt = 6,
     int? MaxPlayers = null,
     DateTimeOffset? DeadlineBooking = null,
-    decimal CourtRentalCost = 0
+    decimal CourtRentalCost = 0,
+    string? Address = null,
+    decimal? Lat = null,
+    decimal? Lng = null
 );

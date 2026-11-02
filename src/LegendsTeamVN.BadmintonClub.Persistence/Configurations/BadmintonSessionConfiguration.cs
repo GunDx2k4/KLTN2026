@@ -38,6 +38,18 @@ public class BadmintonSessionConfiguration : IEntityTypeConfiguration<BadmintonS
             .IsRequired()
             .HasMaxLength(500);
 
+        builder.Property(s => s.Address)
+            .HasColumnName("address")
+            .HasMaxLength(500);
+
+        builder.Property(s => s.Lat)
+            .HasColumnName("lat")
+            .HasPrecision(10, 7);
+
+        builder.Property(s => s.Lng)
+            .HasColumnName("lng")
+            .HasPrecision(10, 7);
+
         builder.Property(s => s.CourtCount)
             .HasColumnName("court_count")
             .IsRequired();
