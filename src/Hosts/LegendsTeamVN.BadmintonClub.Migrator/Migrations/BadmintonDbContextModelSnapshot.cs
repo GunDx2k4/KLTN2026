@@ -141,6 +141,11 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id_session");
 
+                    b.Property<string>("Address")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("address");
+
                     b.Property<decimal?>("AdjustmentDelta")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)")
@@ -209,6 +214,16 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
+
+                    b.Property<decimal?>("Lat")
+                        .HasPrecision(10, 7)
+                        .HasColumnType("numeric(10,7)")
+                        .HasColumnName("lat");
+
+                    b.Property<decimal?>("Lng")
+                        .HasPrecision(10, 7)
+                        .HasColumnType("numeric(10,7)")
+                        .HasColumnName("lng");
 
                     b.Property<int>("MaxPlayers")
                         .HasColumnType("integer")
