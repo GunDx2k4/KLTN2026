@@ -103,7 +103,9 @@ public sealed partial class PaymentReconciliationHttpTests
         {
             ["baseUrl"] = f.Client.BaseAddress!.GetLeftPart(UriPartial.Authority), ["sandboxPort"] = f.Client.BaseAddress.Port.ToString(CultureInfo.InvariantCulture),
             ["sandboxConfirmed"] = "true", ["testSecret"] = Fixture.Secret, ["bankAccountId"] = f.Bank.ToString(), ["groupId"] = f.Group.ToString(),
-            ["paymentCode"] = f.Code, ["manualFeeId"] = manual.Fee.ToString(), ["shortPaymentCode"] = shortFee.Code, ["overPaymentCode"] = overFee.Code,
+            ["paymentCode"] = f.Code, ["manualFeeId"] = manual.Fee.ToString(),
+            ["shortFeeId"] = shortFee.Fee.ToString(), ["shortPaymentCode"] = shortFee.Code,
+            ["overFeeId"] = overFee.Fee.ToString(), ["overPaymentCode"] = overFee.Code,
             ["cashSessionId"] = cash.Session.ToString(), ["cashUserId"] = cash.User.ToString(),
             ["managerToken"] = f.Client.DefaultRequestHeaders.Authorization!.Parameter!, ["otherClubToken"] = otherToken,
             ["gateway"] = "Vietcombank", ["accountNumber"] = "00123456789", ["amount"] = "50000", ["shortAmount"] = "49999", ["excessAmount"] = "50001"

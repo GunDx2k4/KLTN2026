@@ -45,14 +45,15 @@ namespace LegendsTeamVN.BadmintonClub.Application.Tests.Features.Payments;
 
 public sealed partial class PaymentReconciliationHttpTests(ITestOutputHelper output)
 {
-    private sealed class Fixture : IAsyncDisposable
+    private sealed partial class Fixture : IAsyncDisposable
     {
         public const string Secret = "uc18-sandbox-signature-only";
         private static long nextId = 1000000;
         public long ProviderId { get; } = Interlocked.Increment(ref nextId);
         public ReconciliationTestDatabase Database { get; private set; } = null!;
         public ReconciliationMetrics Metrics { get; } = new();
-        public ReconciliationOptions Flags { get; } = new() { Enabled = true, WritesEnabled = true, CompanyId = "uc18-test-company" };
+        public ReconciliationOptions Flags { get; } = new() { Enabled = true, WritesEnabled = true };
+        public Dictionary<Guid, SepayWebhookCredential> Credentials { get; } = [];
         public Guid Group { get; private set; }
         public Guid User { get; private set; }
         public Guid Session { get; private set; }
@@ -69,11 +70,13 @@ public sealed partial class PaymentReconciliationHttpTests(ITestOutputHelper out
         private WebApplication app = null!;
         private IConnectionMultiplexer redis = null!;
         private int requests;
+        public bool Setup { get; private set; }
+        public FakeSepayOAuth Provider { get; } = new();
         public int RequestCount => Volatile.Read(ref requests);
 
-        public static async Task<Fixture> Create(bool prepare = true)
+        public static async Task<Fixture> Create(bool prepare = true, bool setup = false)
         {
-            var f = new Fixture { Database = await ReconciliationTestDatabase.Create() };
+            var f = new Fixture { Database = await ReconciliationTestDatabase.Create(), Setup = setup };
             f.Flags.EvidenceArchiveDirectory = Path.Combine(Path.GetTempPath(), "uc18-evidence-" + Guid.NewGuid().ToString("N"));
             await using (var db = f.Database.Open())
             {
@@ -87,8 +90,9 @@ public sealed partial class PaymentReconciliationHttpTests(ITestOutputHelper out
                 if (prepare) Assert.True(fee.PrepareBankTransfer(new(bank.Id, bank.BankBin!, bank.BankName, bank.AccountNumber, bank.AccountHolder), "qr", DateTime.UtcNow).IsSuccess);
                 await db.SaveChangesAsync();
             }
-            f.Flags.Banks[f.Bank] = new() { Gateway = "Vietcombank", Secret = Secret };
+            f.Credentials[f.Bank] = new("uc18-test-company", "Vietcombank", Secret);
             f.Manager = await f.AddManager();
+            if (setup) await f.SeedSetupIdentity();
             var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Testing" });
             builder.Logging.ClearProviders();
             builder.Logging.AddProvider(f.Metrics);
@@ -116,7 +120,11 @@ public sealed partial class PaymentReconciliationHttpTests(ITestOutputHelper out
             builder.Services.AddSingleton(permissions);
             f.redis = await ConnectionMultiplexer.ConnectAsync("127.0.0.1:56388,abortConnect=true,connectTimeout=3000,syncTimeout=3000");
             builder.Services.AddSingleton(f.redis);
-            builder.Services.AddSingleton<ISepayWebhookVerifier, SepayWebhookVerifier>();
+            builder.Services.AddScoped<ISepayWebhookVerifier, SepayWebhookVerifier>();
+            var credentials = Substitute.For<ISepayWebhookCredentials>();
+            credentials.GetAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(call => f.Credentials.GetValueOrDefault(call.Arg<Guid>()));
+            builder.Services.AddSingleton(credentials);
+            if (setup) f.AddSetupServices(builder.Services);
             builder.Services.AddSingleton<IWebhookEvidenceArchive, WebhookEvidenceArchive>();
             builder.Services.AddScoped<IReconciliationLock, RedisReconciliationLock>();
             f.app = builder.Build();
@@ -129,11 +137,12 @@ public sealed partial class PaymentReconciliationHttpTests(ITestOutputHelper out
             new SepayWebhookEndpoint().MapEndpoint(f.app);
             new ReconciliationEndpoint().MapEndpoint(f.app);
             new SessionEndpoint().MapEndpoint(f.app);
+            if (setup) { new SepaySetupEndpoint().MapEndpoint(f.app); new ClubSepayEndpoint().MapEndpoint(f.app); }
             f.app.UseRouting(); f.app.UseAuthentication(); f.app.UseAuthorization();
             f.app.Urls.Add("http://127.0.0.1:0");
             try { await f.app.StartAsync(); }
             catch { await f.app.DisposeAsync(); f.redis.Dispose(); await f.Database.DisposeAsync(); throw; }
-            f.Client = new HttpClient { BaseAddress = new Uri(f.Services.GetRequiredService<Microsoft.AspNetCore.Hosting.Server.IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.Single()) };
+            f.Client = new HttpClient(new HttpClientHandler { AllowAutoRedirect = false }) { BaseAddress = new Uri(f.Services.GetRequiredService<Microsoft.AspNetCore.Hosting.Server.IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.Single()) };
             f.Login(f.Manager);
             return f;
         }
@@ -158,7 +167,9 @@ public sealed partial class PaymentReconciliationHttpTests(ITestOutputHelper out
 
         public void Login(Guid user)
         {
-            var jwt = new JwtSecurityToken("uc18-tests", "uc18-tests", [new Claim(JwtRegisteredClaimNames.Sub, user.ToString())],
+            var claims = new List<Claim> { new(JwtRegisteredClaimNames.Sub, user.ToString()) };
+            if (Setup && user == Manager) claims.Add(new("permissions", LegendsTeamVN.Core.Identity.Authorization.AppPermissions.Integrations.SepayManage));
+            var jwt = new JwtSecurityToken("uc18-tests", "uc18-tests", claims,
                 DateTime.UtcNow.AddMinutes(-1), DateTime.UtcNow.AddMinutes(20),
                 new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(new string('k', 64))), SecurityAlgorithms.HmacSha256));
             Client.DefaultRequestHeaders.Authorization = new("Bearer", new JwtSecurityTokenHandler().WriteToken(jwt));
@@ -171,6 +182,11 @@ public sealed partial class PaymentReconciliationHttpTests(ITestOutputHelper out
             var role = new GroupRole(Group, "Quản lý thu");
             var permission = new GroupPermission(GroupPermissions.Finance.FeeManage, "Quản lý thu", ModuleGroup.FINANCE);
             db.AddRange(manager, role, permission, new RolePermission(role.Id, permission.Id), new GroupMember(Group, manager.Id, role.Id));
+            if (Setup)
+            {
+                var bankPermission = new GroupPermission(GroupPermissions.Finance.BankManage, "Quản lý ngân hàng", ModuleGroup.FINANCE);
+                db.AddRange(bankPermission, new RolePermission(role.Id, bankPermission.Id));
+            }
             await db.SaveChangesAsync();
             return manager.Id;
         }

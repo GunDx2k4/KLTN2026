@@ -3,6 +3,8 @@ using System.Security.Cryptography;
 using System.Text;
 using LegendsTeamVN.BadmintonClub.Application.DependencyInjection.Options;
 using LegendsTeamVN.BadmintonClub.Infrastructure.Payments;
+using LegendsTeamVN.BadmintonClub.Application.Abstractions;
+using LegendsTeamVN.Core.Utilities.Results;
 using Microsoft.Extensions.Options;
 using Xunit;
 
@@ -26,11 +28,22 @@ public sealed class SepayWebhookSecurityTests
         public override DateTimeOffset GetUtcNow() => DateTimeOffset.FromUnixTimeSeconds(Timestamp);
     }
 
-    private static (SepayWebhookVerifier Verifier, ReconciliationOptions Options, Guid Bank) Create()
+    private sealed class Credentials : ISepayWebhookCredentials
+    {
+        public Dictionary<Guid, SepayWebhookCredential> Banks { get; } = [];
+        public Task<SepayWebhookCredential?> GetAsync(Guid bankAccountId, CancellationToken ct) =>
+            Task.FromResult(Banks.GetValueOrDefault(bankAccountId));
+    }
+    private sealed class VectorVerifier(Credentials credentials)
+    {
+        public Result<VerifiedSepayWebhook> Verify(Guid bank, byte[] body, string signature, string timestamp) =>
+            new SepayWebhookVerifier(credentials, new Clock()).VerifyAsync(bank, body, signature, timestamp, default).GetAwaiter().GetResult();
+    }
+    private static (VectorVerifier Verifier, Credentials Options, Guid Bank) Create()
     {
         var bank = Guid.NewGuid();
-        var options = new ReconciliationOptions { CompanyId = "uc18-vector", Banks = { [bank] = new() { Secret = Secret, Gateway = "Vietcombank" } } };
-        return (new(new ReconciliationTestOptions<ReconciliationOptions>(options), new Clock()), options, bank);
+        var options = new Credentials { Banks = { [bank] = new("uc18-vector", "Vietcombank", Secret) } };
+        return (new(options), options, bank);
     }
 
     private static string Sign(byte[] body, long timestamp) => "sha256=" + Convert.ToHexString(HMACSHA256.HashData(
@@ -72,7 +85,7 @@ public sealed class SepayWebhookSecurityTests
     {
         var (verifier, options, bank) = Create();
         Assert.True(verifier.Verify(Guid.NewGuid(), Encoding.UTF8.GetBytes(Body), Signature, Timestamp.ToString(CultureInfo.InvariantCulture)).IsFailure);
-        options.Banks[bank].Secret = "";
+        options.Banks[bank] = options.Banks[bank] with { Secret = "" };
         Assert.True(verifier.Verify(bank, Encoding.UTF8.GetBytes(Body), Signature, Timestamp.ToString(CultureInfo.InvariantCulture)).IsFailure);
     }
 

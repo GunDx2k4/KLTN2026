@@ -26,7 +26,7 @@ public sealed class SepayWebhookSecurityBehavior(ISepayWebhookVerifier verifier,
         {
             if (!options.CurrentValue.Enabled || !options.CurrentValue.WritesEnabled)
                 return Unavailable();
-            var verified = verifier.Verify(request.BankAccountId, request.Body, request.Signature, request.Timestamp);
+            var verified = await verifier.VerifyAsync(request.BankAccountId, request.Body, request.Signature, request.Timestamp, deadline.Token);
             if (verified.IsFailure) return Result.Failure<SepayWebhookResponse>(verified.Error);
             var bank = await repository.GetBankAsync(request.BankAccountId, deadline.Token);
             if (bank is null) return Result.Failure<SepayWebhookResponse>(Error.Unauthorized("Reconciliation.BankBinding", "Không xác minh được tài khoản nhận."));

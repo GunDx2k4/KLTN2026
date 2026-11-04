@@ -11,12 +11,12 @@ using Microsoft.Extensions.Options;
 
 namespace LegendsTeamVN.BadmintonClub.Infrastructure.Payments;
 
-public sealed class SepayWebhookVerifier(IOptionsMonitor<ReconciliationOptions> options, TimeProvider clock) : ISepayWebhookVerifier
+public sealed class SepayWebhookVerifier(ISepayWebhookCredentials credentials, TimeProvider clock) : ISepayWebhookVerifier
 {
-    public Result<VerifiedSepayWebhook> Verify(Guid bankAccountId, byte[] body, string signature, string timestamp)
+    public async Task<Result<VerifiedSepayWebhook>> VerifyAsync(Guid bankAccountId, byte[] body, string signature, string timestamp, CancellationToken ct)
     {
-        var settings = options.CurrentValue;
-        if (string.IsNullOrWhiteSpace(settings.CompanyId) || !settings.Banks.TryGetValue(bankAccountId, out var credential) ||
+        var credential = await credentials.GetAsync(bankAccountId, ct);
+        if (credential is null || string.IsNullOrWhiteSpace(credential.CompanyId) ||
             string.IsNullOrWhiteSpace(credential.Secret) || string.IsNullOrWhiteSpace(credential.Gateway))
             return Result.Failure<VerifiedSepayWebhook>(Error.Failure("Reconciliation.CredentialUnavailable", "Chưa có cấu hình xác thực webhook."));
         if (body is not { Length: > 0 and <= 65536 } || signature is null || !signature.StartsWith("sha256=", StringComparison.Ordinal) ||
@@ -48,7 +48,7 @@ public sealed class SepayWebhookVerifier(IOptionsMonitor<ReconciliationOptions> 
             var utc = new DateTimeOffset(DateTime.SpecifyKind(local, DateTimeKind.Unspecified), TimeSpan.FromHours(7)).UtcDateTime;
             return Result.Success(new VerifiedSepayWebhook(new PaymentReconciliationEvidence(payload.Id, payload.Gateway,
                 payload.AccountNumber, payload.SubAccount, payload.TransferType, payload.TransferAmount, utc,
-                payload.ReferenceCode, payload.Content), credential.Gateway));
+                payload.ReferenceCode, payload.Content), credential.Gateway, credential.CompanyId, credential.ConnectionId));
         }
         catch (Exception ex) when (ex is JsonException or ArgumentException or OverflowException) { return Invalid(); }
     }

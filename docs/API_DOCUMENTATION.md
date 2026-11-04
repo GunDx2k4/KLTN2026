@@ -1,6 +1,6 @@
 # 📖 Tài Liệu Đặc Tả Toàn Diện API & Kế Hoạch Tích Hợp Mobile (API Specification & Mobile Integration Plan)
 
-> **UC18/FR21 cập nhật 04/11/2026:** Backend đã có webhook SePay, list/detail/manual và CASH ghi ledger/thông báo nguyên tử; kiểm chứng source/sandbox, chưa áp DB chung hoặc nghiệm thu SePay thực. Hợp đồng chính thức, mã lỗi, cấu hình và rollout/rollback tại [UC18-BE](Detail%20Design/UC18-BE.md). Các mốc UC17 ngày 01/11 bên dưới là lịch sử triển khai UC17, không phải trạng thái UC18 hiện tại.
+> **UC18/FR21 cập nhật 04/11/2026:** Backend đã có webhook SePay, list/detail/manual và CASH ghi ledger/thông báo nguyên tử; kiểm chứng tự động và áp migration trên DB chung local BadmintonClub, API54796 chạy profile CASH. Chưa áp DB server/deploy hoặc nghiệm thu SePay thực; webhook/dispatch tắt. Hợp đồng chính thức, mã lỗi, cấu hình và rollout/rollback tại [UC18-BE](Detail%20Design/UC18-BE.md). Các mốc UC17 ngày 01/11 bên dưới là lịch sử triển khai UC17, không phải trạng thái UC18 hiện tại.
 
 > **Dự án**: Hệ thống Quản lý Nhóm Cầu lông Phong trào (**LegendsTeamVN.BadmintonClub**)  
 > **Phiên bản tài liệu**: 2.1 (Cập nhật chuẩn hóa CQRS, Swagger Tags & Đặc tả chi tiết từng FR)  

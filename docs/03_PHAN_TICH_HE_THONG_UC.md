@@ -257,7 +257,7 @@ graph TD
 
 ### UC18: Đối soát & xác nhận thanh toán
 
-- **Hiện trạng 04/11/2026**: Backend đã có source, migration, HTTP/DB/Redis sandbox và collection Postman chạy local; chưa nghiệm thu request SePay Test Mode thực, company/gateway mục tiêu hoặc FCM thiết bị thật, chưa áp migration UC18 lên DB chung. [Hợp đồng và vận hành UC18](Detail%20Design/UC18-BE.md).
+- **Hiện trạng 04/11/2026**: Backend đã có source, kiểm chứng HTTP/DB/Redis/Postman và áp migration UC18 trên DB chung local BadmintonClub; API54796 chạy profile CASH, webhook/dispatch tắt. Chưa áp DB server/deploy hoặc nghiệm thu request SePay Test Mode thực, company/gateway mục tiêu/FCM thiết bị thật. [Hợp đồng và vận hành UC18](Detail%20Design/UC18-BE.md).
 - **FR đáp ứng**: FR21 (F4.4). **Tác nhân**: SePay, hệ thống, người có FeeManage trong đúng CLB.
 - **Tiền điều kiện auto**: khoản thu đã phát hành, UNPAID/BANK_TRANSFER, có QR snapshot; credential HMAC riêng bank đã cấu hình ngoài Git, một company SePay. Không bắt buộc người chơi tự báo chuyển khoản.
 - **Luồng ngân hàng**:

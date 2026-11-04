@@ -429,6 +429,11 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                     b.Property<DateTimeOffset?>("ModifiedOnUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("ProviderCompanyId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("provider_company_id");
+
                     b.Property<long?>("ProviderTransactionId")
                         .HasColumnType("bigint")
                         .HasColumnName("provider_transaction_id");
@@ -496,13 +501,18 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
 
                     b.HasIndex("ProviderTransactionId")
                         .IsUnique()
-                        .HasFilter("provider_transaction_id IS NOT NULL");
+                        .HasFilter("provider_transaction_id IS NOT NULL AND provider_company_id IS NULL");
 
                     b.HasIndex("ReconciledBy");
 
                     b.HasIndex("ReferenceCode");
 
                     b.HasIndex("BankAccountId", "ReferenceCode");
+
+                    b.HasIndex("ProviderCompanyId", "ProviderTransactionId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_bank_transaction_company_provider")
+                        .HasFilter("provider_company_id IS NOT NULL AND provider_transaction_id IS NOT NULL");
 
                     b.ToTable("bank_transaction", null, t =>
                         {
@@ -618,6 +628,83 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("club_group", (string)null);
+                });
+
+            modelBuilder.Entity("LegendsTeamVN.BadmintonClub.Domain.Entities.ClubSepayConnection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ApplicationRevision")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("AuthorizedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("AuthorizedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BankAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("CompanyId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ConnectedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DisconnectedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DisconnectedBy")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Gateway")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<Guid>("GroupId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ProtectedTokens")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("ProtectedWebhookSecret")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long?>("ProviderBankAccountId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("ProviderWebhookId")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BankAccountId")
+                        .IsUnique()
+                        .HasFilter("\"Status\" <> 'DISCONNECTED'");
+
+                    b.HasIndex("GroupId");
+
+                    b.HasIndex("CompanyId", "ProviderBankAccountId", "BankAccountId");
+
+                    b.ToTable("club_sepay_connection", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_club_sepay_connection", "\"CompanyId\" > 0 AND \"Status\" IN ('AUTHORIZED','PROVISIONING','CONNECTED','DISCONNECTED') AND (\"Status\" <> 'CONNECTED' OR (\"ProviderBankAccountId\" > 0 AND \"ProviderWebhookId\" > 0 AND length(\"ProtectedWebhookSecret\") > 0 AND \"ConnectedAt\" IS NOT NULL))");
+                        });
                 });
 
             modelBuilder.Entity("LegendsTeamVN.BadmintonClub.Domain.Entities.GroupBankAccount", b =>
@@ -1579,6 +1666,51 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                     b.ToTable("role_permission", (string)null);
                 });
 
+            modelBuilder.Entity("LegendsTeamVN.BadmintonClub.Domain.Entities.SepayApplicationSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ClientId")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("FrontendBaseUrl")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("ProtectedClientSecret")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PublicApiBaseUrl")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<Guid>("Revision")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UpdatedBy")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("sepay_application_settings", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_sepay_application_singleton", "\"Id\" = 1");
+                        });
+                });
+
             modelBuilder.Entity("LegendsTeamVN.BadmintonClub.Domain.Entities.SessionBooking", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2081,6 +2213,21 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("SessionFee");
+                });
+
+            modelBuilder.Entity("LegendsTeamVN.BadmintonClub.Domain.Entities.ClubSepayConnection", b =>
+                {
+                    b.HasOne("LegendsTeamVN.BadmintonClub.Domain.Entities.GroupBankAccount", null)
+                        .WithMany()
+                        .HasForeignKey("BankAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LegendsTeamVN.BadmintonClub.Domain.Entities.ClubGroup", null)
+                        .WithMany()
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("LegendsTeamVN.BadmintonClub.Domain.Entities.GroupBankAccount", b =>

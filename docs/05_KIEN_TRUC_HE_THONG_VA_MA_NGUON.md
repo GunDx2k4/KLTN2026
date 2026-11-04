@@ -74,7 +74,7 @@ graph TD
 - Phần cá nhân/cash/self-report đã kiểm trên DB riêng: transaction, DB locks, notification/outbox và worker gửi sau commit; tự báo chỉ là UNPAID + chờ đối soát. API pay cũ có guard chống đổi BANK_TRANSFER UC17 thành PAID/CASH. GET nghĩa vụ/receipt vẫn đọc khi Payments tắt.
 - UC18/FR21 source đã triển khai và kiểm chứng sandbox ngày 04/11/2026: endpoint ISender → security HMAC/raw body/bank → Redis lock → UnitOfWorkBehavior → sealed handler gọi Domain policy/entity và repository. Domain events tạo Notification/Outbox trước Save/Commit; ACK sau commit, worker FCM sau commit. CASH/manual dùng cùng bất biến ledger nguồn duy nhất. [API và vận hành UC18](Detail%20Design/UC18-BE.md).
 - HMAC verifier/Redis/archive ở Infrastructure; SQL/EF/lock ở Persistence; nghiệp vụ exact-match ở Domain. Bằng chứng sai bank binding được cô lập ngoài UoW, không tạo inbox hoặc lộ sang danh sách CLB theo URL. Group guard tài chính dùng FOR NO KEY UPDATE, tương thích FK KEY SHARE khi chèn ledger; không đảo thứ tự session/fee.
-- Ba cờ Reconciliation mặc định false; cấu hình giữ CASH là WritesEnabled=true/Enabled=false/DispatchEnabled=false sau triển khai đúng schema/binary. Chưa áp DB chung, chưa nghiệm thu SePay Test Mode/company/gateway hoặc FCM thật; không lấy webhook mock/collection local làm bằng chứng Live.
+- Ba cờ Reconciliation mặc định false; Development local đã dùng profile CASH WritesEnabled=true/Enabled=false/DispatchEnabled=false. Đã áp hai migration còn thiếu tới UC18 trên DB chung local BadmintonClub:5432 sau backup/restore rehearsal; API54796 smoke đạt, dữ liệu cũ 53 bảng giữ nguyên. Chưa áp DB server/deploy hoặc nghiệm thu SePay Test Mode/company/gateway/FCM thật; không lấy webhook mock/collection local làm bằng chứng Live.
 
 ---
 

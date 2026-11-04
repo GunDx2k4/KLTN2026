@@ -36,8 +36,8 @@ public sealed class SepayWebhookLockBehavior(IReconciliationLock locks, IService
             {
                 await using var scope = scopes.CreateAsyncScope();
                 var repository = scope.ServiceProvider.GetRequiredService<IReconciliationRepository>();
-                var stored = await repository.FindProviderAsync(verified.Evidence.ProviderTransactionId, ct);
-                return stored?.BankAccountId == request.BankAccountId &&
+                var stored = await repository.FindProviderAsync(verified.Evidence.ProviderTransactionId, verified.CompanyId, ct);
+                return stored?.ProviderCompanyId == verified.CompanyId && stored.BankAccountId == request.BankAccountId &&
                     PaymentReconciliationPolicy.Compare(verified.Evidence, stored.GetEvidence()) == PaymentEvidenceComparison.RETRY
                     ? Result.Success(new SepayWebhookResponse(true)) : SepayWebhookSecurityBehavior.Unavailable();
             }

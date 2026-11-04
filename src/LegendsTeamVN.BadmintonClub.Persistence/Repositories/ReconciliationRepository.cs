@@ -1,8 +1,10 @@
 using LegendsTeamVN.BadmintonClub.Domain.Constants;
 using LegendsTeamVN.BadmintonClub.Domain.Entities;
 using LegendsTeamVN.BadmintonClub.Domain.Enums;
+using LegendsTeamVN.BadmintonClub.Domain.Exceptions;
 using LegendsTeamVN.BadmintonClub.Domain.Repositories;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace LegendsTeamVN.BadmintonClub.Persistence.Repositories;
 
@@ -11,8 +13,10 @@ public sealed class ReconciliationRepository(BadmintonDbContext db) : IReconcili
     public Task<GroupBankAccount?> GetBankAsync(Guid bankAccountId, CancellationToken ct) =>
         db.GroupBankAccounts.AsNoTracking().SingleOrDefaultAsync(b => b.Id == bankAccountId, ct);
 
-    public Task<BankTransaction?> FindProviderAsync(long providerTransactionId, CancellationToken ct) =>
-        db.BankTransactions.IgnoreQueryFilters().AsNoTracking().SingleOrDefaultAsync(t => t.ProviderTransactionId == providerTransactionId, ct);
+    public Task<BankTransaction?> FindProviderAsync(long providerTransactionId, string? companyId, CancellationToken ct) =>
+        db.BankTransactions.IgnoreQueryFilters().AsNoTracking().Where(t => t.ProviderTransactionId == providerTransactionId &&
+            (t.ProviderCompanyId == companyId || t.ProviderCompanyId == null))
+            .OrderBy(t => t.ProviderCompanyId == null).FirstOrDefaultAsync(ct);
 
     public async Task<IReadOnlyList<BankTransaction>> FindReferenceAsync(string referenceCode, CancellationToken ct)
     {
@@ -49,6 +53,23 @@ public sealed class ReconciliationRepository(BadmintonDbContext db) : IReconcili
     }
 
     public async Task<(SessionFee Fee, BadmintonSession Session, BankTransaction? Transaction)?> LoadForConfirmationAsync(
+        Guid groupId, Guid feeId, Guid? transactionId, string? referenceCode, CancellationToken ct)
+    {
+        try
+        {
+            return await LoadConfirmationSourceAsync(groupId, feeId, transactionId, referenceCode, ct);
+        }
+        catch (Exception ex) when (IsLockConflict(ex))
+        {
+            throw new PaymentOperationConflictException(ex);
+        }
+    }
+
+    private static bool IsLockConflict(Exception exception) => exception is PostgresException
+        { SqlState: PostgresErrorCodes.LockNotAvailable or PostgresErrorCodes.DeadlockDetected } ||
+        exception.InnerException is not null && IsLockConflict(exception.InnerException);
+
+    private async Task<(SessionFee Fee, BadmintonSession Session, BankTransaction? Transaction)?> LoadConfirmationSourceAsync(
         Guid groupId, Guid feeId, Guid? transactionId, string? referenceCode, CancellationToken ct)
     {
         RequireTransaction();

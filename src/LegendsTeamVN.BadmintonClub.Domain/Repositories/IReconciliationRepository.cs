@@ -6,7 +6,7 @@ namespace LegendsTeamVN.BadmintonClub.Domain.Repositories;
 public interface IReconciliationRepository
 {
     Task<GroupBankAccount?> GetBankAsync(Guid bankAccountId, CancellationToken ct);
-    Task<BankTransaction?> FindProviderAsync(long providerTransactionId, CancellationToken ct);
+    Task<BankTransaction?> FindProviderAsync(long providerTransactionId, string? companyId, CancellationToken ct);
     Task<IReadOnlyList<BankTransaction>> FindReferenceAsync(string referenceCode, CancellationToken ct);
     Task<bool> CanManageFinanceAsync(Guid groupId, Guid userId, CancellationToken ct);
     Task<(SessionFee Fee, BadmintonSession Session, BankTransaction? Transaction)?> LoadForConfirmationAsync(

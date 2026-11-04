@@ -42,7 +42,7 @@ public class BadmintonDbContext(DbContextOptions<BadmintonDbContext> options, IP
             return await base.SaveChangesAsync(cancellationToken);
         }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException
-            { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: "IX_bank_transaction_provider_transaction_id" or
+            { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: "IX_bank_transaction_provider_transaction_id" or "ux_bank_transaction_company_provider" or
                 "IX_group_ledger_fee_id" or "IX_group_ledger_bank_transaction_id" })
         {
             throw new ReconciliationWriteConflictException(ex);

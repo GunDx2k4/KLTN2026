@@ -7,6 +7,7 @@ namespace LegendsTeamVN.BadmintonClub.Domain.Entities;
 public class BankTransaction : AggregateRoot<Guid>
 {
     public long? ProviderTransactionId { get; private set; }
+    public string? ProviderCompanyId { get; private set; }
     public Guid? BankAccountId { get; private set; }
     public string? Gateway { get; private set; }
     public string? SubAccount { get; private set; }
@@ -63,13 +64,14 @@ public class BankTransaction : AggregateRoot<Guid>
     {
     }
 
-    public static BankTransaction Receive(Guid bankAccountId, PaymentReconciliationEvidence evidence)
+    public static BankTransaction Receive(Guid bankAccountId, PaymentReconciliationEvidence evidence, string? companyId = null)
     {
         if (bankAccountId == Guid.Empty) throw new ArgumentException("Tài khoản nhận không hợp lệ.", nameof(bankAccountId));
         return new BankTransaction(evidence.AccountNumber, evidence.ReferenceCode, evidence.Amount, evidence.Content,
             evidence.TransactionTime, reconciliationStatus: ReconciliationStatus.MANUAL_CHECK)
         {
             ProviderTransactionId = evidence.ProviderTransactionId,
+            ProviderCompanyId = companyId,
             BankAccountId = bankAccountId,
             Gateway = evidence.Gateway,
             SubAccount = evidence.SubAccount,

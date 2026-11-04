@@ -81,7 +81,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LC }}
           tags: |
             type=raw,value=latest
-            type=sha
+            type=sha,format=long
             
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -98,24 +98,25 @@ jobs:
           context: .
           file: Dockerfile.migrator
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LC }}-migrator:latest
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LC }}-migrator:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LC }}-migrator:sha-${{ github.sha }}
           labels: ${{ steps.meta.outputs.labels }}
 
   deploy:
     needs: build-and-push-docker
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    concurrency:
+      group: badmintonclub-server-deploy
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
-          
-      - name: Check if Migrations changed
-        id: changed-migrations
-        uses: tj-actions/changed-files@v44
-        with:
-          files: |
-            src/Hosts/LegendsTeamVN.BadmintonClub.Migrator/Migrations/**
+          fetch-depth: 1
 
       - name: Prepare Firebase Credentials for Server
         env:
@@ -144,56 +145,97 @@ jobs:
       - name: Deploy to self-hosted server via SSH
         uses: appleboy/ssh-action@v1.0.3
         env:
-          RUN_MIGRATIONS: ${{ steps.changed-migrations.outputs.any_changed }}
+          DEPLOY_SHA: ${{ github.sha }}
+          IMAGE_REPOSITORY: ${{ env.REGISTRY }}/${{ github.repository }}
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DB_CONNECTION_STRING: ${{ secrets.DB_CONNECTION_STRING }}
+          REDIS_CONNECTION_STRING: ${{ secrets.REDIS_CONNECTION_STRING }}
+          JWT_ISSUER: ${{ secrets.JWT_ISSUER }}
+          JWT_AUDIENCE: ${{ secrets.JWT_AUDIENCE }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          JWT_EXPIRE_MIN: ${{ secrets.JWT_EXPIRE_MIN }}
+          RABBITMQ_HOST: ${{ secrets.RABBITMQ_HOST }}
+          RABBITMQ_VHOST: ${{ secrets.RABBITMQ_VHOST }}
+          RABBITMQ_PORT: ${{ secrets.RABBITMQ_PORT }}
+          RABBITMQ_USER: ${{ secrets.RABBITMQ_USER }}
+          RABBITMQ_PASS: ${{ secrets.RABBITMQ_PASS }}
+          SETTLEMENT_WRITES_ENABLED: ${{ secrets.SETTLEMENT_WRITES_ENABLED || 'false' }}
+          SETTLEMENT_DISPATCH_ENABLED: ${{ secrets.SETTLEMENT_DISPATCH_ENABLED || 'false' }}
+          SETTLEMENT_PREVIEW_SIGNING_KEY: ${{ secrets.SETTLEMENT_PREVIEW_SIGNING_KEY }}
+          RECONCILIATION_ENABLED: ${{ secrets.RECONCILIATION_ENABLED || 'false' }}
+          RECONCILIATION_WRITES_ENABLED: ${{ secrets.RECONCILIATION_WRITES_ENABLED || 'false' }}
+          RECONCILIATION_DISPATCH_ENABLED: ${{ secrets.RECONCILIATION_DISPATCH_ENABLED || 'false' }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           port: ${{ secrets.SERVER_PORT }}
           username: ${{ secrets.SERVER_USERNAME }}
           key: ${{ secrets.SERVER_SSH_KEY }}
-          envs: RUN_MIGRATIONS
+          envs: DEPLOY_SHA,IMAGE_REPOSITORY,REGISTRY_USER,REGISTRY_TOKEN,DB_CONNECTION_STRING,REDIS_CONNECTION_STRING,JWT_ISSUER,JWT_AUDIENCE,JWT_SECRET,JWT_EXPIRE_MIN,RABBITMQ_HOST,RABBITMQ_VHOST,RABBITMQ_PORT,RABBITMQ_USER,RABBITMQ_PASS,SETTLEMENT_WRITES_ENABLED,SETTLEMENT_DISPATCH_ENABLED,SETTLEMENT_PREVIEW_SIGNING_KEY,RECONCILIATION_ENABLED,RECONCILIATION_WRITES_ENABLED,RECONCILIATION_DISPATCH_ENABLED
           script: |
-            mkdir -p ~/badmintonclub
-            cd ~/badmintonclub
-            chmod 600 sports-venue-cb204-firebase-adminsdk-fbsvc-7f5ec12fb1.json 2>/dev/null || true
+            set -eu
+            umask 077
+            cd "$HOME/badmintonclub"
             
-            # Convert image name to lowercase as required by GHCR
-            export IMAGE_NAME=$(echo "${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
-            export MIGRATOR_IMAGE="${IMAGE_NAME}-migrator:latest"
+            : "${DEPLOY_SHA:?Cần SHA được deploy}"
+            : "${IMAGE_REPOSITORY:?Cần image repository}"
+            : "${REGISTRY_USER:?Cần registry user}"
+            : "${REGISTRY_TOKEN:?Cần registry token}"
+            : "${DB_CONNECTION_STRING:?Cần database connection}"
+            : "${REDIS_CONNECTION_STRING:?Cần Redis connection}"
+            : "${JWT_SECRET:?Cần JWT secret}"
+            case "$DEPLOY_SHA" in *[!0-9a-f]*|'') exit 1 ;; esac
+            [ "${#DEPLOY_SHA}" -eq 40 ] || exit 1
             
-            # Login to GHCR to pull the image (useful if the repo/image is private)
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            write_env() {
+                case "$2" in *'
+            '*) printf '%s\n' 'Cấu hình deployment phải nằm trên một dòng.' >&2; exit 1 ;; esac
+                escaped=$(printf '%s' "$2" | sed "s/'/\\\\'/g")
+                printf "%s='%s'\n" "$1" "$escaped" >> .env.next
+            }
             
-            # Pull latest images
-            docker pull $IMAGE_NAME:latest
-            docker pull $MIGRATOR_IMAGE
+            image_repository=$(printf '%s' "$IMAGE_REPOSITORY" | tr '[:upper:]' '[:lower:]')
+            api_image="$image_repository:sha-$DEPLOY_SHA"
+            migrator_image="$image_repository-migrator:sha-$DEPLOY_SHA"
+            evidence_directory="$HOME/.local/share/badmintonclub/reconciliation-evidence"
+            key_directory="$HOME/.local/share/badmintonclub/sepay-keys"
+            mkdir -p "$evidence_directory"
+            mkdir -p "$key_directory"
+            chmod 700 "$evidence_directory"
+            chmod 700 "$key_directory"
+            chmod 600 sports-venue-cb204-firebase-adminsdk-fbsvc-7f5ec12fb1.json
             
-            # Write env file for docker-compose securely using GitHub Secrets
-            cat <<EOF > .env
-            API_IMAGE=$IMAGE_NAME:latest
-            MIGRATOR_IMAGE=$MIGRATOR_IMAGE
-            DB_CONNECTION_STRING=${{ secrets.DB_CONNECTION_STRING }}
-            REDIS_CONNECTION_STRING=${{ secrets.REDIS_CONNECTION_STRING }}
-            JWT_ISSUER=${{ secrets.JWT_ISSUER }}
-            JWT_AUDIENCE=${{ secrets.JWT_AUDIENCE }}
-            JWT_SECRET=${{ secrets.JWT_SECRET }}
-            JWT_EXPIRE_MIN=${{ secrets.JWT_EXPIRE_MIN }}
-            RABBITMQ_HOST=${{ secrets.RABBITMQ_HOST }}
-            RABBITMQ_VHOST=${{ secrets.RABBITMQ_VHOST }}
-            RABBITMQ_PORT=${{ secrets.RABBITMQ_PORT }}
-            RABBITMQ_USER=${{ secrets.RABBITMQ_USER }}
-            RABBITMQ_PASS=${{ secrets.RABBITMQ_PASS }}
-            EOF
+            printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USER" --password-stdin
+            docker pull "$api_image"
+            docker pull "$migrator_image"
             
-            # Automatically run Migrations ONLY if there were changes in the Migrations folder
-            if [ "$RUN_MIGRATIONS" = "true" ]; then
-              echo "Changes detected in Migrations folder! Running database migrations automatically..."
-              docker compose run --rm migrator
-            else
-              echo "No changes detected in Migrations folder. Skipping migrations."
-            fi
+            : > .env.next
+            write_env API_IMAGE "$api_image"
+            write_env MIGRATOR_IMAGE "$migrator_image"
+            write_env RECONCILIATION_EVIDENCE_DIRECTORY "$evidence_directory"
+            write_env SEPAY_KEY_DIRECTORY "$key_directory"
+            export API_IMAGE="$api_image"
+            export MIGRATOR_IMAGE="$migrator_image"
+            export RECONCILIATION_EVIDENCE_DIRECTORY="$evidence_directory"
+            export SEPAY_KEY_DIRECTORY="$key_directory"
+            for name in DB_CONNECTION_STRING REDIS_CONNECTION_STRING JWT_ISSUER JWT_AUDIENCE JWT_SECRET JWT_EXPIRE_MIN RABBITMQ_HOST RABBITMQ_VHOST RABBITMQ_PORT RABBITMQ_USER RABBITMQ_PASS SETTLEMENT_WRITES_ENABLED SETTLEMENT_DISPATCH_ENABLED SETTLEMENT_PREVIEW_SIGNING_KEY RECONCILIATION_ENABLED RECONCILIATION_WRITES_ENABLED RECONCILIATION_DISPATCH_ENABLED; do
+                value=$(printenv "$name")
+                write_env "$name" "$value"
+            done
             
-            # Restart the API container
-            docker compose up -d --force-recreate
+            docker compose --env-file .env.next config --quiet
+            docker compose --env-file .env.next run --rm --no-deps -e Seeding__Enabled=false -e Migrations__VerifyOnly=false migrator
+            docker compose --env-file .env.next run --rm --no-deps -e Migrations__VerifyOnly=true migrator
+            if [ -f .env ]; then cp -p .env ".env.before-$DEPLOY_SHA"; fi
+            mv .env.next .env
+            docker compose up -d --no-deps --force-recreate api
             
-            # Clean up dangling images to save disk space
-            docker image prune -f
+            attempt=0
+            until curl --fail --silent --show-error http://127.0.0.1:8080/swagger/v1/swagger.json -o .uc18-swagger.json; do
+                attempt=$((attempt + 1))
+                [ "$attempt" -lt 30 ] || exit 1
+                sleep 2
+            done
+            grep -Fq '/webhooks/sepay/' .uc18-swagger.json
+            grep -Fq '/reconciliations' .uc18-swagger.json
+            printf '%s\n' 'Đã deploy API UC18 với schema đã chuẩn bị. Chưa xác nhận nghiệm thu SePay/FCM thực.'

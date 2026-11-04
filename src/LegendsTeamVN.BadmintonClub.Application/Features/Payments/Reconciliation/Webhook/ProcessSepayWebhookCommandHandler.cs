@@ -1,4 +1,5 @@
 using LegendsTeamVN.BadmintonClub.Application.DependencyInjection.Options;
+using LegendsTeamVN.BadmintonClub.Application.Abstractions;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Payments.Responses;
 using LegendsTeamVN.BadmintonClub.Domain.Entities;
 using LegendsTeamVN.BadmintonClub.Domain.Enums;
@@ -11,7 +12,7 @@ using Microsoft.Extensions.Options;
 
 namespace LegendsTeamVN.BadmintonClub.Application.Features.Payments.Reconciliation.Webhook;
 
-public sealed class ProcessSepayWebhookCommandHandler(IReconciliationRepository repository, TimeProvider clock,
+public sealed class ProcessSepayWebhookCommandHandler(IReconciliationRepository repository, ISepayWebhookCredentials credentials, TimeProvider clock,
     IOptionsMonitor<ReconciliationOptions> options, ILogger<ProcessSepayWebhookCommandHandler> logger)
     : ICommandHandler<ProcessSepayWebhookCommand, SepayWebhookResponse>
 {
@@ -20,13 +21,17 @@ public sealed class ProcessSepayWebhookCommandHandler(IReconciliationRepository 
         if (request.Verified is not { } verified)
             return Result.Failure<SepayWebhookResponse>(Error.Unauthorized("Reconciliation.Unverified", "Webhook chưa được xác thực."));
         if (!options.CurrentValue.Enabled || !options.CurrentValue.WritesEnabled) return SepayWebhookSecurityBehavior.Unavailable();
+        var currentCredential = await credentials.GetAsync(request.BankAccountId, ct);
+        if (currentCredential is null || currentCredential.ConnectionId != verified.ConnectionId ||
+            currentCredential.CompanyId != verified.CompanyId || currentCredential.Gateway != verified.Gateway)
+            return SepayWebhookSecurityBehavior.Unavailable();
         var evidence = verified.Evidence;
         await repository.LockProviderAsync(evidence.ProviderTransactionId, ct);
         await repository.LockReferenceAsync(evidence.ReferenceCode, ct);
-        var stored = await repository.FindProviderAsync(evidence.ProviderTransactionId, ct);
+        var stored = await repository.FindProviderAsync(evidence.ProviderTransactionId, verified.CompanyId, ct);
         if (stored is not null)
         {
-            if (stored.BankAccountId == request.BankAccountId &&
+            if (stored.ProviderCompanyId == verified.CompanyId && stored.BankAccountId == request.BankAccountId &&
                 PaymentReconciliationPolicy.Compare(evidence, stored.GetEvidence()) == PaymentEvidenceComparison.RETRY)
                 return Result.Success(new SepayWebhookResponse(true));
             logger.LogWarning("Xung đột bằng chứng webhook {Id}.", evidence.ProviderTransactionId);
@@ -36,7 +41,7 @@ public sealed class ProcessSepayWebhookCommandHandler(IReconciliationRepository 
         if (bank is null || PaymentReconciliationPolicy.CheckBank(bank, verified.Gateway, evidence) != PaymentReconciliationDecision.MATCHED)
             return Result.Failure<SepayWebhookResponse>(Error.Unauthorized("Reconciliation.BankBinding", "Tài khoản nhận đã thay đổi."));
         if (evidence.IsOutgoing) return Result.Success(new SepayWebhookResponse(true));
-        var transaction = BankTransaction.Receive(bank.Id, evidence);
+        var transaction = BankTransaction.Receive(bank.Id, evidence, verified.CompanyId);
         IReadOnlyList<BankTransaction> collisions = evidence.ReferenceCode is null ? [] : await repository.FindReferenceAsync(evidence.ReferenceCode, ct);
         if (transaction.HasReferenceCollision(collisions)) transaction.RequireManualCheck("REFERENCE_COLLISION");
         else

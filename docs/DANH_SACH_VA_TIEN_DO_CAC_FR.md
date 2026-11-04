@@ -30,7 +30,7 @@
 | **FR18** | Ghi nhận số cầu, chi phí sân và phụ phí thực tế | Hạch toán Vật tư & Sổ quỹ (F4) | BE kiểm chứng Đợt 5 ngày 30/10/2026; gói triển khai Đợt 6 đã chuẩn bị; FE/DB đích chưa triển khai | 4 API quyết toán |
 | **FR19** | Phân bổ chi phí theo rule và loại hội viên | Hạch toán Vật tư & Sổ quỹ (F4) | BE kiểm chứng Domain/API/transaction/Redis/outbox; xem báo cáo UC16 và runbook | 4 API quyết toán + API biểu phí |
 | **FR20** | Khởi tạo mã VietQR thanh toán nhúng sẵn tiền & mã duy nhất | Hạch toán Vật tư & Sổ quỹ (F4) | BE hoàn thiện, POC/decoder đạt; người dùng xác nhận hai app quét đúng; đã nối DB chung local và bàn giao FE | 8 route triển khai, Enabled/WritesEnabled bật trên API54796; FCM tắt, UC18 riêng |
-| **FR21** | Tiếp nhận biến động số dư ngân hàng để tự động xác nhận thanh toán | Hạch toán Vật tư & Sổ quỹ (F4) | Source/DB/HTTP/Redis sandbox đã đạt; chưa nghiệm thu provider thực hoặc áp DB chung | 4 API mới + mở rộng CASH UC16 |
+| **FR21** | Tiếp nhận biến động số dư ngân hàng để tự động xác nhận thanh toán | Hạch toán Vật tư & Sổ quỹ (F4) | Kiểm chứng tự động đạt; đã áp DB chung local, API54796 profile CASH; chưa áp DB server/deploy hoặc nghiệm thu provider thực | 4 API mới + mở rộng CASH UC16 |
 | **FR22** | Quản trị Sổ quỹ mở nội bộ minh bạch (Thu, Chi, Dư nợ) | Hạch toán Vật tư & Sổ quỹ (F4) | UC18 đã cung cấp dòng thu có nguồn; API quản trị/xem sổ quỹ đầy đủ chưa triển khai | 0 API UC19 |
 | **FR23** | Đánh giá tín nhiệm hai chiều (Điểm thành viên & Điểm CLB) | Đánh giá & Tín nhiệm (F5) | ⏳ *Sẵn sàng DB, cần thêm Endpoint* | 0 API |
 
@@ -251,12 +251,12 @@ Các phân hệ dưới đây đã có sẵn cấu trúc bảng và mô hình th
   - *Bảng dữ liệu đã có*: `session_fee`, `group_bank_account`.
   - *API canonical đã map*: GET `/api/v1/user/me/fees`, GET `.../{feeId}`, POST `.../{feeId}/cash-request`, POST `.../{feeId}/transfer-notice`; GET/PUT `/api/v1/clubs/{clubId}/payment-bank-account`. JWT/ownership cho cá nhân; BankManage/FeeManage thật theo DB.
   - POST `.../{feeId}/bank-transfer` cấp/lấy lại payload và snapshot; GET `.../{feeId}/qr.png` trả PNG có JWT/ownership/no-store, không ghi DB. Dùng Anpero `1.0.1-uc17.1` vá metadata một dòng được duyệt, không đổi mã/encoder. Chưa quét hai bank apps. Không có alias GET `/sessions/{sessionId}/fees/me/qr` theo dự kiến cũ.
-  - Migration `20261031155325_AddPersonalFeePayment` additive chỉ kiểm DB test riêng; chưa áp DB chung/production. Không tự đổi PaymentCode UC16, viết encoder hoặc thay thư viện. QRCoder là renderer, không chứng minh payload chuẩn.
+  - Migration `20261031155325_AddPersonalFeePayment` additive đã kiểm DB test riêng và áp DB chung local; DB server/production chưa được áp trong đợt này. Không tự đổi PaymentCode UC16, viết encoder hoặc thay thư viện. QRCoder là renderer, không chứng minh payload chuẩn.
   - *Giới hạn*: image round-trip tự động đạt, người dùng xác nhận hai bank apps quét đúng; UC18/ledger hoàn chỉnh/FE chưa được nghiệm thu. [Contract bàn giao FE UC17](Detail%20Design/UC17-BE.md). DB chung local đã migrate, REST bật; GET nghĩa vụ/receipt vẫn đọc khi Payments tắt. FCM tiền mặt vẫn tắt; không coi self-report là đã nhận tiền.
 - **FR21 - Đối soát và xác nhận thanh toán SePay**:
   - Đã có POST `/api/v1/webhooks/sepay/{bankAccountId}`, GET list/detail và POST confirm dưới `/api/v1/clubs/{groupId}/reconciliations`; mở rộng CASH pay UC16 với ledger/Notification/Outbox cùng transaction.
   - HMAC raw bytes/timestamp, bank binding, Redis và DB locks/unique nguồn; retry/collision, exact-match và manual có audit. Thiếu/thừa tiền giữ MANUAL_CHECK; không cộng dồn/xóa nợ/hoàn tiền trong v1.
-  - Source và sandbox có bằng chứng tại [UC18-BE](Detail%20Design/UC18-BE.md). Chưa bật Live, chưa áp migration DB chung hoặc xác minh company/gateway và request Test Mode thực. Cờ Reconciliation mặc định false.
+  - Source, kiểm chứng tự động và rollout DB chung local có bằng chứng tại [UC18-BE](Detail%20Design/UC18-BE.md). Local đã tới migration `20261104074142_AddPaymentReconciliation`, API54796 profile CASH; dữ liệu cũ 53 bảng giữ nguyên. Chưa bật Live, chưa áp DB server/deploy hoặc xác minh company/gateway và request Test Mode thực. Cờ options mặc định false; Development local bật WritesEnabled, webhook/dispatch tắt.
 - **FR22 - Quản trị Sổ quỹ mở nội bộ minh bạch**:
   - *Mục tiêu*: Công khai minh bạch dòng tiền thu/chi, số dư quỹ khả dụng và danh sách người còn nợ tiền cho toàn thể hội viên theo dõi; cho phép thủ quỹ tạo phiếu thu/chi ngoài sân.
   - *Bảng dữ liệu đã có*: `group_ledger`.

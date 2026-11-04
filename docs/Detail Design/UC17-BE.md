@@ -1,6 +1,6 @@
 # UC17 — Bàn giao tích hợp FE
 
-> Cập nhật liên quan 04/11/2026: UC18 đã có source và sandbox, xem [UC18-BE](UC18-BE.md). CASH pay nay ghi ledger/Notification/Outbox nguyên tử và cần Reconciliation.WritesEnabled; tự báo chuyển khoản vẫn UNPAID. Phần mô tả UC18 chưa triển khai ngày 01/11 bên dưới là lịch sử, chưa có rollout UC18 lên DB chung hoặc nghiệm thu SePay thực.
+> Cập nhật liên quan 04/11/2026: UC18 đã có source, kiểm chứng tự động và áp migration lên DB chung local BadmintonClub; API54796 dùng profile CASH, xem [UC18-BE](UC18-BE.md). CASH pay nay ghi ledger/Notification/Outbox nguyên tử và cần Reconciliation.WritesEnabled; tự báo chuyển khoản vẫn UNPAID. Phần mô tả UC18 chưa triển khai ngày 01/11 bên dưới là lịch sử. Chưa áp DB server/deploy hoặc nghiệm thu SePay thực; webhook và dispatch vẫn tắt.
 
 Phạm vi: khoản đóng cá nhân, chi tiết phí sau UC16, khởi tạo VietQR chuyển khoản, tự báo chờ đối soát, yêu cầu xác nhận tiền mặt và biên lai. Hợp đồng dưới đây theo code BE hiện tại, cập nhật ngày 01/11/2026. API chính local đã dùng DB chung và bật UC17; UC18 chưa triển khai, không tự xác nhận chuyển khoản thành PAID.
 

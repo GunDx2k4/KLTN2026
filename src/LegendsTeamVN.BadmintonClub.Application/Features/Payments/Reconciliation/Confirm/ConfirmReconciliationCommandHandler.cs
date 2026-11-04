@@ -1,4 +1,5 @@
 using LegendsTeamVN.BadmintonClub.Application.DependencyInjection.Options;
+using LegendsTeamVN.BadmintonClub.Application.Abstractions;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Payments.Responses;
 using LegendsTeamVN.BadmintonClub.Domain.Entities;
 using LegendsTeamVN.BadmintonClub.Domain.Enums;
@@ -25,7 +26,7 @@ public sealed class ConfirmReconciliationCommandHandler(IReconciliationRepositor
         if (transaction?.BankAccountId is not Guid bankId)
             return Result.Failure<ReconciliationResponse>(Error.NotFound("Reconciliation.NotFound", "Không tìm thấy giao dịch."));
         var bank = await repository.GetBankAsync(bankId, ct);
-        if (bank is null || !options.CurrentValue.Banks.TryGetValue(bankId, out var credential))
+        if (bank is null || string.IsNullOrWhiteSpace(transaction.Gateway))
             return Conflict("BankUnavailable", "Chưa xác minh được ngân hàng của giao dịch.");
         var target = await repository.LoadForConfirmationAsync(request.GroupId, request.FeeId, transaction.Id, transaction.ReferenceCode, ct);
         if (target is not { Transaction: { } locked } found)
@@ -37,7 +38,7 @@ public sealed class ConfirmReconciliationCommandHandler(IReconciliationRepositor
             return locked.FeeId == request.FeeId ? Result.Success(ReconciliationResponse.From(locked)) : Conflict("AlreadyMatched", "Giao dịch đã liên kết khoản thu khác.");
         if (locked.ReferenceCode is string reference && locked.HasReferenceCollision(await repository.FindReferenceAsync(reference, ct)))
             return Conflict("ReferenceCollision", "Reference có nhiều bằng chứng, chưa thể xác nhận.");
-        var decision = locked.Confirm(found.Fee, found.Session, bank, credential.Gateway, clock.GetUtcNow().UtcDateTime, actor, request.Reason);
+        var decision = locked.Confirm(found.Fee, found.Session, bank, transaction.Gateway, clock.GetUtcNow().UtcDateTime, actor, request.Reason);
         if (decision != PaymentReconciliationDecision.MATCHED)
             return Conflict(decision.ToString(), "Bằng chứng chưa đủ điều kiện xác nhận khoản thu.");
         repository.AddLedger(GroupLedger.CreateSessionFeeReceipt(found.Session, found.Fee, locked));

@@ -31,7 +31,7 @@ public sealed class ReconciliationIntegrationTheoryAttribute : TheoryAttribute
 internal sealed class ReconciliationTestDatabase : IAsyncDisposable
 {
     public const string Baseline = "20261103010523_AddSessionAddressAndCoordinates";
-    public const string Latest = "20261104074142_AddPaymentReconciliation";
+    public const string Latest = "20261104155653_AddClubSepayOAuth";
     private readonly string adminConnection;
     private readonly string databaseName = "uc18_test_" + Guid.NewGuid().ToString("N");
     private bool created;

@@ -233,7 +233,7 @@ public sealed class PaymentReconciliationTransactionTests
             await using var tx = await db.Database.BeginTransactionAsync();
             var repository = new ReconciliationRepository(db);
             await repository.LockReferenceAsync("REF-123", default);
-            if (await repository.FindProviderAsync(123, default) is null)
+            if (await repository.FindProviderAsync(123, null, default) is null)
                 await Confirm(db, ids.Group, ids.Fee, ids.Bank);
             await tx.CommitAsync();
         }
