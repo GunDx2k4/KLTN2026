@@ -9,7 +9,15 @@ public class GroupLedgerConfiguration : IEntityTypeConfiguration<GroupLedger>
 {
     public void Configure(EntityTypeBuilder<GroupLedger> builder)
     {
-        builder.ToTable("group_ledger");
+        builder.ToTable("group_ledger", table => table.HasCheckConstraint("ck_group_ledger_uc18_source",
+            "(fee_id IS NULL AND bank_transaction_id IS NULL) OR (fee_id IS NOT NULL AND id_session IS NOT NULL AND amount > 0 AND transaction_type = 'INFLOW' AND category = 'SESSION_FEE')"));
+
+        builder.Property(l => l.FeeId).HasColumnName("fee_id");
+        builder.Property(l => l.BankTransactionId).HasColumnName("bank_transaction_id");
+        builder.HasIndex(l => l.FeeId).IsUnique().HasFilter("fee_id IS NOT NULL");
+        builder.HasIndex(l => l.BankTransactionId).IsUnique().HasFilter("bank_transaction_id IS NOT NULL");
+        builder.HasOne<SessionFee>().WithMany().HasForeignKey(l => l.FeeId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<BankTransaction>().WithMany().HasForeignKey(l => l.BankTransactionId).OnDelete(DeleteBehavior.Restrict);
 
         builder.HasKey(l => l.Id);
         builder.Property(l => l.Id)

@@ -1,5 +1,7 @@
 # 📖 Tài Liệu Đặc Tả Toàn Diện API & Kế Hoạch Tích Hợp Mobile (API Specification & Mobile Integration Plan)
 
+> **UC18/FR21 cập nhật 04/11/2026:** Backend đã có webhook SePay, list/detail/manual và CASH ghi ledger/thông báo nguyên tử; kiểm chứng source/sandbox, chưa áp DB chung hoặc nghiệm thu SePay thực. Hợp đồng chính thức, mã lỗi, cấu hình và rollout/rollback tại [UC18-BE](Detail%20Design/UC18-BE.md). Các mốc UC17 ngày 01/11 bên dưới là lịch sử triển khai UC17, không phải trạng thái UC18 hiện tại.
+
 > **Dự án**: Hệ thống Quản lý Nhóm Cầu lông Phong trào (**LegendsTeamVN.BadmintonClub**)  
 > **Phiên bản tài liệu**: 2.1 (Cập nhật chuẩn hóa CQRS, Swagger Tags & Đặc tả chi tiết từng FR)  
 > **Ngày cập nhật**: 14/10/2026  
@@ -1471,3 +1473,19 @@ API pay UC16 cũ chỉ cho người có FeeManage thật xác nhận CASH; BANK_
 `paymentInstructions` gồm `{ payload, bank: { bankAccountId, bankBin, bankName, accountNumber, accountHolder }, imagePath }`. imagePath tương đối `/api/v1/user/me/fees/{feeId}/qr.png`. Flutter dùng HTTP client ghép base URL với imagePath, gửi `Authorization: Bearer <token>`, kiểm 200 và `image/png` rồi đưa response bytes vào `Image.memory`. Không gắn JWT vào query string hoặc dùng URL public; 401/404/409 là lỗi JSON, không đưa vào Image.memory. WritesEnabled=false vẫn cho lấy ảnh đã cấp khi Enabled=true; Enabled=false ẩn instructions/ảnh nhưng giữ GET lịch sử và receipt. GET `no-store` không thu hồi được ảnh người dùng đã chụp/lưu.
 
 Ba cờ Payments.Enabled/WritesEnabled/DispatchEnabled mặc định false trong options. Development local hiện Enabled/WritesEnabled=true, DispatchEnabled=false; DB chung BadmintonClub:5432 đã có migration 20261031155325_AddPersonalFeePayment. Seeding:Enabled=false để restart API không chạy demo seeder. Bank cũ chưa có BIN cần người có BankManage cấu hình, không tự backfill/copy bank UAT. Thu tiền/đối soát ngân hàng hoàn chỉnh vẫn thuộc UC18; chưa deploy môi trường production bên ngoài. Không chạy Migrator worker/seeder hoặc bộ test phá dữ liệu trên DB chung.
+
+## UC18/FR21 — API đối soát và xác nhận thanh toán
+
+| Method | Route | Quyền / kết quả |
+|---|---|---|
+| POST | `/api/v1/webhooks/sepay/{bankAccountId}` | HMAC riêng bank, không JWT; ACK 200 success=true sau commit/retry bền vững |
+| GET | `/api/v1/clubs/{groupId}/reconciliations` | SessionOperations + FeeManage thực; status, page, pageSize tối đa 100 |
+| GET | `/api/v1/clubs/{groupId}/reconciliations/{transactionId}` | Cùng quyền, đúng bank/group |
+| POST | `/api/v1/clubs/{groupId}/reconciliations/{transactionId}/confirm` | Cùng quyền; body feeId/reason, lý do bắt buộc; manual không bỏ qua điều kiện tiền/bank/fee |
+| POST | `/api/v1/sessions/{sessionId}/settlement/members/{userId}/pay` | CASH UC16; một PAID/ledger/Notification/Outbox, giữ response cũ |
+
+Webhook JSON UTF-8 tối đa 65.536 byte; header X-SePay-Signature và X-SePay-Timestamp. Không dùng bearer JWT người chơi thay HMAC, code đã trích hoặc accumulated thay content/transferAmount. Sai chữ ký/bank 401, payload 400, collision ID 409, quá lớn 413, sai content type 415, lỗi tạm thời/cờ tắt 503. Không ACK trước lưu.
+
+Manual body: `{"feeId":"<uuid>","reason":"Đã đối chiếu người nộp"}`. Detail trả transactionId/providerTransactionId/bankAccountId/feeId/referenceCode/amountReceived/transferContent/transactionTime/status/reasonCode/reconciledBy/reconciledAt/note; không có secret. List trả items/total/page/pageSize, không bọc data. Thời gian UTC, tiền decimal VND. GET no-store và vẫn kiểm quyền khi cờ tắt.
+
+CASH/manual chỉ cần Reconciliation.WritesEnabled; webhook cần cả Enabled và WritesEnabled. DispatchEnabled chỉ gửi sau commit, không chặn lưu thông báo. Giữ guard Payments UC17; không chuyển BANK_TRANSFER sang CASH. PAID cũ không tự backfill. Chi tiết tại [UC18-BE](Detail%20Design/UC18-BE.md); schema ở [thiết kế CSDL](04_THIET_KE_CO_SO_DU_LIEU_3NF.md).

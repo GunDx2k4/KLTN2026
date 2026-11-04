@@ -71,7 +71,10 @@ erDiagram
     badminton_session ||--o{ group_ledger : "kết chuyển thu chi"
 
     session_match ||--o{ match_player : "gồm 4 người chơi"
-    session_fee ||--o| bank_transaction : "đối soát tự động"
+    session_fee o|--o{ bank_transaction : "liên kết bằng chứng"
+    group_bank_account o|--o{ bank_transaction : "tài khoản nhận đã xác thực"
+    session_fee o|--o| group_ledger : "nguồn thu UC18 duy nhất"
+    bank_transaction o|--o| group_ledger : "nguồn ngân hàng duy nhất"
 ```
 
 ---
@@ -444,19 +447,31 @@ Lưu hóa đơn thu tiền cá nhân của từng người chơi sau khi chốt 
 
 ---
 
-### 3.21. Bảng `bank_transaction` (Giao Dịch Ngân Hàng Đối Soát)
-Lưu log giao dịch Webhook từ cổng thanh toán SePay.
+### 3.21. Bảng `bank_transaction` (Giao dịch ngân hàng đối soát)
 
-| Tên Cột | Kiểu Dữ Liệu | Ràng Buộc | Giá Trị Mặc Định | Mô Tả Nghiệp Vụ |
-| :--- | :--- | :--- | :--- | :--- |
-| `id_transaction` | UUID | PK, NOT NULL | `gen_random_uuid()` | Khóa chính giao dịch ngân hàng |
-| `id_fee` | UUID | FK, NULL | - | Tham chiếu `session_fee.id_fee` |
-| `recipient_account`| VARCHAR(50)| NOT NULL | - | Số tài khoản ngân hàng thụ hưởng |
-| `reference_code` | VARCHAR(100) | UNIQUE, NOT NULL | - | Mã tham chiếu sao kê ngân hàng |
-| `amount_received`| DECIMAL(18,2)| NOT NULL | - | Số tiền thực nhận được |
-| `transfer_content`| TEXT | NOT NULL | - | Nội dung chuyển khoản thực tế từ khách |
-| `transaction_time`| TIMESTAMP | NOT NULL | - | Thời gian giao dịch phía ngân hàng |
-| `reconciliation_status`| VARCHAR(30)| NOT NULL | `'MATCHED'` | Trạng thái: `MATCHED` (Khớp tự động), `MANUAL_CHECK` |
+Schema source UC18 theo migration `20261104074142_AddPaymentReconciliation`; chỉ kiểm trên DB riêng, chưa xác nhận đã áp DB chung.
+
+| Cột | Kiểu PostgreSQL | Ràng buộc / nghĩa |
+|---|---|---|
+| `id_transaction` | uuid | PK, Guid.NewGuid() tại Domain |
+| `id_fee` | uuid | Nullable, FK session_fee; chỉ liên kết khi xác nhận hợp lệ |
+| `recipient_account` | varchar(100) | NOT NULL; giữ số 0 đầu |
+| `reference_code` | varchar(100) | Nullable; index tra cứu, không còn unique toàn cục |
+| `amount_received` | numeric(18,2) | NOT NULL; mới nhận từ provider phải dương và nguyên VND |
+| `transfer_content` | text | NOT NULL; nội dung gốc, không sửa để đoán mã |
+| `transaction_time` | timestamp with time zone | NOT NULL; chuyển từ giờ Việt Nam sang UTC |
+| `reconciliation_status` | varchar(50) | MATCHED hoặc MANUAL_CHECK; default MANUAL_CHECK cho source mới |
+| `provider_transaction_id` | bigint | Nullable cho legacy; unique khi khác null, kể cả soft-delete; phạm vi một company SePay |
+| `bank_account_id` | uuid | Nullable cho legacy; FK RESTRICT group_bank_account |
+| `gateway` | varchar(100) | Tên gateway từ bằng chứng |
+| `sub_account` | varchar(100) | Bằng chứng VA; v1 không tự đối soát subAccount không rỗng |
+| `transfer_type` | varchar(3) | in/out |
+| `reason_code` | varchar(100) | Lý do chờ kiểm tra |
+| `reconciled_by` | uuid | Nullable; FK RESTRICT app_user, người xác nhận manual |
+| `reconciled_at` | timestamp with time zone | Thời điểm xác nhận UTC |
+| `reconciliation_note` | varchar(2000) | Lý do manual, không dùng để sửa số tiền |
+
+CHECK `ck_bank_transaction_uc18` bảo vệ dòng có provider ID: ID dương, bank/gateway/subAccount/chiều tiền đầy đủ, tiền dương nguyên VND; MATCHED phải có fee và thời điểm; audit manual đủ người/lý do. Dòng legacy giữ metadata null, không suy liên kết hoặc đổi tiền cũ. Index `(bank_account_id, reference_code)` và reference phục vụ lookup; collision phải kiểm trong transaction có advisory lock. Preflight trước đổi unique reference; Down guard chặn khi có dữ liệu UC18 hoặc reference null/trùng.
 
 ---
 
@@ -465,15 +480,19 @@ Lưu vết toàn bộ dòng tiền thu chi của câu lạc bộ.
 
 | Tên Cột | Kiểu Dữ Liệu | Ràng Buộc | Giá Trị Mặc Định | Mô Tả Nghiệp Vụ |
 | :--- | :--- | :--- | :--- | :--- |
-| `id_ledger` | UUID | PK, NOT NULL | `gen_random_uuid()` | Khóa chính giao dịch quỹ |
+| `id_ledger` | UUID | PK, NOT NULL | Guid.NewGuid() tại Domain | Khóa chính giao dịch quỹ |
 | `id_group` | UUID | FK, NOT NULL | - | Tham chiếu `club_group.id_group` |
 | `id_session` | UUID | FK, NULL | - | Tham chiếu buổi chơi nếu kết chuyển từ buổi |
 | `actor_id` | UUID | FK, NOT NULL | - | Người lập phiếu / Người nộp tiền (`app_user`) |
-| `transaction_type`| VARCHAR(20) | NOT NULL | - | Loại: `INFLOW` (Tiền vào), `OUTFLOW` (Tiền ra) |
+| `transaction_type`| VARCHAR(50) | NOT NULL | - | Loại: `INFLOW` (Tiền vào), `OUTFLOW` (Tiền ra) |
 | `category` | VARCHAR(50) | NOT NULL | - | `SESSION_FEE`, `COURT_RENT`, `SHUTTLE_EXPENSE`, `MONTHLY_FUND`, `OTHER` |
 | `amount` | DECIMAL(18,2)| NOT NULL | - | Số tiền giao dịch (`> 0`) |
 | `description` | TEXT | NOT NULL | - | Nội dung ghi chú thu chi |
-| `created_at` | TIMESTAMP | NOT NULL | `now()` | Thời điểm ghi sổ quỹ |
+| `created_at` | TIMESTAMP WITH TIME ZONE | NOT NULL | `now()` | Thời điểm ghi sổ quỹ UTC |
+
+UC18 bổ sung `fee_id` UUID nullable, FK RESTRICT session_fee và `bank_transaction_id` UUID nullable, FK RESTRICT bank_transaction. Mỗi cột có unique index khi khác null, không loại soft-delete. CASH chỉ có FeeId; ngân hàng có cả hai nguồn; legacy không backfill. CHECK nguồn mới bắt buộc fee/session, Amount > 0 và INFLOW/SESSION_FEE. Không liên kết bank source khi FeeId null.
+
+ActorId auto là người nộp theo fee; CASH/manual là người xác nhận. Không tạo UUID hệ thống giả. Dữ liệu tiền MANUAL_CHECK chưa ghi vào quỹ xác nhận; không coi phần nguồn thu UC18 là toàn bộ UC19/FR22.
 
 ---
 

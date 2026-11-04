@@ -24,6 +24,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IDeviceRepository, DeviceRepository>();
         services.AddScoped<ISessionRepository, SessionRepository>();
         services.AddScoped<IPaymentRepository, PaymentRepository>();
+        services.AddScoped<IReconciliationRepository, ReconciliationRepository>();
         services.AddScoped<IOutboxRepository, OutboxRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<IBookingRepository, BookingRepository>();

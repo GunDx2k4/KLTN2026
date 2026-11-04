@@ -72,7 +72,9 @@ graph TD
 - UC16 phát hành Amount/breakdown bất biến và mã G04 29 ký tự, ví dụ `CLB 0123456789AB FEDCBA987654`; UC17 không tính lại tiền hoặc đổi mã.
 - UC17 sinh raw payload qua adapter Anpero.Payment.QrPayload và PNG bằng QRCoder tại BE, snapshot một bank active cùng yêu cầu. Cập nhật 01/11/2026: source upstream được pin commit, giữ license và vá một dòng metadata theo phê duyệt; bản riêng `1.0.1-uc17.1` nằm tại src/ThirdParty. POC/decoder ảnh độc lập đạt; generator runtime đã tích hợp. Chưa nghiệm thu quét hai ứng dụng ngân hàng hoặc bật sử dụng thật.
 - Phần cá nhân/cash/self-report đã kiểm trên DB riêng: transaction, DB locks, notification/outbox và worker gửi sau commit; tự báo chỉ là UNPAID + chờ đối soát. API pay cũ có guard chống đổi BANK_TRANSFER UC17 thành PAID/CASH. GET nghĩa vụ/receipt vẫn đọc khi Payments tắt.
-- Mục tiêu UC18: nhận webhook xác thực, khớp bằng chứng ngân hàng, ghi PAID/bank_transaction/ledger nguyên tử và thông báo. Chưa được triển khai/nghiệm thu bởi test writer mô phỏng UC17. Cash PAID hiện hữu cũng chưa đồng nghĩa hoàn thiện sổ quỹ. [Contract và rollback UC17](Detail%20Design/UC17-BE.md).
+- UC18/FR21 source đã triển khai và kiểm chứng sandbox ngày 04/11/2026: endpoint ISender → security HMAC/raw body/bank → Redis lock → UnitOfWorkBehavior → sealed handler gọi Domain policy/entity và repository. Domain events tạo Notification/Outbox trước Save/Commit; ACK sau commit, worker FCM sau commit. CASH/manual dùng cùng bất biến ledger nguồn duy nhất. [API và vận hành UC18](Detail%20Design/UC18-BE.md).
+- HMAC verifier/Redis/archive ở Infrastructure; SQL/EF/lock ở Persistence; nghiệp vụ exact-match ở Domain. Bằng chứng sai bank binding được cô lập ngoài UoW, không tạo inbox hoặc lộ sang danh sách CLB theo URL. Group guard tài chính dùng FOR NO KEY UPDATE, tương thích FK KEY SHARE khi chèn ledger; không đảo thứ tự session/fee.
+- Ba cờ Reconciliation mặc định false; cấu hình giữ CASH là WritesEnabled=true/Enabled=false/DispatchEnabled=false sau triển khai đúng schema/binary. Chưa áp DB chung, chưa nghiệm thu SePay Test Mode/company/gateway hoặc FCM thật; không lấy webhook mock/collection local làm bằng chứng Live.
 
 ---
 
@@ -116,7 +118,7 @@ graph TD
     subgraph Infrastructure ["Infrastructure Layer (External Services)"]
         RedisServ["RedisDistributedLockService, RedisCacheService"]
         FCMServ["FirebaseNotificationService"]
-        SePayServ["SePayWebhookService"]
+        SePayServ["SepayWebhookVerifier / RedisReconciliationLock"]
     end
 
     Presentation --> Application

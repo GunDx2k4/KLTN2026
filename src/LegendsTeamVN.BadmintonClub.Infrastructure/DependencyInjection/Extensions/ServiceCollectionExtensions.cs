@@ -25,6 +25,10 @@ public static class ServiceCollectionExtensions
         services.AddCoreInfrastructure(configuration);
         services.Configure<SettlementOptions>(configuration.GetSection(SettlementOptions.SectionName));
         services.Configure<PaymentsOptions>(configuration.GetSection(PaymentsOptions.SectionName));
+        services.AddSingleton<ISepayWebhookVerifier, Payments.SepayWebhookVerifier>();
+        services.AddSingleton<IWebhookEvidenceArchive, Payments.WebhookEvidenceArchive>();
+        services.AddScoped<IReconciliationLock, Payments.RedisReconciliationLock>();
+        services.AddHostedService<Payments.ReconciliationNotificationWorker>();
         services.AddSingleton<IVietQrImageRenderer, Payments.VietQrImageRenderer>();
         services.AddSingleton<IVietQrPayloadGenerator, Payments.VietQrPayloadGenerator>();
         services.AddHostedService<Payments.CashPaymentNotificationWorker>();

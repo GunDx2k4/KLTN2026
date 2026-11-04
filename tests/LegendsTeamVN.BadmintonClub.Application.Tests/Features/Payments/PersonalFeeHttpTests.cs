@@ -40,7 +40,7 @@ public sealed partial class PersonalFeeHttpTests
 {
     private sealed class Fixture : IAsyncDisposable
     {
-        public PaymentTestDatabase Database { get; private set; } = null!;
+        public ReconciliationTestDatabase Database { get; private set; } = null!;
         public HttpClient Client { get; private set; } = null!;
         public PaymentsOptions Flags { get; } = new();
         public bool RejectCommit { get; set; }
@@ -55,7 +55,7 @@ public sealed partial class PersonalFeeHttpTests
 
         public static async Task<Fixture> Create()
         {
-            var f = new Fixture { Database = await PaymentTestDatabase.Create() };
+            var f = new Fixture { Database = await ReconciliationTestDatabase.Create() };
             await using (var db = f.Database.Open())
             {
                 var ids = await PaymentTestDatabase.Seed(db);
@@ -75,6 +75,8 @@ public sealed partial class PersonalFeeHttpTests
             builder.Services.AddScoped(sp => f.Database.Open(sp.GetRequiredService<IPublisher>(), new RejectPaymentCommitInterceptor(() => f.RejectCommit)));
             builder.Services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<BadmintonDbContext>());
             builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();
+            builder.Services.AddScoped<IReconciliationRepository, ReconciliationRepository>();
+            builder.Services.AddSingleton<IOptionsMonitor<ReconciliationOptions>>(new LegendsTeamVN.BadmintonClub.Application.Tests.Common.TestOptionsMonitor<ReconciliationOptions>(new() { WritesEnabled = true }));
             builder.Services.AddScoped<ISessionRepository, SessionRepository>();
             builder.Services.AddScoped<INotificationRepository, NotificationRepository>();
             builder.Services.AddScoped<IOutboxRepository, OutboxRepository>();
@@ -160,7 +162,7 @@ public sealed partial class PersonalFeeHttpTests
         }
     }
 
-    [PaymentIntegrationTheory]
+    [ReconciliationIntegrationTheory]
     [InlineData("expired")]
     [InlineData("signature")]
     [InlineData("issuer")]
@@ -172,7 +174,7 @@ public sealed partial class PersonalFeeHttpTests
         Assert.Equal(HttpStatusCode.Unauthorized, (await f.Client.GetAsync(f.FeePath + "/qr.png")).StatusCode);
     }
 
-    [PaymentIntegrationFact]
+    [ReconciliationIntegrationFact]
     public async Task DisabledPaymentsKeepGuestHistoryAndReceiptReadableWithoutWrites()
     {
         await using var f = await Fixture.Create();
@@ -201,7 +203,7 @@ public sealed partial class PersonalFeeHttpTests
         Assert.Equal("CASH", paid.Receipt.Method);
     }
 
-    [PaymentIntegrationFact]
+    [ReconciliationIntegrationFact]
     public async Task OwnershipCannotBeExpandedByAdminOrFiltersAndValidationRejectsHugePages()
     {
         await using var f = await Fixture.Create();
@@ -216,7 +218,7 @@ public sealed partial class PersonalFeeHttpTests
         Assert.Equal(HttpStatusCode.NotFound, (await f.Client.GetAsync($"/api/v1/user/me/fees/{Guid.NewGuid()}")).StatusCode);
     }
 
-    [PaymentIntegrationFact]
+    [ReconciliationIntegrationFact]
     public async Task BankPermissionIsCheckedInDatabaseAndRotationPreservesOldSecret()
     {
         await using var f = await Fixture.Create();
@@ -254,7 +256,7 @@ public sealed partial class PersonalFeeHttpTests
         Assert.Equal(HttpStatusCode.OK, (await f.Client.GetAsync(f.BankPath)).StatusCode);
     }
 
-    [PaymentIntegrationTheory]
+    [ReconciliationIntegrationTheory]
     [InlineData(ClubMemberStatus.LEAVED)]
     [InlineData(ClubMemberStatus.BANNED)]
     public async Task LeavingOrBeingBannedDoesNotHideOwnFinancialObligation(ClubMemberStatus status)
@@ -271,7 +273,7 @@ public sealed partial class PersonalFeeHttpTests
         Assert.Equal(HttpStatusCode.Forbidden, (await f.Client.GetAsync(f.BankPath)).StatusCode);
     }
 
-    [PaymentIntegrationFact]
+    [ReconciliationIntegrationFact]
     public async Task DeletedSessionRemainsReadableButDisabledUserDoesNot()
     {
         await using var f = await Fixture.Create();
@@ -293,7 +295,7 @@ public sealed partial class PersonalFeeHttpTests
         Assert.Equal(HttpStatusCode.NotFound, (await f.Client.GetAsync(f.FeePath)).StatusCode);
     }
 
-    [PaymentIntegrationFact]
+    [ReconciliationIntegrationFact]
     public async Task ConcurrentBankWritesSerializeAndInvalidInputDoesNotChangeConfiguration()
     {
         await using var f = await Fixture.Create();
@@ -311,7 +313,7 @@ public sealed partial class PersonalFeeHttpTests
         Assert.Empty(await db.Notifications.ToListAsync());
     }
 
-    [PaymentIntegrationFact]
+    [ReconciliationIntegrationFact]
     public async Task HeldGroupLockReturnsBusinessConflictAndLeavesBankUnchanged()
     {
         await using var f = await Fixture.Create();
@@ -328,7 +330,7 @@ public sealed partial class PersonalFeeHttpTests
         Assert.Empty(await db.GroupBankAccounts.ToListAsync());
     }
 
-    [PaymentIntegrationFact]
+    [ReconciliationIntegrationFact]
     public async Task PaidLegacyReceiptDoesNotInventMissingMetadataOrBreakdown()
     {
         await using var f = await Fixture.Create();
