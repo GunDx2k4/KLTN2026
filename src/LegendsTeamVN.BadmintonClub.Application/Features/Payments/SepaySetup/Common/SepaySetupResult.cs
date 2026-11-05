@@ -2,7 +2,7 @@ using LegendsTeamVN.BadmintonClub.Application.Abstractions;
 using LegendsTeamVN.Core.Identity.Abstractions;
 using LegendsTeamVN.Core.Utilities.Results;
 
-namespace LegendsTeamVN.BadmintonClub.Application.Features.Payments.SepaySetup;
+namespace LegendsTeamVN.BadmintonClub.Application.Features.Payments.SepaySetup.Common;
 
 internal static class SepaySetupResult
 {

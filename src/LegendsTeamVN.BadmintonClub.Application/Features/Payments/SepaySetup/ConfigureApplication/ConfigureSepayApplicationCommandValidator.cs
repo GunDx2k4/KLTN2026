@@ -1,7 +1,7 @@
 using FluentValidation;
 using LegendsTeamVN.BadmintonClub.Domain.Entities;
 
-namespace LegendsTeamVN.BadmintonClub.Application.Features.Payments.SepaySetup;
+namespace LegendsTeamVN.BadmintonClub.Application.Features.Payments.SepaySetup.ConfigureApplication;
 
 public sealed class ConfigureSepayApplicationCommandValidator : AbstractValidator<ConfigureSepayApplicationCommand>
 {

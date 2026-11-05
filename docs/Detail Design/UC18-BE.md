@@ -179,7 +179,15 @@ FE web phải có route hash `/club/{groupId}/sepay` theo URL callback. Đọc t
 
 Tắt nút khi request đang chạy. Sau timeout của complete, đọc status trước: ticket có thể đã tiêu thụ và DB đã lưu. Không phát authorize mới chỉ vì response bị mất; AUTHORIZED/PROVISIONING/CONNECTED đã lưu có thể tiếp tục đúng bước. Lỗi callback có thể là Problem Details ở BE thay vì redirect FE; bắt đầu lại OAuth nếu state đã hết hạn/đã dùng.
 
-Model chuẩn: [SepaySetupResponse](../../src/LegendsTeamVN.BadmintonClub.Application/DTOs/Payments/Responses/SepaySetupResponse.cs), [ConfigureSepayApplicationRequest](../../src/LegendsTeamVN.BadmintonClub.Application/DTOs/Payments/Requests/ConfigureSepayApplicationRequest.cs), [SepaySetupEndpoint](../../src/LegendsTeamVN.BadmintonClub.Presentation/Endpoints/SepaySetupEndpoint.cs).
+Model chuẩn: [SepaySetupResponse](../../src/LegendsTeamVN.BadmintonClub.Application/DTOs/Payments/Responses/SepaySetupResponse.cs), [ConfigureSepayApplicationRequest](../../src/LegendsTeamVN.BadmintonClub.Application/DTOs/Payments/Requests/ConfigureSepayApplicationRequest.cs), [SepayEndpoint](../../src/LegendsTeamVN.BadmintonClub.Presentation/Endpoints/SepayEndpoint.cs).
+
+### 1.3. Tổ chức mã nguồn
+
+Presentation còn hai file cho UC18: `SepayEndpoint.cs` chứa ba class SepaySetupEndpoint/ClubSepayEndpoint/SepayWebhookEndpoint, `ReconciliationEndpoint.cs` giữ list/detail/manual riêng. Discovery đăng ký theo class, không theo tên file; URL, Swagger name/tag, quyền Admin/BankManage/FeeManage và HMAC giữ nguyên.
+
+Application `Features/Payments/SepaySetup` chia theo use case: GetApplication, ConfigureApplication, GetConnection, ListConnections, StartConnection, CompleteAuthorization, CompleteConnection, ListBankAccounts, SelectBank, ActivateConnection, DisconnectConnection và Common. Mỗi use case có file command/query và handler riêng; validator cùng ConfigureApplication, helper SepaySetupResult ở Common. Namespace theo thư mục, không giữ alias tên cũ.
+
+Handlers chỉ điều phối qua ISepaySetupService; lớp Application không tham chiếu trực tiếp Infrastructure/Persistence. Các request thiết lập OAuth tiếp tục dùng IRequest như trước để không tự bọc I/O provider bằng UoW tài chính. Việc chia thư mục là tổ chức Vertical Slices, không thay đổi luồng nghiệp vụ hoặc cấu trúc DB.
 
 ## 2. Luồng thanh toán theo BE
 
