@@ -11,6 +11,7 @@ public interface ISepaySetupService
     Task<IReadOnlyList<SepayConnectionResponse>> ListConnectionsAsync(Guid groupId, Guid actor, CancellationToken ct);
     Task<SepayAuthorizationResponse> StartAsync(Guid groupId, Guid actor, CancellationToken ct);
     Task<SepayCallbackResponse> CallbackAsync(string state, string? code, string? error, CancellationToken ct);
+    Task<SepayConnectionResponse> CompleteAsync(Guid groupId, Guid actor, string ticket, CancellationToken ct);
     Task<IReadOnlyList<SepayBankAccountResponse>> AccountsAsync(Guid groupId, Guid actor, CancellationToken ct);
     Task<SepayConnectionResponse> SelectAsync(Guid groupId, Guid actor, long providerBankId, CancellationToken ct);
     Task<SepayConnectionResponse> ActivateAsync(Guid groupId, Guid actor, CancellationToken ct);

@@ -67,6 +67,8 @@ public class BankTransaction : AggregateRoot<Guid>
     public static BankTransaction Receive(Guid bankAccountId, PaymentReconciliationEvidence evidence, string? companyId = null)
     {
         if (bankAccountId == Guid.Empty) throw new ArgumentException("Tài khoản nhận không hợp lệ.", nameof(bankAccountId));
+        if (companyId is not null && (string.IsNullOrWhiteSpace(companyId) || companyId.Length > 100))
+            throw new ArgumentException("Company SePay không hợp lệ.", nameof(companyId));
         return new BankTransaction(evidence.AccountNumber, evidence.ReferenceCode, evidence.Amount, evidence.Content,
             evidence.TransactionTime, reconciliationStatus: ReconciliationStatus.MANUAL_CHECK)
         {
@@ -86,7 +88,8 @@ public class BankTransaction : AggregateRoot<Guid>
             : null;
 
     public bool HasReferenceCollision(IEnumerable<BankTransaction> transactions) =>
-        !string.IsNullOrEmpty(ReferenceCode) && transactions.Any(t => t.Id != Id && t.ReferenceCode == ReferenceCode);
+        !string.IsNullOrEmpty(ReferenceCode) && transactions.Any(t => t.Id != Id && t.ReferenceCode == ReferenceCode &&
+            (ProviderCompanyId is null || t.ProviderCompanyId is null || t.ProviderCompanyId == ProviderCompanyId));
 
     public void RequireManualCheck(string reasonCode)
     {

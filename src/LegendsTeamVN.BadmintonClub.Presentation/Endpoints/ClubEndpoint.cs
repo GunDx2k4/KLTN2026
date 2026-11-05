@@ -42,6 +42,11 @@ public class ClubEndpoint : EndpointGroupBase
     {
         var paymentBank = group.MapGroup("{clubId:guid}/payment-bank-account").WithTags("UC17 - Ngân hàng nhận tiền")
             .RequireAuthorization("SessionOperations").RequireGroupPermission(Domain.Constants.GroupPermissions.Finance.BankManage);
+        paymentBank.AddEndpointFilter((context, next) =>
+        {
+            context.HttpContext.Response.Headers.CacheControl = "no-store";
+            return next(context);
+        });
         paymentBank.MapGet("", GetPaymentBankAccount).WithName("GetPaymentBankAccount");
         paymentBank.MapPut("", ConfigurePaymentBankAccount).WithName("ConfigurePaymentBankAccount");
         var generalGroup = group.MapGroup("").WithTags("Clubs");

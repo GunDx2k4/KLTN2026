@@ -1,8 +1,14 @@
 namespace LegendsTeamVN.BadmintonClub.Application.Abstractions;
 
-public sealed record SepayTokens(string AccessToken, string RefreshToken, DateTime ExpiresAt);
+public sealed record SepayTokens(string AccessToken, string RefreshToken, DateTime ExpiresAt)
+{
+    public override string ToString() => nameof(SepayTokens);
+}
 public sealed record SepayRemoteBank(long Id, string AccountNumber, string AccountHolder, string BankBin, string Gateway, bool Active);
-public sealed record SepayRemoteWebhook(long Id, string Url, long BankAccountId, string Authentication, string Secret, bool Active);
+public sealed record SepayRemoteWebhook(long Id, string Url, long BankAccountId, string Authentication, string Secret, bool Active)
+{
+    public override string ToString() => nameof(SepayRemoteWebhook);
+}
 
 public interface ISepayOAuthClient
 {

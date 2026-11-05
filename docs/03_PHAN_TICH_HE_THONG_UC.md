@@ -259,7 +259,7 @@ graph TD
 
 - **Hiện trạng 04/11/2026**: Backend đã có source, kiểm chứng HTTP/DB/Redis/Postman và áp migration UC18 trên DB chung local BadmintonClub; API54796 chạy profile CASH, webhook/dispatch tắt. Chưa áp DB server/deploy hoặc nghiệm thu request SePay Test Mode thực, company/gateway mục tiêu/FCM thiết bị thật. [Hợp đồng và vận hành UC18](Detail%20Design/UC18-BE.md).
 - **FR đáp ứng**: FR21 (F4.4). **Tác nhân**: SePay, hệ thống, người có FeeManage trong đúng CLB.
-- **Tiền điều kiện auto**: khoản thu đã phát hành, UNPAID/BANK_TRANSFER, có QR snapshot; credential HMAC riêng bank đã cấu hình ngoài Git, một company SePay. Không bắt buộc người chơi tự báo chuyển khoản.
+- **Tiền điều kiện auto**: khoản thu đã phát hành, UNPAID/BANK_TRANSFER, có QR snapshot; kết nối SePay đúng ngân hàng/company đã hoạt động, HMAC lưu mã hóa ngoài Git và cờ nhận/ghi bật. Không bắt buộc người chơi tự báo chuyển khoản. Bổ sung ngày 05/11: Admin hệ thống cấu hình ứng dụng OAuth, chủ CLB/BankManage authorize → callback → complete bằng JWT → chọn ngân hàng → activate; company và quyền tách theo CLB, FE làm sau.
 - **Luồng ngân hàng**:
   1. Nhận POST `/api/v1/webhooks/sepay/{bankAccountId}`, kiểm raw body/timestamp/HMAC và tài khoản/gateway; không dùng JWT người chơi hoặc cột webhook_secret_key cũ để xác thực.
   2. Redis lock ngoài Unit of Work; DB khóa provider ID/reference, session, fee và transaction theo thứ tự thống nhất.

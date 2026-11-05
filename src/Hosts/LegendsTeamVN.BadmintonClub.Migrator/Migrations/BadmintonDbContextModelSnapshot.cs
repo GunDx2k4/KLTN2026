@@ -699,11 +699,13 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
 
                     b.HasIndex("GroupId");
 
-                    b.HasIndex("CompanyId", "ProviderBankAccountId", "BankAccountId");
+                    b.HasIndex("CompanyId", "ProviderBankAccountId")
+                        .IsUnique()
+                        .HasFilter("\"Status\" <> 'DISCONNECTED' AND \"ProviderBankAccountId\" IS NOT NULL");
 
                     b.ToTable("club_sepay_connection", null, t =>
                         {
-                            t.HasCheckConstraint("ck_club_sepay_connection", "\"CompanyId\" > 0 AND \"Status\" IN ('AUTHORIZED','PROVISIONING','CONNECTED','DISCONNECTED') AND (\"Status\" <> 'CONNECTED' OR (\"ProviderBankAccountId\" > 0 AND \"ProviderWebhookId\" > 0 AND length(\"ProtectedWebhookSecret\") > 0 AND \"ConnectedAt\" IS NOT NULL))");
+                            t.HasCheckConstraint("ck_club_sepay_connection", "\"CompanyId\" > 0 AND \"Status\" IN ('AUTHORIZED','PROVISIONING','CONNECTED','DISCONNECTING','DISCONNECTED') AND (\"Status\" <> 'CONNECTED' OR (\"ProviderBankAccountId\" IS NOT NULL AND \"ProviderBankAccountId\" > 0 AND \"ProviderWebhookId\" IS NOT NULL AND \"ProviderWebhookId\" > 0 AND length(\"ProtectedWebhookSecret\") > 0 AND \"ConnectedAt\" IS NOT NULL))");
                         });
                 });
 

@@ -9,18 +9,20 @@ using LegendsTeamVN.BadmintonClub.Domain.Entities;
 using LegendsTeamVN.BadmintonClub.Domain.Repositories;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 
 namespace LegendsTeamVN.BadmintonClub.Infrastructure.Payments;
 
 public sealed class SepaySetupService(ISepaySetupRepository repository, IPaymentRepository payments, IReconciliationRepository reconciliation,
     ISepayOAuthClient provider, IDataProtectionProvider protection, IConnectionMultiplexer redis,
-    IOptionsMonitor<ReconciliationOptions> operations, TimeProvider clock) : ISepaySetupService, ISepayWebhookCredentials
+    IOptionsMonitor<ReconciliationOptions> operations, TimeProvider clock, ILogger<SepaySetupService> logger) : ISepaySetupService, ISepayWebhookCredentials
 {
     private readonly IDataProtector secrets = protection.CreateProtector("SePay.Secrets.v1");
     private static readonly TimeSpan StateLifetime = TimeSpan.FromMinutes(10);
     private const string Scopes = "bank-account:read webhook:read webhook:write webhook:delete company";
     private sealed record AuthorizationState(Guid GroupId, Guid Actor, Guid BankAccountId, Guid Revision);
+    private sealed record PendingAuthorization(AuthorizationState Authorization, long CompanyId, SepayTokens Tokens);
 
     public async Task<SepayApplicationResponse> GetApplicationAsync(Guid actor, CancellationToken ct)
     {
@@ -82,7 +84,7 @@ public sealed class SepaySetupService(ISepaySetupRepository repository, IPayment
 
     public async Task<SepayCallbackResponse> CallbackAsync(string state, string? code, string? error, CancellationToken ct)
     {
-        if (state.Length != 64 || !state.All(Uri.IsHexDigit)) throw Failure("InvalidState", "Phiên cấp quyền không hợp lệ hoặc đã hết hạn.", 400);
+            if (!IsOpaqueToken(state)) throw Failure("InvalidState", "Phiên cấp quyền không hợp lệ hoặc đã hết hạn.", 400);
         var value = await redis.GetDatabase().StringGetDeleteAsync(StateKey(state)).WaitAsync(ct);
         if (value.IsNullOrEmpty) throw Failure("InvalidState", "Phiên cấp quyền không hợp lệ hoặc đã dùng. Hãy bắt đầu kết nối lại.", 400);
         var auth = JsonSerializer.Deserialize<AuthorizationState>(value.ToString()) ?? throw Failure("InvalidState", "Phiên không hợp lệ.", 400);
@@ -98,22 +100,50 @@ public sealed class SepaySetupService(ISepaySetupRepository repository, IPayment
             var tokens = await provider.ExchangeAsync(app.ClientId, Unprotect(app.ProtectedClientSecret), app.CallbackUrl, code, token);
             var company = await provider.CompanyAsync(tokens.AccessToken, token);
             await Manager(auth.GroupId, auth.Actor, token);
-            if (existing is not null && existing.Status != "DISCONNECTED")
-            {
-                existing.Disconnect(auth.Actor, Now);
-                await repository.SaveAsync(token);
-            }
-            repository.AddConnection(ClubSepayConnection.Authorize(bank, company, Protect(JsonSerializer.Serialize(tokens)), app.Revision, auth.Actor, Now));
-            await repository.SaveAsync(token);
-            return new SepayCallbackResponse(app.ClubReturnUrl(auth.GroupId) + "?sepay=authorized");
+            var ticket = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+            var pending = Protect(JsonSerializer.Serialize(new PendingAuthorization(auth, company, tokens)));
+            await redis.GetDatabase().StringSetAsync(TicketKey(ticket), pending, StateLifetime, When.NotExists).WaitAsync(token);
+            return new SepayCallbackResponse(app.ClubReturnUrl(auth.GroupId) + "?sepay=authorized&ticket=" + ticket);
         }, ct);
     }
+
+    public Task<SepayConnectionResponse> CompleteAsync(Guid groupId, Guid actor, string ticket, CancellationToken ct) =>
+        Locked("application", gate => Locked("club:" + groupId, async token =>
+        {
+            if (!IsOpaqueToken(ticket)) throw Failure("InvalidTicket", "Phiên xác nhận kết nối không hợp lệ.", 400);
+            var bank = await Bank(groupId, actor, token);
+            var app = await ReadyApplication(token);
+            var key = TicketKey(ticket);
+            var value = await redis.GetDatabase().StringGetAsync(key).WaitAsync(token);
+            if (value.IsNullOrEmpty) throw Failure("InvalidTicket", "Phiên xác nhận đã hết hạn hoặc đã dùng. Hãy kết nối lại.", 400);
+            var pending = JsonSerializer.Deserialize<PendingAuthorization>(Unprotect(value.ToString()))
+                ?? throw Failure("InvalidTicket", "Phiên xác nhận không hợp lệ.", 400);
+            var auth = pending.Authorization;
+            if (auth.Actor != actor || auth.GroupId != groupId) throw Failure("AuthorizationOwner", "Phiên xác nhận không thuộc người dùng và CLB hiện tại.", 403);
+            if (bank.Id != auth.BankAccountId || app.Revision != auth.Revision)
+                throw Failure("ConfigurationChanged", "Cấu hình đã thay đổi. Hãy kết nối lại.");
+            var existing = await repository.GetConnectionAsync(bank.Id, token);
+            if (existing?.Status is "CONNECTED" or "PROVISIONING" or "DISCONNECTING") throw Failure("AlreadyConnected", "CLB đã có kết nối. Vui lòng tải lại.");
+            var consumed = await redis.GetDatabase().StringGetDeleteAsync(key).WaitAsync(token);
+            if (consumed.IsNullOrEmpty || consumed != value) throw Failure("InvalidTicket", "Phiên xác nhận đã được sử dụng.", 400);
+            if (existing is not null && existing.Status != "DISCONNECTED")
+            {
+                existing.Disconnect(actor, Now);
+                await repository.SaveAsync(token);
+            }
+            await Manager(groupId, actor, token);
+            repository.AddConnection(ClubSepayConnection.Authorize(bank, pending.CompanyId, Protect(JsonSerializer.Serialize(pending.Tokens)), app.Revision, actor, Now));
+            await repository.SaveAsync(token);
+            return Connection(bank, await repository.GetConnectionAsync(bank.Id, token), app);
+        }, gate), ct);
 
     public Task<IReadOnlyList<SepayBankAccountResponse>> AccountsAsync(Guid groupId, Guid actor, CancellationToken ct) =>
         Locked<IReadOnlyList<SepayBankAccountResponse>>("club:" + groupId, async token =>
         {
             var bank = await Bank(groupId, actor, token);
             var connection = await OwnedConnection(bank, actor, token);
+            if (connection.Status != "AUTHORIZED" || connection.AuthorizedBy != actor || Now > connection.AuthorizedAt.AddMinutes(15))
+                throw Failure("AuthorizationRequired", "Danh sách tài khoản chỉ mở trong phiên cấp quyền của người khởi tạo, tối đa 15 phút.");
             var access = await Access(connection, token);
             var accounts = await provider.BanksAsync(access, token);
             await Manager(groupId, actor, token);
@@ -269,6 +299,8 @@ public sealed class SepaySetupService(ISepaySetupRepository repository, IPayment
     private static bool FixedEquals(string left, string right) => CryptographicOperations.FixedTimeEquals(
         System.Text.Encoding.UTF8.GetBytes(left), System.Text.Encoding.UTF8.GetBytes(right));
     private static string StateKey(string state) => "sepay:oauth:state:" + Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(state)));
+    private static string TicketKey(string ticket) => "sepay:oauth:ticket:" + Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(ticket)));
+    private static bool IsOpaqueToken(string? value) => value is { Length: 64 } && value.All(Uri.IsHexDigit);
     private static SepaySetupException Failure(string code, string message, int status = 409) => new(code, message, status);
 
     private async Task<T> Locked<T>(string key, Func<CancellationToken, Task<T>> action, CancellationToken ct)
@@ -288,8 +320,15 @@ public sealed class SepaySetupService(ISepaySetupRepository repository, IPayment
         { throw Failure("ProviderTimeout", "Kết nối quá thời gian chờ. Vui lòng tải lại trạng thái trước khi thử lại.", 503); }
         finally
         {
-            await database.ScriptEvaluateAsync("if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
-                new RedisKey[] { redisKey }, new RedisValue[] { owner }).WaitAsync(TimeSpan.FromSeconds(2));
+            try
+            {
+                await database.ScriptEvaluateAsync("if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end",
+                    new RedisKey[] { redisKey }, new RedisValue[] { owner }).WaitAsync(TimeSpan.FromSeconds(2));
+            }
+            catch (Exception exception)
+            {
+                logger.LogWarning("Chưa giải phóng được khóa cấu hình SePay: {ErrorType}.", exception.GetType().Name);
+            }
         }
     }
 }

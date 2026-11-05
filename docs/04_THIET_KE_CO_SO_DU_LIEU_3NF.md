@@ -461,7 +461,8 @@ Schema source UC18 theo migration `20261104074142_AddPaymentReconciliation`; ch�
 | `transfer_content` | text | NOT NULL; nội dung gốc, không sửa để đoán mã |
 | `transaction_time` | timestamp with time zone | NOT NULL; chuyển từ giờ Việt Nam sang UTC |
 | `reconciliation_status` | varchar(50) | MATCHED hoặc MANUAL_CHECK; default MANUAL_CHECK cho source mới |
-| `provider_transaction_id` | bigint | Nullable cho legacy; unique khi khác null, kể cả soft-delete; phạm vi một company SePay |
+| `provider_transaction_id` | bigint | Nullable cho legacy; unique cùng provider_company_id khi đã biết company, kể cả soft-delete |
+| `provider_company_id` | varchar(100) | Nullable cho legacy; company lấy từ kết nối OAuth, không nhận từ FE/webhook payload |
 | `bank_account_id` | uuid | Nullable cho legacy; FK RESTRICT group_bank_account |
 | `gateway` | varchar(100) | Tên gateway từ bằng chứng |
 | `sub_account` | varchar(100) | Bằng chứng VA; v1 không tự đối soát subAccount không rỗng |
@@ -471,7 +472,7 @@ Schema source UC18 theo migration `20261104074142_AddPaymentReconciliation`; ch�
 | `reconciled_at` | timestamp with time zone | Thời điểm xác nhận UTC |
 | `reconciliation_note` | varchar(2000) | Lý do manual, không dùng để sửa số tiền |
 
-CHECK `ck_bank_transaction_uc18` bảo vệ dòng có provider ID: ID dương, bank/gateway/subAccount/chiều tiền đầy đủ, tiền dương nguyên VND; MATCHED phải có fee và thời điểm; audit manual đủ người/lý do. Dòng legacy giữ metadata null, không suy liên kết hoặc đổi tiền cũ. Index `(bank_account_id, reference_code)` và reference phục vụ lookup; collision phải kiểm trong transaction có advisory lock. Preflight trước đổi unique reference; Down guard chặn khi có dữ liệu UC18 hoặc reference null/trùng.
+CHECK `ck_bank_transaction_uc18` bảo vệ dòng có provider ID: ID dương, bank/gateway/subAccount/chiều tiền đầy đủ, tiền dương nguyên VND; MATCHED phải có fee và thời điểm; audit manual đủ người/lý do. Dòng legacy giữ metadata null, không suy liên kết hoặc đổi tiền cũ. Unique company/provider ID bảo vệ các company độc lập; unique provider ID riêng cho dòng chưa biết company tiếp tục bảo vệ legacy. Reference xét cùng company hoặc legacy chưa rõ company, trong transaction có advisory lock. Preflight trước đổi unique reference; Down guard chặn khi có cấu hình hoặc dữ liệu UC18/reference không tương thích.
 
 ---
 
@@ -515,6 +516,20 @@ Bổ sung ngoài 22 bảng nghiệp vụ ban đầu để giao nhận SignalR/FC
 | `last_error` | VARCHAR(2000), NULL | Loại lỗi gần nhất, không lưu token |
 
 Có thêm các cột audit/soft-delete theo AggregateRoot hiện tại. Index trên `(next_attempt_at, created_at)` cho bản ghi chưa delivered, attempts < 10. Worker claim bằng SKIP LOCKED; network chạy ngoài transaction claim. Xem hợp đồng và vận hành tại [UC13-BE.md](Detail%20Design/UC13-BE.md).
+
+### 3.24. Bảng kỹ thuật `sepay_application_settings` (Ứng dụng OAuth toàn hệ thống)
+
+Bổ sung 05/11/2026; các cột dùng đúng tên có dấu nháy trong migration EF. `Id` integer singleton bằng 1; `ClientId` varchar(255), `ProtectedClientSecret` text, `PublicApiBaseUrl`/`FrontendBaseUrl` varchar(500), `Enabled` boolean, `Revision` uuid concurrency token, `UpdatedBy` uuid và `UpdatedAt` UTC. GET API chỉ trả `hasClientSecret`, không trả ciphertext hoặc secret. Callback URL được suy từ backend origin đã cấu hình, không lưu thêm một bản có thể lệch nhau.
+
+Client secret được mã hóa bằng Data Protection; key ring nằm trên volume bền vững riêng, cần backup cùng DB. Quyền API là `Integrations.SepayManage`; migration cấp quyền cho các role vốn đã có `Roles.AssignPermissions`, không cần chạy demo seeder. Không thay client ID/backend origin khi còn kết nối chưa ngắt xong.
+
+### 3.25. Bảng kỹ thuật `club_sepay_connection` (Kết nối ngân hàng SePay theo CLB)
+
+`Id` UUID; `GroupId`/`BankAccountId` FK RESTRICT đến CLB/ngân hàng, không xóa lịch sử khi đổi ngân hàng. `CompanyId` bigint dương lấy từ provider; `ProviderBankAccountId`/`ProviderWebhookId` bigint nullable; `Gateway` varchar(100). Token OAuth và HMAC chỉ lưu dạng `ProtectedTokens`/`ProtectedWebhookSecret` text đã mã hóa. `ApplicationRevision` tham chiếu phiên cấu hình ứng dụng, `Revision` là concurrency token.
+
+`Status` varchar(20): AUTHORIZED, PROVISIONING, CONNECTED, DISCONNECTING, DISCONNECTED. CHECK yêu cầu CONNECTED có provider bank/webhook ID dương, secret và ConnectedAt. Unique bank khi chưa DISCONNECTED; unique `(CompanyId, ProviderBankAccountId)` khi đã chọn bank và chưa DISCONNECTED, tránh cùng ngân hàng provider bị gắn đồng thời vào nhiều cấu hình CLB. Audit gồm AuthorizedBy/AuthorizedAt, ConnectedAt, DisconnectedBy/DisconnectedAt. Ngắt hoàn tất xóa token/khóa trong record nhưng giữ audit và company; DISCONNECTING giữ dữ liệu cần dọn provider, chặn xác thực webhook tại BE.
+
+State OAuth và ticket xác nhận không lưu thành bảng: khóa Redis chỉ giữ hash của nonce, có hạn 10 phút, dùng một lần. Dữ liệu token đang chờ complete trong Redis được mã hóa và gắn user/CLB/bank/revision; callback không tự tạo kết nối. Cấu hình/kết nối không làm thay đổi Amount, PAID hay ledger. Down bị chặn khi đã có cấu hình, kết nối hoặc dữ liệu thanh toán.
 
 ## Bổ sung UC16 — Snapshot phát hành trên bảng hiện hữu
 

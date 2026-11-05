@@ -175,17 +175,27 @@ public sealed partial class PaymentReconciliationHttpTests(ITestOutputHelper out
             Client.DefaultRequestHeaders.Authorization = new("Bearer", new JwtSecurityTokenHandler().WriteToken(jwt));
         }
 
-        private async Task<Guid> AddManager()
+        public async Task<Guid> AddManager()
         {
             await using var db = Database.Open();
             var manager = new AppUser(Guid.NewGuid(), "Người quản lý thu");
-            var role = new GroupRole(Group, "Quản lý thu");
-            var permission = new GroupPermission(GroupPermissions.Finance.FeeManage, "Quản lý thu", ModuleGroup.FINANCE);
-            db.AddRange(manager, role, permission, new RolePermission(role.Id, permission.Id), new GroupMember(Group, manager.Id, role.Id));
+            var role = new GroupRole(Group, "Quản lý thu " + Guid.NewGuid().ToString("N")[..8]);
+            var permission = await db.GroupPermissions.SingleOrDefaultAsync(x => x.PermissionCode == GroupPermissions.Finance.FeeManage);
+            if (permission is null)
+            {
+                permission = new GroupPermission(GroupPermissions.Finance.FeeManage, "Quản lý thu", ModuleGroup.FINANCE);
+                db.Add(permission);
+            }
+            db.AddRange(manager, role, new RolePermission(role.Id, permission.Id), new GroupMember(Group, manager.Id, role.Id));
             if (Setup)
             {
-                var bankPermission = new GroupPermission(GroupPermissions.Finance.BankManage, "Quản lý ngân hàng", ModuleGroup.FINANCE);
-                db.AddRange(bankPermission, new RolePermission(role.Id, bankPermission.Id));
+                var bankPermission = await db.GroupPermissions.SingleOrDefaultAsync(x => x.PermissionCode == GroupPermissions.Finance.BankManage);
+                if (bankPermission is null)
+                {
+                    bankPermission = new GroupPermission(GroupPermissions.Finance.BankManage, "Quản lý ngân hàng", ModuleGroup.FINANCE);
+                    db.Add(bankPermission);
+                }
+                db.Add(new RolePermission(role.Id, bankPermission.Id));
             }
             await db.SaveChangesAsync();
             return manager.Id;

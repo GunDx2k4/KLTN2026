@@ -133,3 +133,11 @@ Ma trận sandbox gồm HMAC/raw bytes/timestamp, payload key trùng, bank/group
 Collection Postman phải chạy bằng runtime có Web Crypto, dùng năm fee riêng cho auto/manual/thiếu/thừa/CASH. Test runner bật/tắt webhook theo hai lượt, kiểm đủ 17 request cùng kết quả DB; không thay bằng fixture SePay. Backup/restore rehearsal chỉ trên hai DB fixture ngẫu nhiên, không dump/restore DB ứng dụng. Postman CLI đã chạy đủ 17 request và kiểm số nguồn tài chính sau chạy; backup/restore trên hai DB fixture riêng giữ nguyên năm nhóm dữ liệu và migration history. Xem [UC18-BE](Detail%20Design/UC18-BE.md).
 
 UAT-06 toàn luồng tiếp tục chưa đạt cho tới khi có request Test Mode do provider phát hành, đúng company/gateway/tài khoản nhận, nghiệm thu notification trên thiết bị nếu tuyên bố push thật và rollout có duyệt đúng đích. Collection local, thông báo DB và FCM mock không thay bằng chứng đó.
+
+## Kiểm chứng BE cấu hình/kết nối SePay — cập nhật 05/11/2026
+
+Đã hoàn thiện API Admin cấu hình ứng dụng và BankManage kết nối SePay theo CLB. Callback chỉ cấp ticket có hạn, một lần; JWT đúng người khởi tạo mới hoàn tất gắn kết nối. Suite kiểm quyền/revocation/chéo nhóm, state/ticket/replay, cấu hình đổi phiên bản, bank mismatch, refresh, provider lỗi, recovery webhook, DISCONNECTING và namespace company. Provider giả lập, không gọi SePay/FCM thật.
+
+Lượt mới đạt 69/69 integration PostgreSQL16/Redis7 riêng, 41/41 Infrastructure, 46/46 Domain filter Payments/Settlement và 37/37 architecture, không failed/skipped; build solution 0 lỗi, còn NU1510 hiện hữu. Không cộng trùng với số lịch sử phía trên hoặc coi là toàn bộ solution. Postman có thêm 13 request cấu hình/kết nối ngoài 17 request tài chính đã chạy tự động; collection thiết lập chỉ được sinh/kiểm hợp đồng, chưa chạy OAuth thật.
+
+DB chung local PostgreSQL18.6 đã áp hai migration OAuth tới `20261105004125_HardenClubSepayConnectionLifecycle` sau backup và restore/Up/Down/Up cô lập. Dữ liệu cũ 53 bảng giữ nguyên, chỉ thêm quyền Admin dự kiến; 18 kiểm tra HTTP đọc/guard đạt. Không thêm cấu hình/token/nghiệp vụ thử vào DB chung. FE đã hoàn tác theo yêu cầu, FE/UAT/provider thật/thiết bị và server deployment còn tách riêng. Chi tiết backup và bàn giao tại [UC18-BE](Detail%20Design/UC18-BE.md).

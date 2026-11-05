@@ -1,8 +1,8 @@
-# UC18 — Bàn giao tích hợp FE và triển khai Backend
+# UC18 — Bàn giao Backend và hợp đồng tích hợp
 
-Cập nhật 04/11/2026. Phạm vi FR21/F4.4: SePay webhook, đối soát tự động/thủ công, xác nhận CASH, ledger và thông báo. Báo cáo theo mẫu UC17, gồm hợp đồng FE/API và hướng dẫn triển khai cần thiết ngay trong tài liệu này.
+Cập nhật 05/11/2026. Phạm vi FR21/F4.4: SePay webhook, đối soát tự động/thủ công, xác nhận CASH, ledger, thông báo và luồng Admin cấu hình ứng dụng OAuth để chủ CLB tự kết nối SePay. Báo cáo theo mẫu UC17; theo yêu cầu mới nhất chỉ thực hiện BE và hợp đồng API, FE để sau.
 
-**Trạng thái bàn giao: Backend đã kiểm chứng tự động và áp migration UC18 lên DB chung local `BadmintonClub:5432`; API chính `http://127.0.0.1:54796` đã chạy với DB này. Chưa deploy hoặc áp migration trên DB server, chưa nghiệm thu request SePay Test Mode thực hoặc FCM thiết bị thật.** FE có thể tích hợp theo hợp đồng này. Source sửa trong phiên chưa commit/push. Việc người dùng đã tạo tài khoản MBBank Test Mode chưa xác nhận company/gateway/chữ ký/ACK của provider.
+**Trạng thái bàn giao:** đã hoàn thiện BE và áp DB chung local đến `20261105004125_HardenClubSepayConnectionLifecycle` ngày 05/11 sau backup, restore rehearsal và đối chiếu dữ liệu. API local đang chạy tại `http://127.0.0.1:54796`; webhook/dispatch/seeder tắt, cho phép ghi CASH theo profile hiện có. Chưa deploy DB server, chưa nghiệm thu OAuth/request SePay Test Mode thực hoặc FCM thiết bị thật. FE chưa triển khai và phần FE thử viết đã được hoàn tác theo yêu cầu. Tài khoản MBBank Test Mode đã tạo chưa thay thế ứng dụng OAuth do SePay cấp.
 
 ## 1. API và quyền
 
@@ -18,7 +18,56 @@ Base path thủ quỹ: `/api/v1/clubs/{groupId}/reconciliations`. Gửi `Authori
 
 Thành công trả 200; webhook trả `{"success":true}`, API người dùng trả DTO trực tiếp. GET và webhook trả `Cache-Control: no-store`. GET lịch sử vẫn đọc khi tắt cờ nhưng luôn kiểm quyền. Không suy quyền từ tên role hoặc `X-Group-Id`; không cấp FeeManage toàn nhóm cho người chơi chỉ để xem biên lai.
 
-`bankAccountId` là UUID record ngân hàng trong DB backend, không phải số tài khoản hoặc ID trên SePay. Bản triển khai này chỉ hỗ trợ một company SePay. Người chơi đọc nghĩa vụ/biên lai bằng API sở hữu UC17 tại `/api/v1/user/me/fees/{feeId}`.
+`bankAccountId` là UUID record ngân hàng trong DB backend, không phải số tài khoản hoặc ID trên SePay. Mỗi kết nối CLB giữ company SePay lấy từ provider; hỗ trợ các CLB dùng company khác nhau. Provider transaction ID và reference được đối chiếu trong phạm vi company; bằng chứng legacy chưa biết company tiếp tục được bảo vệ, không tự gán namespace hoặc backfill tiền. Người chơi đọc nghĩa vụ/biên lai bằng API sở hữu UC17 tại `/api/v1/user/me/fees/{feeId}`.
+
+### 1.1. Admin cấu hình ứng dụng, chủ CLB kết nối SePay
+
+Admin hệ thống cần quyền `Integrations.SepayManage`. Chủ CLB hoặc thành viên được ủy quyền cần `FINANCE.BANK.MANAGE` thực trong đúng CLB; có role Admin hệ thống không tự vượt kiểm quyền ngân hàng trong handler. Tất cả API dưới đây, trừ callback, dùng JWT qua `SessionOperations`; response không chứa client secret, access/refresh token hoặc HMAC. Cấu hình và trạng thái trả `Cache-Control: no-store`.
+
+| Method | Route | Tác dụng |
+|---|---|---|
+| GET / PUT | `/api/v1/sepay/application` | Admin đọc/lưu ứng dụng OAuth chung |
+| GET / PUT | `/api/v1/clubs/{clubId}/payment-bank-account` | API UC17 hiện có: ngân hàng nhận tiền, BIN và chủ tài khoản |
+| GET | `/api/v1/clubs/{groupId}/sepay` | Trạng thái kết nối của ngân hàng hiện tại |
+| POST | `.../sepay/authorize` | Bắt đầu OAuth, trả `authorizationUrl` |
+| GET | `/api/v1/sepay/oauth/callback` | SePay gửi code/state; callback không tự gắn kết nối |
+| POST | `.../sepay/complete` | Xác nhận ticket bằng JWT của đúng người khởi tạo |
+| GET | `.../sepay/accounts` | Danh sách tài khoản SePay trong phiên cấp quyền |
+| POST | `.../sepay/account` | Chọn tài khoản và lưu PROVISIONING trước gọi provider |
+| POST | `.../sepay/activate` | Tạo hoặc khôi phục webhook HMAC, chuyển CONNECTED |
+| GET | `.../sepay/connections` | Các kết nối chưa ngắt xong, kể cả ngân hàng đã thay |
+| DELETE | `.../sepay` | Ngắt kết nối ngân hàng hiện tại |
+| DELETE | `.../sepay/connections/{connectionId}` | Ngắt kết nối cũ đúng CLB theo ID |
+
+PUT ứng dụng nhận:
+
+```json
+{
+  "clientId": "<Client ID SePay cấp>",
+  "clientSecret": "<chỉ điền khi tạo hoặc thay khóa>",
+  "publicApiBaseUrl": "https://api.example.com",
+  "frontendBaseUrl": "https://app.example.com",
+  "enabled": true,
+  "revision": null
+}
+```
+
+Lần đầu `revision=null` và cần secret; các lần sau lấy revision từ GET. `clientSecret=null` hoặc chuỗi rỗng giữ khóa đã lưu; GET chỉ trả `hasClientSecret`. URL là origin HTTPS công khai, không có path/query/fragment/IP/localhost. Không đổi Client ID hoặc backend origin khi vẫn còn kết nối chưa ngắt xong; ngắt các kết nối trước để tránh token/webhook thuộc ứng dụng cũ. Lưu thành công trả revision mới; stale revision trả 409. Sau migration cần refresh/login lại để JWT nhận quyền mới; migration cấp quyền cho các role hệ thống vốn đã có `Roles.AssignPermissions`.
+
+Luồng FE/API được bàn giao, chưa có màn FE trong đợt này:
+
+1. Lưu ngân hàng CLB qua UC17, bao gồm BIN sáu chữ số. Gọi authorize bằng JWT BankManage; mở `authorizationUrl` trong trình duyệt. OAuth yêu cầu các scope `bank-account:read webhook:read webhook:write webhook:delete company`.
+2. SePay redirect về `{publicApiBaseUrl}/api/v1/sepay/oauth/callback`. State ngẫu nhiên 256 bit, gắn người khởi tạo/CLB/bank/revision, TTL 10 phút và tiêu thụ một lần. Từ chối cấp quyền trả về frontend với `sepay=denied`.
+3. Callback hợp lệ đổi code lấy token ở BE và đọc company từ API SePay, lưu tạm dữ liệu đã mã hóa trong Redis. Redirect về `{frontendBaseUrl}/#/club/{groupId}/sepay?sepay=authorized&ticket=...`; ticket ở fragment, có hạn 10 phút, không phải access token. Callback chưa tạo kết nối trong DB. FE dùng JWT của đúng người đã authorize để POST complete body `{ "ticket": "<ticket>" }`; sai người/CLB bị 403, ticket đã dùng/hết hạn bị 400. Sau complete, xóa ticket khỏi URL/lịch sử hiển thị và không ghi vào log.
+4. GET accounts trong trạng thái AUTHORIZED; chỉ người khởi tạo được xem, tối đa 15 phút. Chọn `providerBankId` qua POST account body `{ "providerBankId": 19 }`. BE lấy dữ liệu từ SePay và kiểm active, số tài khoản, BIN với ngân hàng CLB; không nhận các giá trị này từ FE để kết luận sở hữu. Mỗi company/provider bank chỉ có một cấu hình kết nối chưa ngắt xong.
+5. POST activate tạo webhook `In_only`, HMAC-SHA256, JSON, nhận tài khoản chính, retry non-2xx và không bỏ giao dịch thiếu mã. Khóa webhook được lưu mã hóa trước lời gọi provider. Nếu request tạo webhook timeout sau khi provider đã tạo, retry tìm đúng URL có connectionId và kiểm bank/HMAC trước khi nhận lại; không nhận webhook của cấu hình khác. Chưa chứng minh provider thành công thì giữ PROVISIONING.
+6. DELETE đánh dấu DISCONNECTING và ngừng chấp nhận webhook ở BE trước khi dọn provider. Nếu SePay lỗi, giữ trạng thái này cùng bằng chứng để retry; chưa trả thành công giả. Xóa provider thành công mới DISCONNECTED, xóa token/khóa trong record và giữ audit/lịch sử thu. Dùng GET connections và DELETE theo ID để dọn tài khoản ngân hàng cũ. Manual trên bằng chứng ngân hàng đã lưu vẫn dùng gateway đã xác thực của giao dịch, không cần bật lại webhook.
+
+Trạng thái phản hồi: `BANK_REQUIRED`, `DISCONNECTED`, `AUTHORIZED`, `PROVISIONING`, `CONNECTED`, `DISCONNECTING`; `applicationReady` cho biết Admin đã bật ứng dụng, `webhookEnabled` là cờ vận hành tổng. **CONNECTED không tự bật SePay Live hoặc dispatch.** Callback và API không nhận URL token/API provider tùy ý: BE chỉ gọi `https://my.sepay.vn`.
+
+Các lỗi thêm: 400 `Sepay.InvalidState/InvalidTicket/InvalidInput`; 403 `Sepay.Forbidden/AuthorizationOwner`; 404 `Sepay.NotFound/BankNotFound`; 409 `Sepay.Busy/BankRequired/BankAlreadyConnected/AlreadyConnected/ConfigurationChanged/ActiveConnections/InvalidState/WebhookConflict`; 503 `Sepay.ProviderUnavailable/ProviderResponse/ProviderTimeout/AuthorizationRequired/SecretUnavailable`. Khi timeout hoặc lỗi lưu, đọc lại trạng thái trước retry. Quyền bị thu hồi được tái kiểm từ DB, không chỉ dựa JWT hoặc header.
+
+SePay yêu cầu ứng dụng OAuth được phê duyệt/cấp client credentials; đăng ký tài khoản Test Mode không tự cấp quyền này. Xem [đăng ký ứng dụng](https://developer.sepay.vn/vi/sepay-oauth2/dang-ky-ung-dung), [OAuth](https://developer.sepay.vn/vi/sepay-oauth2/luong-xac-thuc), [company](https://developer.sepay.vn/vi/sepay-oauth2/cong-ty), [ngân hàng](https://developer.sepay.vn/vi/sepay-oauth2/tai-khoan-ngan-hang), [webhook](https://developer.sepay.vn/vi/sepay-oauth2/api-webhook). Việc OAuth dùng được trực tiếp với tài khoản Test Mode cụ thể chưa được nghiệm thu; không gán kết quả mock cho provider thật.
 
 ## 2. Luồng thanh toán theo BE
 
@@ -200,52 +249,70 @@ Ba cờ mặc định false. Profile CASH: Enabled=false, WritesEnabled=true, Di
 
 ### 7.1. Cấu hình server
 
-Pipeline và Docker Compose dùng file `reconciliation.env` tại thư mục deploy trên server, quyền 0600 và ngoài Git. Lần đầu workflow tạo bốn dòng cấu hình tắt; những lần deploy sau giữ nguyên file đang có:
+Không còn phụ thuộc file `reconciliation.env`. Client credentials và kết nối theo CLB được quản lý qua API tại mục 1.1, lưu trong DB và mã hóa bằng ASP.NET Core Data Protection. Bỏ các key cũ `Reconciliation:CompanyId/Banks`; không dùng cột `WebhookSecretKey` legacy làm credential.
 
-```dotenv
-Reconciliation__Enabled=false
-Reconciliation__WritesEnabled=false
-Reconciliation__DispatchEnabled=false
-Reconciliation__CompanyId=
-```
+Ba cờ vận hành tổng đi qua GitHub Secrets → `.env` deployment → Compose, mặc định false khi thiếu:
 
-Khi đã xác minh company/bank, người triển khai điền các khóa sau trong cùng file, thay `<bankAccountId>` bằng UUID record BE:
-
-| Khóa | Nội dung |
+| GitHub Secret / biến Compose | Cấu hình API |
 |---|---|
-| Reconciliation__CompanyId | Company SePay mục tiêu, một company cho schema này |
-| Reconciliation__Banks__<bankAccountId>__Gateway | Gateway đúng payload provider, ví dụ MBBank |
-| Reconciliation__Banks__<bankAccountId>__Secret | HMAC key riêng bank, ngoài Git, không phải API Key |
+| `RECONCILIATION_ENABLED` | `Reconciliation__Enabled` |
+| `RECONCILIATION_WRITES_ENABLED` | `Reconciliation__WritesEnabled` |
+| `RECONCILIATION_DISPATCH_ENABLED` | `Reconciliation__DispatchEnabled` |
 
-Không dùng UUID mẫu/số tài khoản thay bankAccountId, không dùng cột WebhookSecretKey cũ. Secret có ký tự `$` hoặc nháy cần quote theo cú pháp env_file. Sau sửa file cần recreate API, biến môi trường không hot reload trong container. Không in cấu hình chứa secret vào log; dùng `docker compose config --quiet` để kiểm cú pháp.
+Profile CASH chỉ đặt WritesEnabled=true. Chỉnh cờ cần recreate API; việc chủ CLB kết nối không vượt các cờ này. Không in secret vào log; dùng `docker compose config --quiet` để kiểm cú pháp. File `reconciliation.env` cũ nếu còn trên server không được Compose đọc; rule ignore vẫn giữ để tránh vô tình đưa khóa cũ vào Git.
+
+Key ring Data Protection được giữ bền vững ở `$HOME/.local/share/badmintonclub/sepay-keys`, bind vào `/var/lib/badmintonclub/sepay-keys`; Compose dùng `SEPAY_KEY_DIRECTORY`, API dùng `Sepay:KeyDirectory`. Workflow tạo thư mục host quyền 0700, ngoài image. Cần backup và bảo vệ key ring cùng DB: mất key thì không giải mã được client secret/token/HMAC; restore DB riêng mà thiếu key ring không khôi phục được kết nối. Nếu đổi UID container cần cấp đúng ownership trước khởi động; không dùng key ring tạm trong production. Trên local, mặc định key ring nằm ở `sepay-keys` bên cạnh binary, trong thư mục bin bị Git ignore.
 
 UC16 còn cần GitHub Secrets `SETTLEMENT_WRITES_ENABLED`, `SETTLEMENT_DISPATCH_ENABLED`, `SETTLEMENT_PREVIEW_SIGNING_KEY` khi deploy; workflow đã truyền ba khóa này sang Compose. Hai cờ thiếu mặc định false; giữ preview signing key ổn định, ngoài Git. Bật CASH UC18 không tự bật quyền ghi/phát hành settlement UC16. Nếu trước đây chỉ cấu hình UC16 trực tiếp trong `.env` server thì cần đưa giá trị đã duyệt vào GitHub Secrets trước deploy vì pipeline tạo lại `.env`.
 
-Archive được bind từ `$HOME/.local/share/badmintonclub/reconciliation-evidence` trên host vào `/var/lib/badmintonclub/reconciliation-evidence` trong container, ngoài `/app`, quyền 0700 trên Linux. Tài khoản container phải có quyền ghi; đổi UID cần cập nhật ownership. Compose cần từ 2.24 cho env_file tùy chọn.
+Archive được bind từ `$HOME/.local/share/badmintonclub/reconciliation-evidence` trên host vào `/var/lib/badmintonclub/reconciliation-evidence` trong container, ngoài `/app`, quyền 0700 trên Linux. Tài khoản container phải có quyền ghi; đổi UID cần cập nhật ownership. Chạy Compose thủ công phải đặt cả `RECONCILIATION_EVIDENCE_DIRECTORY` và `SEPAY_KEY_DIRECTORY`.
 
 ### 7.2. Trước merge và triển khai
 
-1. Xác minh host/DB/Redis đích, `__EFMigrationsHistory`, schema/index/FK/CHECK, dữ liệu legacy và cờ hiện có. Migration UC18 là `20261104074142_AddPaymentReconciliation`, predecessor source là `20261103010523_AddSessionAddressAndCoordinates`; không suy đây là baseline thật của server.
+1. Xác minh host/DB/Redis đích, `__EFMigrationsHistory`, schema/index/FK/CHECK, dữ liệu legacy và cờ hiện có. Sau lõi UC18 `20261104074142_AddPaymentReconciliation`, luồng OAuth cần `20261104155653_AddClubSepayOAuth` và `20261105004125_HardenClubSepayConnectionLifecycle`. Migration sau siết trạng thái DISCONNECTING, unique company/provider bank và rollback guard; không sửa migration đã commit trước đó hoặc suy baseline server từ source.
 2. Sinh/review SQL từ baseline thật, chuẩn bị backup và restore rehearsal vào DB riêng, ghi cutoff và phương án rollback cho đúng đích. Ví dụ sinh SQL chỉ để review từ repo BE:
 
 ```bash
-dotnet ef migrations script "${UC18_BASELINE:?Cần baseline đích đã xác minh}" 20261104074142_AddPaymentReconciliation --context BadmintonDbContext --project src/Hosts/LegendsTeamVN.BadmintonClub.Migrator --output "${UC18_SQL_UP:?Cần file SQL review}"
+dotnet ef migrations script "${UC18_BASELINE:?Cần baseline đích đã xác minh}" 20261105004125_HardenClubSepayConnectionLifecycle --context BadmintonDbContext --project src/Hosts/LegendsTeamVN.BadmintonClub.Migrator --output "${UC18_SQL_UP:?Cần file SQL review}"
 ```
 
 3. Trước deploy cần backup bằng client PostgreSQL tương thích server và xác định thời điểm tạm dừng writer nếu migration cần khóa bảng; migration UC18 đặt lock_timeout=3s. Pipeline không tự backup hoặc dừng writer của API cũ. Giữ credential qua secret/PGPASSFILE, không chép vào chat/artifact công khai. Không chạy Migrator ngoài cấu hình deployment để thử trên DB chung: host này migrate cả Identity/Badminton và mặc định vẫn chạy seeders khi không đặt Seeding.Enabled=false.
 4. Theo yêu cầu người dùng, pipeline [deploy.yml](../../.github/workflows/deploy.yml) **tự áp mọi migration còn thiếu trước thay API**, dùng API/Migrator cùng SHA: `docker compose --env-file .env.next run --rm --no-deps -e Seeding__Enabled=false -e Migrations__VerifyOnly=false migrator`. Sau đó chạy thêm `Migrations__VerifyOnly=true` để kiểm cả hai context. Migration hoặc kiểm schema lỗi trả mã khác 0, job dừng, API và `.env` cũ chưa được thay; sửa nguyên nhân rồi chạy lại. EF chỉ áp migration chưa có trong history; không phụ thuộc diff của commit cuối. Deployment được tuần tự hóa trong workflow.
-5. Migration và kiểm schema pass mới giữ `.env.before-<SHA>`, cập nhật `.env`, recreate riêng API với Seeding=false và kiểm Swagger có route webhook/reconciliations. Không chạy seeder hoặc prune image rollback. Migration đã commit vẫn tồn tại nếu bước sau lỗi; không tự chạy Down/restore. GitHub Secrets kết nối server/DB/Redis/JWT/RabbitMQ/Firebase giữ như pipeline hiện có; HMAC/cờ UC18 quản lý riêng trong `reconciliation.env`.
+5. Migration và kiểm schema pass mới giữ `.env.before-<SHA>`, cập nhật `.env`, recreate riêng API với Seeding=false và kiểm Swagger có route webhook/reconciliations. Không chạy seeder hoặc prune image rollback. Migration đã commit vẫn tồn tại nếu bước sau lỗi; không tự chạy Down/restore. Client secret và HMAC được quản lý qua API, key ring phải được giữ qua các lần deploy; cờ vận hành vẫn qua GitHub Secrets.
 6. Mở CASH trước: Enabled=false, WritesEnabled=true, DispatchEnabled=false. Chỉ bật webhook với fixture/DB UAT riêng và HMAC đã cấu hình; nếu dev đang dùng DB chung cho nhóm thì cần instance/DB UAT riêng để gửi Test Mode. Không đưa giao dịch mô phỏng vào nợ thật hoặc trộn credential/payload Test Mode với Live.
 
 SePay Test Mode: tạo webhook JSON/tiền vào, chọn bank test và tài khoản chính, HMAC-SHA256, bật retry; để kiểm cả thiếu mã thì tắt bộ lọc chỉ gửi khi có mã. URL là `https://<uat-host>/api/v1/webhooks/sepay/<bankAccountId>`. Mô phỏng đúng Amount/PaymentCode, kiểm delivery ACK, PAID/MATCHED, ledger/receipt và retry không thêm thu; tiếp tục manual/thiếu-thừa/CASH/quyền chéo nhóm. VA khác rỗng chưa thuộc v1. FCM cần kiểm thiết bị thật và duyệt dispatch riêng.
 
 ### 7.3. Dừng và rollback
 
-Dừng cờ theo phạm vi, dừng delivery và drain writer; giữ bằng chứng/PAID/ledger, theo dõi hạn retry rồi replay cùng ID có kiểm soát. DDL chưa commit thì xác minh rollback/schema/history. Chỉ review Down khi đúng baseline và chưa có dữ liệu UC18; migration Down chặn metadata/nguồn ledger/reference không tương thích. Đã phát sinh dữ liệu thì giữ schema và sửa tiến.
+Dừng cờ theo phạm vi, dừng delivery và drain writer; giữ bằng chứng/PAID/ledger, theo dõi hạn retry rồi replay cùng ID và company có kiểm soát. DDL chưa commit thì xác minh rollback/schema/history. Chỉ review Down khi đúng baseline và chưa có dữ liệu UC18. Migration Harden chặn ngay trước thay schema/history nếu đã có cấu hình/kết nối SePay, provider evidence hoặc ledger nguồn mới; không hạ dở một chuỗi rồi mới phát hiện dữ liệu. Đã phát sinh cấu hình hoặc tài chính thì giữ schema và sửa tiến.
 
 Không tự quay về binary UC17 xác nhận CASH thiếu ledger, không reset PAID/xóa ledger để chạy lại. `.env.before-<SHA>` không tự chứng minh binary cũ tương thích. Restore toàn DB cần duyệt riêng và thống kê mọi ghi sau cutoff, kể cả UC khác; không thu hồi push hoặc hoàn tác tiền ngoài ngân hàng. Archive sai binding chỉ cho vận hành; outbox quá 10 lỗi chỉ requeue đúng message đã review, giữ EventId.
 
 ## 8. Kiểm chứng và bàn giao
+
+### 8.1. Kết quả hiện hành ngày 05/11/2026
+
+Luồng BE Admin/BankManage đã hoàn thiện, gồm callback chỉ tạo ticket mã hóa trong Redis và POST complete bằng JWT của đúng người khởi tạo; state/ticket một lần, kiểm phiên bản cấu hình và quyền thực tế. Đã kiểm provider timeout/malformed response, refresh token, retry khi tạo webhook mất response, DISCONNECTING khi xóa provider thất bại, ngân hàng cũ và namespace company. Lỗi provider trả 503 với thông báo đã làm sạch; không trả body/secret từ provider.
+
+| Kiểm chứng | Kết quả |
+|---|---|
+| Integration PaymentReconciliation, PostgreSQL16/Redis7 riêng | 69/69 passed, 0 failed/skipped; gồm 8 test luồng thiết lập SePay và hồi quy tài chính/deployment |
+| Infrastructure HMAC/Redis/worker/OAuth client | 41/41 passed, 0 failed/skipped |
+| Domain filter Payments/Settlement | 46/46 passed, 0 failed/skipped; đây là filter của lượt kiểm mới, không cộng với số lịch sử |
+| Clean Architecture | 37/37 passed |
+| Build solution `dotnet build --no-restore` | 0 lỗi; còn 1 cảnh báo NU1510 dependency hiện hữu |
+| EF model/snapshot | Không có pending model changes |
+| Workflow deployment và Postman | Verifier workflow đạt; collection tài chính 17 request chạy trong integration; collection thiết lập 13 request sinh/kiểm đồng bộ |
+| Shared-local smoke | 18/18 kiểm tra HTTP đọc/guard UC14–UC18 và SePay; không tạo giao dịch thử |
+
+**Rollout OAuth DB local:** baseline thực `20261104074142_AddPaymentReconciliation`, PostgreSQL 18.6. Đã backup bằng client major 18, restore trên container PostgreSQL18 không mạng, diễn tập Up → Down → Up rồi áp hai migration tại mục 7.2 trong một transaction. Đối chiếu toàn bộ dữ liệu cũ của 53 bảng public/Identity trước và sau migration/smoke giữ nguyên; chỉ thêm permission `Integrations.SepayManage` và cấp cho đúng 1 role vốn có `Roles.AssignPermissions`. Hai bảng cấu hình/kết nối mới rỗng; vẫn 0 bank transaction. Không chạy seeder, không tạo ngân hàng/fee/ledger hoặc nhập credential SePay thử vào DB chung.
+
+Backup OAuth riêng tại `artifacts/uc18/shared-local/oauth-20261105/backups/BadmintonClub-before-SePay-OAuth.dump`, SHA256 `96d7bea4b413b65b43a040f02476203cea2f0606d66aaffda9bcc15f5c88764e`. Thư mục backup có ACL riêng và bị Git ignore; SQL review, rehearsal, postflight và smoke cùng thư mục đợt này. Không đưa dump vào gói bàn giao công khai. Sáu constraint nguồn UC18, ba unique index nguồn thu và hai unique index namespace company/provider bank được kiểm sau migration.
+
+FE đã hoàn tác phần thử thêm; chỉ còn `pubspec.lock` vốn đã sửa trước đợt này. Không commit/push/deploy trong lượt hoàn thiện này; các commit UC18 trung gian do người dùng tạo được giữ nguyên. Source và docs sửa tiếp cần được review, commit và push cùng các file mới. Postman ở ngoài repo BE cần gửi kèm riêng. Kiểm thử provider dùng fake, FCM dùng mock; không kết luận đã nghiệm thu SePay thật từ các số liệu trên.
+
+### 8.2. Bằng chứng lịch sử ngày 04/11/2026
 
 **Rollout DB chung local ngày 04/11/2026 đã hoàn tất:** baseline thực `20261031155325_AddPersonalFeePayment`, PostgreSQL 18.6. Đã backup bằng client cùng major 18, restore vào PostgreSQL 18 riêng và kiểm Up → Down → Up trước khi áp một transaction cho `20261103010523_AddSessionAddressAndCoordinates` và `20261104074142_AddPaymentReconciliation`. Không chạy seeder, không tạo fee/bank/PAID/ledger thử trên DB chung. Đối chiếu toàn bộ cột cũ của 53 bảng public/Identity trước và sau migration/API smoke trùng nhau; sáu CHECK và ba unique index nguồn thu hiện diện.
 
@@ -259,7 +326,7 @@ Sau khi bỏ gói file vận hành riêng, chạy lại đạt 59/59 integration
 
 Postman CLI 1.75.0 chạy đủ 17 request trên Kestrel/PostgreSQL16/Redis7 riêng: 3 PAID, 3 ledger, 4 bank transaction, 6 Notification, 6 Outbox; thiếu/thừa giữ UNPAID. Năm ca kiểm timeout reference/session/fee/transaction và deadlock thật: lỗi không ghi dở, retry hai lần chỉ một khoản thu. Backup/restore sang DB fixture khác đạt. FCM dùng mock; request tự ký chưa phải request SePay thực.
 
-**Postman:** [collection](../../../postman/UC18/UC18.postman_collection.json), [environment mẫu](../../../postman/UC18/UC18.sandbox.postman_environment.json), [hướng dẫn](../../../postman/UC18/README.md). Postman ở workspace root, ngoài repo BE; bàn giao qua Git phải gửi thêm bundle, không coi push BE đã mang theo thư mục này.
+**Postman:** [17 request tài chính sandbox](../../../postman/UC18/UC18.postman_collection.json), [13 request Admin/chủ CLB kết nối SePay](../../../postman/UC18/UC18-SePay-Setup.postman_collection.json), [environment sandbox](../../../postman/UC18/UC18.sandbox.postman_environment.json), [hướng dẫn](../../../postman/UC18/README.md). Collection kết nối gọi từng request trên đích đã chọn, cần credential/OAuth thật khi dùng provider thật; không Run toàn bộ vì có request cấu hình/ngắt kết nối. Postman ở workspace root, ngoài repo BE; bàn giao qua Git phải gửi kèm, không coi push BE đã mang theo thư mục này.
 
 Từ repo BE, với Docker Desktop Linux containers, .NET 10, Node.js và Postman CLI:
 
@@ -275,6 +342,6 @@ Runner tạo PostgreSQL16 loopback:55438/Redis7 loopback:56388 với mật khẩ
 ## 9. Việc còn lại trước nghiệm thu vận hành
 
 1. DB chung local đã áp theo yêu cầu người dùng. Trước merge/deploy cần xác minh connection DB server, baseline, SQL và backup đúng đích. Push nhánh feature chưa thay đổi DB server; sau merge main, pipeline sẽ tự áp migration còn thiếu rồi deploy đúng SHA, không chạy seeder. Phiên này chưa commit/push hoặc chạy workflow trên server.
-2. Tạo fixture riêng, bank record BE và HMAC đúng company/gateway/account; nhận request SePay Test Mode thực, kiểm ACK/retry/collision/manual/CASH/PAID/ledger/receipt.
-3. FE tích hợp list/detail/manual cho FeeManage, receipt UC17 và khử trùng push; kiểm thiết bị thật nếu nghiệm thu cả ứng dụng/thông báo.
+2. Đăng ký/phê duyệt ứng dụng OAuth với SePay, nhập client credentials qua API Admin; nghiệm thu authorize/callback/ticket/complete/select/activate/disconnect với company/ngân hàng thật trên đích UAT. Tạo fixture riêng và nhận request SePay Test Mode thực để kiểm ACK/retry/collision/manual/CASH/PAID/ledger/receipt; không coi provider giả lập là đã nghiệm thu.
+3. FE làm sau theo yêu cầu: tích hợp màn Admin, nút kết nối của chủ CLB và xác nhận ticket bằng JWT, cùng list/detail/manual cho FeeManage, receipt UC17, khử trùng push. Kiểm thiết bị thật nếu nghiệm thu cả ứng dụng/thông báo.
 4. Ghi biên bản UAT rồi duyệt riêng SePay Live/dispatch; theo dõi lỗi, MANUAL_CHECK, replay. VA và thu/chi đầy đủ UC19 chưa thuộc phiên bản này.

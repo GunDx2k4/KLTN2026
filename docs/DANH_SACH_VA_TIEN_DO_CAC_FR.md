@@ -1,7 +1,7 @@
 # 🏸 BẢNG TỔNG HỢP VÀ TIẾN ĐỘ TOÀN BỘ CÁC YÊU CẦU CHỨC NĂNG (FR01 - FR23)
 > **Dự án**: Hệ thống quản lý nhóm cầu lông phong trào (Badminton Club Management System)  
 > **Tài liệu tham chiếu gốc**: `KLHK1262714_BC1_Hệ thống quản lý nhóm cầu lông phong trào.docx`  
-> **Cập nhật UC18/FR21**: 04/11/2026; các phân hệ khác giữ mốc kiểm chứng tương ứng
+> **Cập nhật UC18/FR21**: 05/11/2026, thêm BE Admin/OAuth theo CLB; các phân hệ khác giữ mốc kiểm chứng tương ứng
 > **Trạng thái hệ thống**: Backend (.NET 10 Clean Architecture) & Mobile (Flutter)
 
 ---
@@ -30,7 +30,7 @@
 | **FR18** | Ghi nhận số cầu, chi phí sân và phụ phí thực tế | Hạch toán Vật tư & Sổ quỹ (F4) | BE kiểm chứng Đợt 5 ngày 30/10/2026; gói triển khai Đợt 6 đã chuẩn bị; FE/DB đích chưa triển khai | 4 API quyết toán |
 | **FR19** | Phân bổ chi phí theo rule và loại hội viên | Hạch toán Vật tư & Sổ quỹ (F4) | BE kiểm chứng Domain/API/transaction/Redis/outbox; xem báo cáo UC16 và runbook | 4 API quyết toán + API biểu phí |
 | **FR20** | Khởi tạo mã VietQR thanh toán nhúng sẵn tiền & mã duy nhất | Hạch toán Vật tư & Sổ quỹ (F4) | BE hoàn thiện, POC/decoder đạt; người dùng xác nhận hai app quét đúng; đã nối DB chung local và bàn giao FE | 8 route triển khai, Enabled/WritesEnabled bật trên API54796; FCM tắt, UC18 riêng |
-| **FR21** | Tiếp nhận biến động số dư ngân hàng để tự động xác nhận thanh toán | Hạch toán Vật tư & Sổ quỹ (F4) | Kiểm chứng tự động đạt; đã áp DB chung local, API54796 profile CASH; chưa áp DB server/deploy hoặc nghiệm thu provider thực | 4 API mới + mở rộng CASH UC16 |
+| **FR21** | Tiếp nhận biến động số dư ngân hàng để tự động xác nhận thanh toán | Hạch toán Vật tư & Sổ quỹ (F4) | Lõi đã áp DB chung local; bổ sung BE Admin/OAuth theo CLB, FE để sau; chưa deploy server hoặc nghiệm thu provider thực | Webhook/list/detail/manual, CASH UC16 và 12 route thiết lập OAuth |
 | **FR22** | Quản trị Sổ quỹ mở nội bộ minh bạch (Thu, Chi, Dư nợ) | Hạch toán Vật tư & Sổ quỹ (F4) | UC18 đã cung cấp dòng thu có nguồn; API quản trị/xem sổ quỹ đầy đủ chưa triển khai | 0 API UC19 |
 | **FR23** | Đánh giá tín nhiệm hai chiều (Điểm thành viên & Điểm CLB) | Đánh giá & Tín nhiệm (F5) | ⏳ *Sẵn sàng DB, cần thêm Endpoint* | 0 API |
 

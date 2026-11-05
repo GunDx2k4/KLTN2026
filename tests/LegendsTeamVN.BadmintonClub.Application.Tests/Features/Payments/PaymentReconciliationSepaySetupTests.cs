@@ -24,7 +24,7 @@ public sealed partial class PaymentReconciliationHttpTests
 {
     private sealed partial class Fixture
     {
-        private AppIdentityDbContext OpenIdentity() => new(new DbContextOptionsBuilder<AppIdentityDbContext>()
+        public AppIdentityDbContext OpenIdentity() => new(new DbContextOptionsBuilder<AppIdentityDbContext>()
             .UseNpgsql(Database.ConnectionString, o => o.MigrationsAssembly("LegendsTeamVN.BadmintonClub.Migrator")).Options);
 
         private async Task SeedSetupIdentity()
@@ -74,6 +74,13 @@ public sealed partial class PaymentReconciliationHttpTests
             var callback = await Callback(await StartSetup());
             Assert.Equal(HttpStatusCode.Redirect, callback.StatusCode);
             Assert.StartsWith("https://app.example.test/#/club/" + Group + "/sepay?", callback.Headers.Location!.ToString());
+            var ticket = CallbackTicket(callback);
+            Assert.Equal(HttpStatusCode.OK, (await Client.PostAsJsonAsync(SetupPath + "/complete", new { ticket })).StatusCode);
+        }
+        public static string CallbackTicket(HttpResponseMessage response)
+        {
+            var fragment = response.Headers.Location!.Fragment;
+            return QueryHelpers.ParseQuery(fragment[(fragment.IndexOf('?') + 1)..])["ticket"].ToString();
         }
     }
 
@@ -83,6 +90,8 @@ public sealed partial class PaymentReconciliationHttpTests
         public string Account { get; set; } = "00123456789";
         public string Secret { get; private set; } = "";
         public string WebhookUrl { get; private set; } = "";
+        public DateTime InitialExpiry { get; set; } = DateTime.UtcNow.AddHours(1);
+        public int Refreshes { get; private set; }
         public int Creates { get; private set; }
         public int Exchanges { get; private set; }
         public bool FailAfterCreate { get; set; }
@@ -92,10 +101,13 @@ public sealed partial class PaymentReconciliationHttpTests
         {
             Exchanges++;
             Assert.Equal("private-client-secret", secret);
-            return Task.FromResult(new SepayTokens("private-access-token", "private-refresh-token", DateTime.UtcNow.AddHours(1)));
+            return Task.FromResult(new SepayTokens("private-access-token", "private-refresh-token", InitialExpiry));
         }
-        public Task<SepayTokens> RefreshAsync(string clientId, string secret, string refreshToken, CancellationToken ct) =>
-            Task.FromResult(new SepayTokens("private-refreshed-access", "private-refreshed-refresh", DateTime.UtcNow.AddHours(1)));
+        public Task<SepayTokens> RefreshAsync(string clientId, string secret, string refreshToken, CancellationToken ct)
+        {
+            Refreshes++;
+            return Task.FromResult(new SepayTokens("private-refreshed-access", "private-refreshed-refresh", DateTime.UtcNow.AddHours(1)));
+        }
         public Task<long> CompanyAsync(string accessToken, CancellationToken ct) => Task.FromResult(Company);
         public Task<IReadOnlyList<SepayRemoteBank>> BanksAsync(string accessToken, CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<SepayRemoteBank>>([new(19, Account, "CLB", "970436", "Vietcombank", true)]);
@@ -175,12 +187,12 @@ public sealed partial class PaymentReconciliationHttpTests
         f.Provider.Account = "00123456789";
         Assert.Equal(HttpStatusCode.OK, (await f.Client.PostAsJsonAsync(f.SetupPath + "/account", new { providerBankId = 19 })).StatusCode);
         f.Provider.FailAfterCreate = true;
-        Assert.NotEqual(HttpStatusCode.OK, (await f.Client.PostAsync(f.SetupPath + "/activate", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await f.Client.PostAsync(f.SetupPath + "/activate", null)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await f.Client.PostAsync(f.SetupPath + "/activate", null)).StatusCode);
         Assert.Equal(1, f.Provider.Creates);
         f.Provider.FailDelete = true;
-        Assert.NotEqual(HttpStatusCode.OK, (await f.Client.DeleteAsync(f.SetupPath)).StatusCode);
-        Assert.Contains("CONNECTED", await f.Client.GetStringAsync(f.SetupPath));
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await f.Client.DeleteAsync(f.SetupPath)).StatusCode);
+        Assert.Contains("DISCONNECTING", await f.Client.GetStringAsync(f.SetupPath));
         f.Provider.FailDelete = false;
         Assert.Equal(HttpStatusCode.OK, (await f.Client.DeleteAsync(f.SetupPath)).StatusCode);
     }
@@ -191,7 +203,7 @@ public sealed partial class PaymentReconciliationHttpTests
         await using var f = await Fixture.Create();
         await using var db = f.Database.Open();
         var evidence = new LegendsTeamVN.BadmintonClub.Domain.Services.PaymentReconciliationEvidence(999, "Vietcombank", "00123456789", "", "in", 50000,
-            DateTime.UtcNow, null, "missing code");
+            DateTime.UtcNow, "COMPANY-REFERENCE", "missing code");
         var a = BankTransaction.Receive(f.Bank, evidence, "123");
         var b = BankTransaction.Receive(f.Bank, evidence, "456");
         db.AddRange(a, b);
@@ -200,6 +212,104 @@ public sealed partial class PaymentReconciliationHttpTests
         Assert.Equal(a.Id, (await repository.FindProviderAsync(999, "123", default))!.Id);
         Assert.Equal(b.Id, (await repository.FindProviderAsync(999, "456", default))!.Id);
         Assert.Null(await repository.FindProviderAsync(999, "789", default));
+        Assert.False(a.HasReferenceCollision([b]));
+        var legacy = BankTransaction.Receive(f.Bank, evidence);
+        Assert.True(a.HasReferenceCollision([legacy]));
         Assert.Equal(0, await db.GroupLedgers.CountAsync());
+    }
+
+    [ReconciliationIntegrationFact]
+    public async Task SepaySetupCallbackDoesNotConnectUntilInitiatingUserCompletesSingleUseTicket()
+    {
+        await using var f = await Fixture.Create(setup: true);
+        await f.ConfigureSetup();
+        var callback = await f.Callback(await f.StartSetup());
+        Assert.Equal(HttpStatusCode.Redirect, callback.StatusCode);
+        var ticket = Fixture.CallbackTicket(callback);
+        await using var db = f.Database.Open();
+        Assert.Empty(await db.Set<ClubSepayConnection>().ToListAsync());
+        var pending = await f.Redis.GetDatabase().StringGetAsync("sepay:oauth:ticket:" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(ticket))));
+        Assert.DoesNotContain("private-access-token", pending.ToString());
+        var otherManager = await f.AddManager();
+        f.Login(otherManager);
+        Assert.Equal(HttpStatusCode.Forbidden, (await f.Client.PostAsJsonAsync(f.SetupPath + "/complete", new { ticket })).StatusCode);
+        Assert.Empty(await db.Set<ClubSepayConnection>().ToListAsync());
+        f.Login(f.Manager);
+        Assert.Equal(HttpStatusCode.OK, (await f.Client.PostAsJsonAsync(f.SetupPath + "/complete", new { ticket })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await f.Client.PostAsJsonAsync(f.SetupPath + "/complete", new { ticket })).StatusCode);
+        Assert.Equal(1, await db.Set<ClubSepayConnection>().CountAsync());
+    }
+
+    [ReconciliationIntegrationFact]
+    public async Task SepaySetupDenyAndRevokedPermissionCannotCompleteOAuth()
+    {
+        await using var f = await Fixture.Create(setup: true);
+        await f.ConfigureSetup();
+        var state = await f.StartSetup();
+        var denied = await f.Client.GetAsync("/api/v1/sepay/oauth/callback?state=" + state + "&error=access_denied");
+        Assert.Equal(HttpStatusCode.Redirect, denied.StatusCode);
+        Assert.Contains("sepay=denied", denied.Headers.Location!.ToString());
+        Assert.DoesNotContain("ticket", denied.Headers.Location.ToString());
+        Assert.Equal(0, f.Provider.Exchanges);
+        var callback = await f.Callback(await f.StartSetup());
+        var ticket = Fixture.CallbackTicket(callback);
+        await using var db = f.Database.Open();
+        var member = await db.GroupMembers.SingleAsync(x => x.UserId == f.Manager);
+        await db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM role_permission WHERE id_role = {member.RoleId}");
+        Assert.Equal(HttpStatusCode.Forbidden, (await f.Client.PostAsJsonAsync(f.SetupPath + "/complete", new { ticket })).StatusCode);
+        Assert.Empty(await db.Set<ClubSepayConnection>().ToListAsync());
+        await using var identity = f.OpenIdentity();
+        identity.RolePermissions.RemoveRange(await identity.RolePermissions.ToListAsync());
+        await identity.SaveChangesAsync();
+        Assert.Equal(HttpStatusCode.Forbidden, (await f.Client.GetAsync("/api/v1/sepay/application")).StatusCode);
+    }
+
+    [ReconciliationIntegrationFact]
+    public async Task SepaySetupRefreshesExpiredTokenAndCanManageHistoricalBankConnection()
+    {
+        await using var f = await Fixture.Create(setup: true);
+        f.Provider.InitialExpiry = DateTime.UtcNow.AddSeconds(-5);
+        await f.AuthorizeSetup();
+        Assert.Equal(HttpStatusCode.OK, (await f.Client.GetAsync(f.SetupPath + "/accounts")).StatusCode);
+        Assert.Equal(1, f.Provider.Refreshes);
+        Assert.Equal(HttpStatusCode.OK, (await f.Client.PostAsJsonAsync(f.SetupPath + "/account", new { providerBankId = 19 })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await f.Client.PostAsync(f.SetupPath + "/activate", null)).StatusCode);
+        await using var db = f.Database.Open();
+        var connected = await db.Set<ClubSepayConnection>().SingleAsync();
+        Assert.DoesNotContain("private-refreshed-access", connected.ProtectedTokens);
+        var bank = await db.GroupBankAccounts.SingleAsync();
+        bank.SetActive(false);
+        var replacement = GroupBankAccount.CreatePaymentAccount(f.Group, new(Guid.NewGuid(), "970436", "Vietcombank", "00123456789", "CLB NEW"));
+        await db.SaveChangesAsync();
+        db.Add(replacement);
+        await db.SaveChangesAsync();
+        var list = await f.Client.GetFromJsonAsync<SepayConnectionResponse[]>(f.SetupPath + "/connections");
+        Assert.Equal(connected.Id, Assert.Single(list!).ConnectionId);
+        Assert.Equal(HttpStatusCode.NotFound, (await f.Client.DeleteAsync(f.SetupPath + "/connections/" + Guid.NewGuid())).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await f.Client.DeleteAsync(f.SetupPath + "/connections/" + connected.Id)).StatusCode);
+        Assert.Empty((await f.Client.GetFromJsonAsync<SepayConnectionResponse[]>(f.SetupPath + "/connections"))!);
+        Assert.Equal(0, await db.GroupLedgers.CountAsync());
+    }
+
+    [ReconciliationIntegrationFact]
+    public async Task SepaySetupMasksAndRetainsClientSecretAndRejectsStaleOrUnsafeConfiguration()
+    {
+        await using var f = await Fixture.Create(setup: true);
+        await f.ConfigureSetup();
+        var app = await f.Client.GetFromJsonAsync<SepayApplicationResponse>("/api/v1/sepay/application");
+        Assert.True(app!.HasClientSecret);
+        await using var db = f.Database.Open();
+        var encrypted = (await db.Set<SepayApplicationSettings>().AsNoTracking().SingleAsync()).ProtectedClientSecret;
+        var input = new ConfigureSepayApplicationRequest(app.ClientId, null, app.PublicApiBaseUrl, app.FrontendBaseUrl, true, app.Revision);
+        Assert.Equal(HttpStatusCode.OK, (await f.Client.PutAsJsonAsync("/api/v1/sepay/application", input)).StatusCode);
+        Assert.Equal(encrypted, (await db.Set<SepayApplicationSettings>().AsNoTracking().SingleAsync()).ProtectedClientSecret);
+        Assert.Equal(HttpStatusCode.Conflict, (await f.Client.PutAsJsonAsync("/api/v1/sepay/application", input)).StatusCode);
+        var current = await f.Client.GetFromJsonAsync<SepayApplicationResponse>("/api/v1/sepay/application");
+        Assert.Equal(HttpStatusCode.BadRequest, (await f.Client.PutAsJsonAsync("/api/v1/sepay/application", input with {
+            Revision = current!.Revision, PublicApiBaseUrl = "http://localhost:54796" })).StatusCode);
+        var callback = await f.Callback(await f.StartSetup());
+        Assert.Equal(HttpStatusCode.OK, (await f.Client.PostAsJsonAsync(f.SetupPath + "/complete", new { ticket = Fixture.CallbackTicket(callback) })).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await f.Client.PutAsJsonAsync("/api/v1/sepay/application", input with {
+            Revision = current.Revision, ClientId = "another-client" })).StatusCode);
     }
 }

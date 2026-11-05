@@ -21,7 +21,7 @@ public sealed class SepaySetupRepository(BadmintonDbContext db, AppIdentityDbCon
 
     public Task<ClubSepayConnection?> GetConnectionAsync(Guid bankAccountId, CancellationToken ct) =>
         db.Set<ClubSepayConnection>().Where(x => x.BankAccountId == bankAccountId)
-            .OrderByDescending(x => x.AuthorizedAt).FirstOrDefaultAsync(ct);
+            .OrderBy(x => x.Status == "DISCONNECTED").ThenByDescending(x => x.AuthorizedAt).ThenByDescending(x => x.Id).FirstOrDefaultAsync(ct);
 
     public Task<ClubSepayConnection?> GetConnectionByIdAsync(Guid connectionId, CancellationToken ct) =>
         db.Set<ClubSepayConnection>().SingleOrDefaultAsync(x => x.Id == connectionId, ct);
