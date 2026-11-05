@@ -7,7 +7,7 @@ services:
       - "127.0.0.1:8080:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - Seeding__Enabled=false
+      - Seeding__Enabled=true
       - ConnectionStrings__Database=${DB_CONNECTION_STRING}
       - ConnectionStrings__Redis=${REDIS_CONNECTION_STRING}
       - Jwt__Issuer=${JWT_ISSUER}
@@ -41,7 +41,7 @@ services:
       - migration
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - Seeding__Enabled=false
+      - Seeding__Enabled=true
       - ConnectionStrings__Database=${DB_CONNECTION_STRING}
       - ConnectionStrings__Redis=${REDIS_CONNECTION_STRING}
       - ConnectionStrings__MigrationsAssembly=LegendsTeamVN.BadmintonClub.Migrator

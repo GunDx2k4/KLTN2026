@@ -224,7 +224,7 @@ jobs:
             done
             
             docker compose --env-file .env.next config --quiet
-            docker compose --env-file .env.next run --rm --no-deps -e Seeding__Enabled=false -e Migrations__VerifyOnly=false migrator
+            docker compose --env-file .env.next run --rm --no-deps -e Seeding__Enabled=true -e Migrations__VerifyOnly=false migrator
             docker compose --env-file .env.next run --rm --no-deps -e Migrations__VerifyOnly=true migrator
             if [ -f .env ]; then cp -p .env ".env.before-$DEPLOY_SHA"; fi
             mv .env.next .env
