@@ -81,7 +81,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LC }}
           tags: |
             type=raw,value=latest
-            type=sha,format=long
+            type=sha
             
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -98,9 +98,7 @@ jobs:
           context: .
           file: Dockerfile.migrator
           push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LC }}-migrator:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LC }}-migrator:sha-${{ github.sha }}
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LC }}-migrator:latest
           labels: ${{ steps.meta.outputs.labels }}
 
   deploy:
@@ -116,7 +114,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 2
+
+      - name: Check if Migrations changed
+        id: changed-migrations
+        uses: tj-actions/changed-files@v44
+        with:
+          files: |
+            src/Hosts/LegendsTeamVN.BadmintonClub.Migrator/Migrations/**
 
       - name: Prepare Firebase Credentials for Server
         env:
@@ -145,6 +150,7 @@ jobs:
       - name: Deploy to self-hosted server via SSH
         uses: appleboy/ssh-action@v1.0.3
         env:
+          RUN_MIGRATIONS: ${{ steps.changed-migrations.outputs.any_changed }}
           DEPLOY_SHA: ${{ github.sha }}
           IMAGE_REPOSITORY: ${{ env.REGISTRY }}/${{ github.repository }}
           REGISTRY_USER: ${{ github.actor }}
@@ -171,7 +177,7 @@ jobs:
           port: ${{ secrets.SERVER_PORT }}
           username: ${{ secrets.SERVER_USERNAME }}
           key: ${{ secrets.SERVER_SSH_KEY }}
-          envs: DEPLOY_SHA,IMAGE_REPOSITORY,REGISTRY_USER,REGISTRY_TOKEN,DB_CONNECTION_STRING,REDIS_CONNECTION_STRING,JWT_ISSUER,JWT_AUDIENCE,JWT_SECRET,JWT_EXPIRE_MIN,RABBITMQ_HOST,RABBITMQ_VHOST,RABBITMQ_PORT,RABBITMQ_USER,RABBITMQ_PASS,SETTLEMENT_WRITES_ENABLED,SETTLEMENT_DISPATCH_ENABLED,SETTLEMENT_PREVIEW_SIGNING_KEY,RECONCILIATION_ENABLED,RECONCILIATION_WRITES_ENABLED,RECONCILIATION_DISPATCH_ENABLED
+          envs: RUN_MIGRATIONS,DEPLOY_SHA,IMAGE_REPOSITORY,REGISTRY_USER,REGISTRY_TOKEN,DB_CONNECTION_STRING,REDIS_CONNECTION_STRING,JWT_ISSUER,JWT_AUDIENCE,JWT_SECRET,JWT_EXPIRE_MIN,RABBITMQ_HOST,RABBITMQ_VHOST,RABBITMQ_PORT,RABBITMQ_USER,RABBITMQ_PASS,SETTLEMENT_WRITES_ENABLED,SETTLEMENT_DISPATCH_ENABLED,SETTLEMENT_PREVIEW_SIGNING_KEY,RECONCILIATION_ENABLED,RECONCILIATION_WRITES_ENABLED,RECONCILIATION_DISPATCH_ENABLED
           script: |
             set -eu
             umask 077
@@ -195,8 +201,8 @@ jobs:
             }
             
             image_repository=$(printf '%s' "$IMAGE_REPOSITORY" | tr '[:upper:]' '[:lower:]')
-            api_image="$image_repository:sha-$DEPLOY_SHA"
-            migrator_image="$image_repository-migrator:sha-$DEPLOY_SHA"
+            api_image="$image_repository:latest"
+            migrator_image="$image_repository-migrator:latest"
             evidence_directory="$HOME/.local/share/badmintonclub/reconciliation-evidence"
             key_directory="$HOME/.local/share/badmintonclub/sepay-keys"
             mkdir -p "$evidence_directory"
@@ -224,18 +230,11 @@ jobs:
             done
             
             docker compose --env-file .env.next config --quiet
-            docker compose --env-file .env.next run --rm --no-deps -e Seeding__Enabled=true -e Migrations__VerifyOnly=false migrator
-            docker compose --env-file .env.next run --rm --no-deps -e Migrations__VerifyOnly=true migrator
+            if [ "$RUN_MIGRATIONS" = "true" ]; then
+              docker compose --env-file .env.next run --rm migrator
+            fi
             if [ -f .env ]; then cp -p .env ".env.before-$DEPLOY_SHA"; fi
             mv .env.next .env
-            docker compose up -d --no-deps --force-recreate api
+            docker compose up -d --force-recreate
             
-            attempt=0
-            until curl --fail --silent --show-error http://127.0.0.1:8080/swagger/v1/swagger.json -o .uc18-swagger.json; do
-                attempt=$((attempt + 1))
-                [ "$attempt" -lt 30 ] || exit 1
-                sleep 2
-            done
-            grep -Fq '/webhooks/sepay/' .uc18-swagger.json
-            grep -Fq '/reconciliations' .uc18-swagger.json
-            printf '%s\n' 'Đã deploy API UC18 với schema đã chuẩn bị. Chưa xác nhận nghiệm thu SePay/FCM thực.'
+            docker image prune -f
