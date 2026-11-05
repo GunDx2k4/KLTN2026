@@ -40,6 +40,16 @@ public sealed class LedgerReadRepository(BadmintonDbContext db, TimeProvider clo
         var monthly = db.MonthlyContributions.AsNoTracking().Where(m => !m.IsDeleted && m.GroupId == clubId &&
             m.Status == MonthlyContributionStatus.UNPAID);
         if (userId.HasValue) monthly = monthly.Where(m => m.UserId == userId.Value);
+        if (filter.FromUtc.HasValue)
+        {
+            sessions = sessions.Where(f => f.PublishedAt >= filter.FromUtc.Value);
+            monthly = monthly.Where(m => m.IssuedAt >= filter.FromUtc.Value);
+        }
+        if (filter.ToUtc.HasValue)
+        {
+            sessions = sessions.Where(f => f.PublishedAt < filter.ToUtc.Value);
+            monthly = monthly.Where(m => m.IssuedAt < filter.ToUtc.Value);
+        }
         if (filter.ContributionMonth.HasValue)
         {
             monthly = monthly.Where(m => m.ContributionMonth == filter.ContributionMonth.Value);
@@ -80,6 +90,9 @@ public sealed class LedgerReadRepository(BadmintonDbContext db, TimeProvider clo
     public async Task<LedgerPageResponse<LedgerTransactionResponse>> ListTransactionsAsync(Guid clubId, Guid userId, LedgerReadFilter filter, CancellationToken ct)
     {
         var query = Filter(Ledger(clubId), filter);
+        if (filter.ContributionMonth.HasValue)
+            query = query.Where(l => db.MonthlyContributions.Any(m => m.Id == l.MonthlyContributionId &&
+                m.GroupId == clubId && m.ContributionMonth == filter.ContributionMonth.Value));
         if (filter.OnlyMine) query = query.Where(l => l.TransactionType == TransactionType.INFLOW &&
             ((l.FeeId != null && db.SessionFees.Any(f => f.Id == l.FeeId && f.UserId == userId && f.Session.GroupId == clubId)) ||
              (l.MonthlyContributionId != null && db.MonthlyContributions.Any(m => m.Id == l.MonthlyContributionId && m.GroupId == clubId && m.UserId == userId))));
