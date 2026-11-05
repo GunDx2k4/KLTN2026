@@ -72,6 +72,7 @@ public sealed partial class PersonalFeeHttpTests
                 ["Jwt:Issuer"] = "uc17-tests", ["Jwt:Audience"] = "uc17-tests", ["Jwt:SecretKey"] = new string('k', 64)
             }).Build());
             builder.Services.AddApplication();
+            builder.Services.AddScoped<LegendsTeamVN.BadmintonClub.Application.Abstractions.ILedgerWriteRepository, LegendsTeamVN.BadmintonClub.Persistence.Repositories.LedgerWriteRepository>();
             builder.Services.AddScoped(sp => f.Database.Open(sp.GetRequiredService<IPublisher>(), new RejectPaymentCommitInterceptor(() => f.RejectCommit)));
             builder.Services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<BadmintonDbContext>());
             builder.Services.AddScoped<IPaymentRepository, PaymentRepository>();

@@ -32,6 +32,8 @@ public class BadmintonDbContext(DbContextOptions<BadmintonDbContext> options, IP
     public DbSet<MatchPlayer> MatchPlayers => Set<MatchPlayer>();
     public DbSet<SessionFee> SessionFees => Set<SessionFee>();
     public DbSet<BankTransaction> BankTransactions => Set<BankTransaction>();
+    public DbSet<MonthlyContribution> MonthlyContributions => Set<MonthlyContribution>();
+    public DbSet<LedgerAttachment> LedgerAttachments => Set<LedgerAttachment>();
     public DbSet<GroupLedger> GroupLedgers => Set<GroupLedger>();
 
 
@@ -40,6 +42,16 @@ public class BadmintonDbContext(DbContextOptions<BadmintonDbContext> options, IP
         try
         {
             return await base.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException
+            { SqlState: PostgresErrorCodes.LockNotAvailable or PostgresErrorCodes.DeadlockDetected or PostgresErrorCodes.SerializationFailure })
+        {
+            throw new LedgerWriteConflictException("Ledger.Busy", "Sổ quỹ đang được cập nhật, hãy thử lại với cùng mã yêu cầu.", ex);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException
+            { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: "IX_group_ledger_id_group_request_id" or "IX_group_ledger_monthly_contribution_id" or "IX_monthly_contribution_id_group_user_id_contribution_month" })
+        {
+            throw new LedgerWriteConflictException("Ledger.Busy", "Sổ quỹ đang được cập nhật, hãy thử lại với cùng mã yêu cầu.", ex);
         }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException
             { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: "IX_bank_transaction_provider_transaction_id" or "ux_bank_transaction_company_provider" or

@@ -573,3 +573,23 @@ PaymentBankSnapshot là kiểu giá trị ở cuối SessionFee.cs; cột mappin
 Notification PAYMENT tham chiếu `SessionFee/feeId`; outbox dùng bảng rotation_outbox hiện hữu, kind mới CashPaymentRequestedPush, payload EventId/RequestId/FeeId/RecipientId/GroupId/SessionId. Không ghi bank_transaction/ledger từ thao tác khởi tạo/tự báo.
 
 Down chặn nếu còn bất kỳ metadata UC17/snapshot/BIN; không xóa dữ liệu để ép rollback, không hạ UC16. Khi đã dùng, ưu tiên giữ schema và tắt ghi/dispatch; GET lịch sử vẫn đọc. [Hợp đồng và runbook](Detail%20Design/UC17-BE.md). Schema này không có nghĩa POC QR đã đạt hoặc DB đích đã được nâng cấp.
+
+
+## Bổ sung UC19 Wave 1 — Nghĩa vụ tháng và hóa đơn
+
+Schema theo hướng B đã chốt, migration `20261105062612_AddOpenGroupLedger`; không thay lịch sử migration UC18. Chưa áp database vận hành.
+
+| Bảng | Cột chính và ràng buộc |
+|---|---|
+| monthly_contribution | id_monthly_contribution UUID PK; id_group/user_id FK RESTRICT; contribution_month DATE ngày đầu tháng; monthly_fee/female_discount_applied/amount_due numeric(18,2); status UNPAID/PAID; issued_at/issued_by; paid_at/collected_by. Có audit Aggregate. Unique nhóm/người/kỳ kể cả soft-delete; snapshot giá không thay theo biểu phí mới. |
+| group_ledger | Thêm request_id UUID nullable (unique theo id_group khi khác null), monthly_contribution_id UUID nullable FK RESTRICT/unique. Nguồn tháng loại trừ fee_id/bank_transaction_id, chỉ INFLOW/MONTHLY_FUND và amount dương; RequestId UC19 chỉ đi cùng nguồn tháng hoặc khoản OUTFLOW hợp lệ. Không thêm cột balance/contributor/kỳ trùng nguồn. |
+| ledger_attachment | id_attachment UUID PK; ledger_id UUID unique FK RESTRICT; original_file_name, content_type, content_length, sha256, content bytea. Một file JPEG/PNG/PDF <= 5 MiB; chiều dài khớp bytea. Truy vấn lịch sử không tải bytea. |
+
+`group_member.monthly_expiry_date` theo mapping thực tế là timestamptz UTC, không phải DATE. Domain gia hạn tới đầu tháng kế tiếp tại Asia/Ho_Chi_Minh trừ một microsecond; giữ hạn hiện có lớn hơn. Unique/FK không thay kiểm bất biến liên bảng trong Domain/transaction.
+
+Số dư chỉ tính từ ledger đã ghi nhận. Nghĩa vụ tháng UNPAID và SessionFee UNPAID đã phát hành là công nợ, không phải thu quỹ. Không backfill lịch sử đóng tháng từ MonthlyExpiryDate hoặc nội dung mô tả. Down migration chặn cả nghĩa vụ UNPAID chưa có ledger.
+
+
+### UC19 Wave 2 — Mốc tư cách hội viên tháng
+
+Migration `20261105065216_TrackMonthlyMembershipPeriod` thêm `group_member.monthly_membership_since` timestamptz nullable. Mốc ghi nhận thời điểm thực tế bắt đầu liên tục MONTHLY ACTIVE, thay đổi loại/trạng thái sẽ đặt lại hoặc xóa hiệu lực; không backfill từ JoinedAt/MonthlyExpiryDate. Legacy null bị chặn khi phát hành/thu tháng. Domain không nhận cờ xác nhận lịch sử từ client. Nhóm/phí/ledger/hạn/Notification/Outbox được khóa và ghi trong cùng transaction theo nghiệp vụ; RequestId và nguồn tháng có unique. Các migration Down UC19 khóa bảng trước khi kiểm guard để không có ghi chen giữa kiểm dữ liệu và drop; cần dừng writer khi hạ schema và chỉ kiểm trên sandbox đã xác nhận.

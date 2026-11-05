@@ -31,7 +31,7 @@
 | **FR19** | Phân bổ chi phí theo rule và loại hội viên | Hạch toán Vật tư & Sổ quỹ (F4) | BE kiểm chứng Domain/API/transaction/Redis/outbox; xem báo cáo UC16 và runbook | 4 API quyết toán + API biểu phí |
 | **FR20** | Khởi tạo mã VietQR thanh toán nhúng sẵn tiền & mã duy nhất | Hạch toán Vật tư & Sổ quỹ (F4) | BE hoàn thiện, POC/decoder đạt; người dùng xác nhận hai app quét đúng; đã nối DB chung local và bàn giao FE | 8 route triển khai, Enabled/WritesEnabled bật trên API54796; FCM tắt, UC18 riêng |
 | **FR21** | Tiếp nhận biến động số dư ngân hàng để tự động xác nhận thanh toán | Hạch toán Vật tư & Sổ quỹ (F4) | Lõi đã áp DB chung local; bổ sung BE Admin/OAuth theo CLB, FE để sau; chưa deploy server hoặc nghiệm thu provider thực | Webhook/list/detail/manual, CASH UC16 và 12 route thiết lập OAuth |
-| **FR22** | Quản trị Sổ quỹ mở nội bộ minh bạch (Thu, Chi, Dư nợ) | Hạch toán Vật tư & Sổ quỹ (F4) | UC18 đã cung cấp dòng thu có nguồn; API quản trị/xem sổ quỹ đầy đủ chưa triển khai | 0 API UC19 |
+| **FR22** | Quản trị Sổ quỹ mở nội bộ minh bạch (Thu, Chi, Dư nợ) | Hạch toán Vật tư & Sổ quỹ (F4) | UC19 Wave 1–3: đọc/ghi nguyên tử, DomainEvent và worker sau commit; chưa deploy/provider thật | 5 GET + 3 POST UC19 |
 | **FR23** | Đánh giá tín nhiệm hai chiều (Điểm thành viên & Điểm CLB) | Đánh giá & Tín nhiệm (F5) | ⏳ *Sẵn sàng DB, cần thêm Endpoint* | 0 API |
 
 > **Thống kê tổng hợp cũ** (không dùng làm bằng chứng UC17/UC18; cập nhật FR20 ngày 01/11/2026 tại dòng tương ứng và hợp đồng UC17):
@@ -259,8 +259,8 @@ Các phân hệ dưới đây đã có sẵn cấu trúc bảng và mô hình th
   - Source, kiểm chứng tự động và rollout DB chung local có bằng chứng tại [UC18-BE](Detail%20Design/UC18-BE.md). Local đã tới migration `20261104074142_AddPaymentReconciliation`, API54796 profile CASH; dữ liệu cũ 53 bảng giữ nguyên. Chưa bật Live, chưa áp DB server/deploy hoặc xác minh company/gateway và request Test Mode thực. Cờ options mặc định false; Development local bật WritesEnabled, webhook/dispatch tắt.
 - **FR22 - Quản trị Sổ quỹ mở nội bộ minh bạch**:
   - *Mục tiêu*: Công khai minh bạch dòng tiền thu/chi, số dư quỹ khả dụng và danh sách người còn nợ tiền cho toàn thể hội viên theo dõi; cho phép thủ quỹ tạo phiếu thu/chi ngoài sân.
-  - *Bảng dữ liệu đã có*: `group_ledger`.
-  - *Endpoint dự kiến*: `GET /api/v1/clubs/{clubId}/ledger`, `POST /api/v1/clubs/{clubId}/ledger/transactions`.
+  - *Wave 1–2*: Source đã có `group_ledger`, `monthly_contribution`, `ledger_attachment` và 5 GET tổng quan/lịch sử/công nợ/candidates/hóa đơn cùng 3 POST phát hành/thu tháng/chi. Migration chỉ kiểm trên sandbox.
+  - *Wave 3*: Đã có worker gửi thông báo UC19 và sự kiện thu UC18, kiểm sandbox/provider giả; chưa nghiệm thu dispatch thật hoặc deploy. [Hợp đồng Wave 1](Detail%20Design/UC19-BE.md).
 
 ---
 

@@ -1,3 +1,4 @@
+using Swashbuckle.AspNetCore.SwaggerGen;
 using LegendsTeamVN.BadmintonClub.Presentation.Security;
 using LegendsTeamVN.BadmintonClub.Presentation.Exceptions;
 using Microsoft.AspNetCore.Diagnostics;
@@ -17,6 +18,7 @@ public static class ServiceCollectionExtensions
         services.Insert(0, ServiceDescriptor.Singleton<IExceptionHandler, PaymentOperationExceptionHandler>());
         services.AddScoped<IAuthorizationHandler, GroupPermissionHandler>();
         services.AddEndpoints(Assembly.GetExecutingAssembly());
+        services.Configure<Swashbuckle.AspNetCore.SwaggerGen.SwaggerGenOptions>(o => o.OperationFilter<OpenApi.LedgerOperationFilter>());
         return services;
     }
 }

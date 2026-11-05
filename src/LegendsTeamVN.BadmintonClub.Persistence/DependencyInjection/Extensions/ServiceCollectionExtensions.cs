@@ -25,6 +25,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISessionRepository, SessionRepository>();
         services.AddScoped<IPaymentRepository, PaymentRepository>();
         services.AddScoped<IReconciliationRepository, ReconciliationRepository>();
+        services.AddScoped<LegendsTeamVN.BadmintonClub.Application.Abstractions.ILedgerReadRepository, LedgerReadRepository>();
+        services.AddScoped<LegendsTeamVN.BadmintonClub.Application.Abstractions.ILedgerWriteRepository, LedgerWriteRepository>();
         services.AddScoped<ISepaySetupRepository, SepaySetupRepository>();
         services.AddScoped<IOutboxRepository, OutboxRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();

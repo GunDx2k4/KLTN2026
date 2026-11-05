@@ -274,12 +274,13 @@ graph TD
 ---
 
 ### UC19: Quản trị & Theo dõi Sổ quỹ mở minh bạch
-- **FR đáp ứng**: FR22 (F4.5) | **Tác nhân**: Toàn thể hội viên (Xem), Thủ quỹ/Host (Quản trị).
-- **Tiền điều kiện**: Là thành viên của nhóm đang chọn.
-- **Luồng chính**:
-  - *Hội viên*: Xem toàn bộ lịch sử thu tiền buổi chơi, thu quỹ tháng, chi tiền sân, chi mua cầu và số dư khả dụng của quỹ nhóm theo thời gian thực.
-  - *Thủ quỹ*: Tạo phiếu chi mua cầu số lượng lớn, chi liên hoan, hoặc ghi nhận thu tiền mặt cho người chơi không chuyển khoản.
-- **Hậu điều kiện**: Mọi biến động dòng tiền được công khai minh bạch.
+- **FR đáp ứng**: FR22 (F4.5). Hội viên ACTIVE MONTHLY/DAILY có LedgerView xem; người có LedgerManage quản trị theo quyền thực tế từng nhóm.
+- **Luồng chính**: Mở sổ nhóm → kiểm quyền → xem số dư theo sổ đã ghi nhận, thu/chi và công nợ phí buổi/phí tháng đã phát hành. “Khoản đóng của tôi” lọc theo người đóng của nguồn phí, không theo người xác nhận.
+- **Luồng chi**: Quản trị nhập tiền/lý do/hóa đơn; transaction có khóa nhóm kiểm quỹ; đủ tiền mới ghi OUTFLOW, thiếu tiền không ghi bất kỳ dữ liệu liên quan. Quyết toán chi phí không tự chứng minh thực chi quỹ.
+- **Luồng tháng theo B**: Phát hành thủ công nghĩa vụ kỳ hiện tại với snapshot biểu phí → hiện UNPAID, không tăng quỹ → xác nhận thực thu đủ một lần → PAID, INFLOW và gia hạn cuối kỳ Việt Nam nguyên tử. Trường hợp ngoài chính sách v1 bị chặn có lý do, không tự tạo nợ.
+- **Đồng bộ**: Lưu Notification/Outbox cùng giao dịch, gửi FCM/SignalR sau commit. Số dư không phải số dư ngân hàng; MANUAL_CHECK chưa được cộng.
+- **Hiện trạng Wave 1–2**: Đã có Domain/schema, 5 GET và 3 POST phát hành/thu tháng/chi có Redis, khóa DB và transaction. Notification/Outbox lưu nguyên tử, đã nối DomainEvent UC18/UC19 và worker FCM/SignalR sau commit; cờ mặc định false, provider thật chưa nghiệm thu. Migration chỉ kiểm sandbox; legacy thiếu mốc tư cách tháng bị chặn, không tự backfill.
+- **Chi tiết**: [Kế hoạch đã chốt](Detail%20Design/UC19-BE-plan.md), [Hợp đồng Wave 1](Detail%20Design/UC19-BE.md).
 
 ### UC20: Đánh giá tín nhiệm & Tính điểm uy tín hai chiều
 - **FR đáp ứng**: FR23 (F5.1, F5.2) | **Tác nhân**: Hệ thống tự động, Người chơi.

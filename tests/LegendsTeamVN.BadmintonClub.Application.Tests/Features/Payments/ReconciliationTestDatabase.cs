@@ -69,7 +69,7 @@ internal sealed class ReconciliationTestDatabase : IAsyncDisposable
             if (migrate)
             {
                 await using var db = fixture.Open();
-                await db.GetService<IMigrator>().MigrateAsync(baseline ? Baseline : Latest);
+                await db.GetService<IMigrator>().MigrateAsync(baseline ? Baseline : null);
             }
             return fixture;
         }

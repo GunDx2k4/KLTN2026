@@ -52,6 +52,7 @@ public sealed partial class PaymentReconciliationHttpTests(ITestOutputHelper out
         public long ProviderId { get; } = Interlocked.Increment(ref nextId);
         public ReconciliationTestDatabase Database { get; private set; } = null!;
         public ReconciliationMetrics Metrics { get; } = new();
+        public LedgerOptions LedgerFlags { get; } = new();
         public ReconciliationOptions Flags { get; } = new() { Enabled = true, WritesEnabled = true };
         public Dictionary<Guid, SepayWebhookCredential> Credentials { get; } = [];
         public Guid Group { get; private set; }
@@ -103,6 +104,8 @@ public sealed partial class PaymentReconciliationHttpTests(ITestOutputHelper out
             builder.Services.AddSessionOperationsAuthentication(new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
             { ["Jwt:Issuer"] = "uc18-tests", ["Jwt:Audience"] = "uc18-tests", ["Jwt:SecretKey"] = new string('k', 64) }).Build());
             builder.Services.AddApplication();
+            builder.Services.AddSingleton<Microsoft.Extensions.Options.IOptionsMonitor<LedgerOptions>>(new TestOptionsMonitor<LedgerOptions>(f.LedgerFlags));
+            builder.Services.AddScoped<LegendsTeamVN.BadmintonClub.Application.Abstractions.ILedgerWriteRepository, LegendsTeamVN.BadmintonClub.Persistence.Repositories.LedgerWriteRepository>();
             builder.Services.AddSingleton<Microsoft.Extensions.Options.IOptionsMonitor<ReconciliationOptions>>(new TestOptionsMonitor<ReconciliationOptions>(f.Flags));
             builder.Services.AddSingleton<Microsoft.Extensions.Options.IOptionsMonitor<PaymentsOptions>>(new TestOptionsMonitor<PaymentsOptions>(new() { Enabled = true, WritesEnabled = true }));
             builder.Services.AddScoped(sp => f.Database.Open(sp.GetRequiredService<IPublisher>(), f.Metrics));

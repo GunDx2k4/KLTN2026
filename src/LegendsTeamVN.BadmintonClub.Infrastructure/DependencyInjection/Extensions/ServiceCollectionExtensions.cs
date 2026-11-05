@@ -43,6 +43,9 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(
             configuration.GetConnectionString("Redis") ?? throw new InvalidOperationException("Thiếu ConnectionStrings:Redis cho khóa quyết toán.")));
         services.AddScoped<ISettlementLock, RedisSettlementLock>();
+        services.AddScoped<ILedgerLock, RedisLedgerLock>();
+        services.AddScoped<ILedgerRealtimePublisher, Realtime.SignalRLedgerRealtimePublisher>();
+        services.AddHostedService<LedgerNotificationWorker>();
         services.AddSingleton<ISettlementPreviewTokenService, SettlementPreviewTokenService>();
         services.AddHostedService<SettlementNotificationWorker>();
         // Session operations authentication, realtime and outbox worker.

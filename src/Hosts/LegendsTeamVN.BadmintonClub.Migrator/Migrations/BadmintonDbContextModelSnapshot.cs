@@ -915,6 +915,14 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                     b.Property<DateTimeOffset?>("ModifiedOnUtc")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("MonthlyContributionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("monthly_contribution_id");
+
+                    b.Property<Guid?>("RequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("request_id");
+
                     b.Property<Guid?>("SessionId")
                         .HasColumnType("uuid")
                         .HasColumnName("id_session");
@@ -938,13 +946,25 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                         .IsUnique()
                         .HasFilter("fee_id IS NOT NULL");
 
-                    b.HasIndex("GroupId");
+                    b.HasIndex("MonthlyContributionId")
+                        .IsUnique()
+                        .HasFilter("monthly_contribution_id IS NOT NULL");
 
                     b.HasIndex("SessionId");
+
+                    b.HasIndex("GroupId", "RequestId")
+                        .IsUnique()
+                        .HasFilter("request_id IS NOT NULL");
+
+                    b.HasIndex("GroupId", "CreatedAt", "Id");
 
                     b.ToTable("group_ledger", null, t =>
                         {
                             t.HasCheckConstraint("ck_group_ledger_uc18_source", "(fee_id IS NULL AND bank_transaction_id IS NULL) OR (fee_id IS NOT NULL AND id_session IS NOT NULL AND amount > 0 AND transaction_type = 'INFLOW' AND category = 'SESSION_FEE')");
+
+                            t.HasCheckConstraint("ck_group_ledger_uc19_request", "request_id IS NULL OR (amount > 0 AND fee_id IS NULL AND bank_transaction_id IS NULL AND ((monthly_contribution_id IS NOT NULL AND transaction_type = 'INFLOW' AND category = 'MONTHLY_FUND') OR (monthly_contribution_id IS NULL AND transaction_type = 'OUTFLOW' AND category IN ('COURT_RENT','SHUTTLE_EXPENSE','OTHER'))))");
+
+                            t.HasCheckConstraint("ck_group_ledger_uc19_source", "(monthly_contribution_id IS NULL) OR (fee_id IS NULL AND bank_transaction_id IS NULL AND request_id IS NOT NULL AND transaction_type = 'INFLOW' AND category = 'MONTHLY_FUND' AND amount > 0)");
                         });
                 });
 
@@ -997,6 +1017,10 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                     b.Property<DateTime?>("MonthlyExpiryDate")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("monthly_expiry_date");
+
+                    b.Property<DateTime?>("MonthlyMembershipSince")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("monthly_membership_since");
 
                     b.Property<Guid>("RoleId")
                         .HasColumnType("uuid")
@@ -1377,6 +1401,57 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                     b.ToTable("join_request", (string)null);
                 });
 
+            modelBuilder.Entity("LegendsTeamVN.BadmintonClub.Domain.Entities.LedgerAttachment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id_attachment");
+
+                    b.Property<byte[]>("Content")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("content");
+
+                    b.Property<long>("ContentLength")
+                        .HasColumnType("bigint")
+                        .HasColumnName("content_length");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("content_type");
+
+                    b.Property<Guid>("LedgerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ledger_id");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("original_file_name");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("sha256");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LedgerId")
+                        .IsUnique();
+
+                    b.ToTable("ledger_attachment", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_ledger_attachment_size", "content_length > 0 AND content_length <= 5242880 AND octet_length(content) = content_length");
+
+                            t.HasCheckConstraint("ck_ledger_attachment_type", "content_type IN ('image/jpeg', 'image/png', 'application/pdf')");
+                        });
+                });
+
             modelBuilder.Entity("LegendsTeamVN.BadmintonClub.Domain.Entities.MatchPlayer", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1483,6 +1558,106 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                     b.HasIndex("ReviewerId");
 
                     b.ToTable("member_review", (string)null);
+                });
+
+            modelBuilder.Entity("LegendsTeamVN.BadmintonClub.Domain.Entities.MonthlyContribution", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id_monthly_contribution");
+
+                    b.Property<decimal>("AmountDue")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("amount_due");
+
+                    b.Property<Guid?>("CollectedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("collected_by");
+
+                    b.Property<DateOnly>("ContributionMonth")
+                        .HasColumnType("date")
+                        .HasColumnName("contribution_month");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedOnUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("DeletedOnUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("FemaleDiscountApplied")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("female_discount_applied");
+
+                    b.Property<Guid>("GroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id_group");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("IssuedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("issued_at");
+
+                    b.Property<Guid>("IssuedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("issued_by");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("ModifiedOnUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<decimal>("MonthlyFee")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("monthly_fee");
+
+                    b.Property<DateTime?>("PaidAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("paid_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CollectedBy");
+
+                    b.HasIndex("IssuedBy");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("GroupId", "Status", "ContributionMonth");
+
+                    b.HasIndex("GroupId", "UserId", "ContributionMonth")
+                        .IsUnique();
+
+                    b.ToTable("monthly_contribution", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_monthly_contribution_amount", "amount_due > 0 AND monthly_fee > 0 AND female_discount_applied >= 0 AND amount_due = monthly_fee - female_discount_applied");
+
+                            t.HasCheckConstraint("ck_monthly_contribution_period", "EXTRACT(DAY FROM contribution_month) = 1");
+
+                            t.HasCheckConstraint("ck_monthly_contribution_state", "(status = 'UNPAID' AND paid_at IS NULL AND collected_by IS NULL) OR (status = 'PAID' AND paid_at IS NOT NULL AND collected_by IS NOT NULL)");
+                        });
                 });
 
             modelBuilder.Entity("LegendsTeamVN.BadmintonClub.Domain.Entities.Notification", b =>
@@ -2278,6 +2453,11 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("LegendsTeamVN.BadmintonClub.Domain.Entities.MonthlyContribution", null)
+                        .WithMany()
+                        .HasForeignKey("MonthlyContributionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("LegendsTeamVN.BadmintonClub.Domain.Entities.BadmintonSession", "Session")
                         .WithMany("LedgerTransactions")
                         .HasForeignKey("SessionId")
@@ -2395,6 +2575,15 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("LegendsTeamVN.BadmintonClub.Domain.Entities.LedgerAttachment", b =>
+                {
+                    b.HasOne("LegendsTeamVN.BadmintonClub.Domain.Entities.GroupLedger", null)
+                        .WithMany()
+                        .HasForeignKey("LedgerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("LegendsTeamVN.BadmintonClub.Domain.Entities.MatchPlayer", b =>
                 {
                     b.HasOne("LegendsTeamVN.BadmintonClub.Domain.Entities.SessionMatch", "Match")
@@ -2431,6 +2620,32 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                     b.Navigation("Reviewee");
 
                     b.Navigation("Reviewer");
+                });
+
+            modelBuilder.Entity("LegendsTeamVN.BadmintonClub.Domain.Entities.MonthlyContribution", b =>
+                {
+                    b.HasOne("LegendsTeamVN.BadmintonClub.Domain.Entities.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("CollectedBy")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("LegendsTeamVN.BadmintonClub.Domain.Entities.ClubGroup", null)
+                        .WithMany()
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LegendsTeamVN.BadmintonClub.Domain.Entities.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("IssuedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("LegendsTeamVN.BadmintonClub.Domain.Entities.AppUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("LegendsTeamVN.BadmintonClub.Domain.Entities.Notification", b =>

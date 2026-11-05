@@ -1491,3 +1491,13 @@ Manual body: `{"feeId":"<uuid>","reason":"Đã đối chiếu người nộp"}`.
 CASH/manual chỉ cần Reconciliation.WritesEnabled; webhook cần cả Enabled và WritesEnabled. DispatchEnabled chỉ gửi sau commit, không chặn lưu thông báo. Giữ guard Payments UC17; không chuyển BANK_TRANSFER sang CASH. PAID cũ không tự backfill. Chi tiết tại [UC18-BE](Detail%20Design/UC18-BE.md); schema ở [thiết kế CSDL](04_THIET_KE_CO_SO_DU_LIEU_3NF.md).
 
 Luồng tự kết nối: GET/PUT `/api/v1/sepay/application` yêu cầu `Integrations.SepayManage`; ngân hàng qua GET/PUT `/api/v1/clubs/{clubId}/payment-bank-account`. Các route `/api/v1/clubs/{groupId}/sepay` yêu cầu BankManage thực: GET trạng thái, POST authorize, POST complete (`ticket`), GET accounts, POST account (`providerBankId`), POST activate, GET connections, DELETE hiện tại hoặc DELETE connections/{connectionId}. GET `/api/v1/sepay/oauth/callback` công khai nhận code/state, redirect về frontend với ticket ở fragment; callback chưa tự tạo kết nối. State/ticket TTL 10 phút, dùng một lần; complete bằng JWT của người đã authorize, danh sách tài khoản chỉ mở trong phiên 15 phút. Ngân hàng phải khớp BIN/số tài khoản CLB; CONNECTED chưa vượt cờ vận hành tổng. DISCONNECTING chặn webhook tại BE ngay cả khi dọn SePay thất bại. Hợp đồng chi tiết và Postman tại mục 1.1 của [UC18-BE](Detail%20Design/UC18-BE.md).
+
+
+## UC19 Wave 1–3 — Sổ quỹ mở
+
+Đã bổ sung 5 GET dưới `/api/v1/clubs/{clubId}/ledger`: tổng quan, `/transactions`, `/debts`, `/monthly-contributions/candidates` và `/transactions/{ledgerId}/attachment`. Kiểm JWT, route/header nhóm và quyền thực từ database; mặc định Ledger:Enabled=false. Wave 2 mở thêm POST `/monthly-contributions`, `/monthly-contributions/{monthlyContributionId}/collect` và `/transactions` (multipart), cần LedgerManage và Enabled/WritesEnabled.
+
+[Hợp đồng, bộ lọc, schema và giới hạn Wave 1](Detail%20Design/UC19-BE.md). Số dư là thu − chi đã ghi sổ, không phải số dư ngân hàng; công nợ tháng/phí buổi chưa thanh toán không tăng quỹ.
+
+
+UC19 Wave 3: LedgerUpdatedPush được tạo nguyên tử qua LedgerRecordedDomainEvent (kể cả thu UC18), worker gửi FCM/SignalR sau commit và kiểm lại quyền/nguồn nhóm. SignalR LedgerUpdated chỉ tới user đích; payload định danh, client khử trùng EventId và GET lại dữ liệu. Enabled/DispatchEnabled là chốt gửi, RealtimeEnabled kiểm kênh SignalR; mặc định false. Xem contract UC19-BE về retry, rollback và giới hạn kiểm chứng provider giả.

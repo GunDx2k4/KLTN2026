@@ -41,7 +41,7 @@ public sealed class PaymentReconciliationMigrationTests
             Assert.Equal(12345.67m, bank.AmountReceived);
             Assert.Null(bank.ProviderTransactionId);
             Assert.Null(bank.BankAccountId);
-            Assert.Empty(await after.GroupLedgers.ToListAsync());
+            Assert.False(await after.GroupLedgers.AnyAsync());
             await after.GetService<IMigrator>().MigrateAsync(ReconciliationTestDatabase.Baseline);
         }
         Assert.Equal("LEGACY-REF", await Scalar(fixture, "SELECT reference_code FROM bank_transaction"));
