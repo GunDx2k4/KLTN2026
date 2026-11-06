@@ -14,11 +14,12 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddPresentation(this IServiceCollection services)
     {
         // The core catch-all is registered first by the host; specific failures must run before it.
+        services.Insert(0, ServiceDescriptor.Singleton<IExceptionHandler, ReputationConflictExceptionHandler>());
         services.Insert(0, ServiceDescriptor.Singleton<IExceptionHandler, LineupSnapshotExceptionHandler>());
         services.Insert(0, ServiceDescriptor.Singleton<IExceptionHandler, PaymentOperationExceptionHandler>());
         services.AddScoped<IAuthorizationHandler, GroupPermissionHandler>();
         services.AddEndpoints(Assembly.GetExecutingAssembly());
-        services.Configure<Swashbuckle.AspNetCore.SwaggerGen.SwaggerGenOptions>(o => o.OperationFilter<OpenApi.LedgerOperationFilter>());
+        services.Configure<SwaggerGenOptions>(Endpoints.LedgerEndpoint.ConfigureSwagger);
         return services;
     }
 }

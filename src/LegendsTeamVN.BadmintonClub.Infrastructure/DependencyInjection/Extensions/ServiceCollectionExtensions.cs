@@ -36,6 +36,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISepayWebhookVerifier, Payments.SepayWebhookVerifier>();
         services.AddSingleton<IWebhookEvidenceArchive, Payments.WebhookEvidenceArchive>();
         services.AddScoped<IReconciliationLock, Payments.RedisReconciliationLock>();
+        services.AddScoped<LegendsTeamVN.BadmintonClub.Application.Abstractions.IReputationRealtimePublisher,
+            LegendsTeamVN.BadmintonClub.Infrastructure.Realtime.SignalRReputationRealtimePublisher>();
+        services.AddHostedService<LegendsTeamVN.BadmintonClub.Infrastructure.Services.ReputationNotificationWorker>();
+        services.AddHostedService<LegendsTeamVN.BadmintonClub.Infrastructure.Services.ReputationAssessmentWorker>();
         services.AddHostedService<Payments.ReconciliationNotificationWorker>();
         services.AddSingleton<IVietQrImageRenderer, Payments.VietQrImageRenderer>();
         services.AddSingleton<IVietQrPayloadGenerator, Payments.VietQrPayloadGenerator>();

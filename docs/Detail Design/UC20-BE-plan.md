@@ -1,10 +1,10 @@
 # Kế hoạch UC20 / FR23 — Đánh giá tín nhiệm và Điểm uy tín
 
-Cập nhật: 06/11/2026. Trạng thái: **ĐÃ TRIỂN KHAI SOURCE WAVE 1; CHƯA KIỂM CHỨNG POSTGRESQL SANDBOX; CHƯA TRIỂN KHAI WAVE 2–3**.
+Cập nhật: 06/11/2026. Trạng thái: **ĐÃ TRIỂN KHAI SOURCE WAVE 1–3; ĐÃ KIỂM CHỨNG SANDBOX; CÒN NGHIỆM THU NHÀ CUNG CẤP/THIẾT BỊ THẬT**.
 
-Người dùng đã chốt phương án nghiệp vụ được đề xuất, bỏ thưởng vượt trần 100 và chỉ thêm cột/ràng buộc vào bảng hiện có. Bản này thay thế toàn bộ phương án tạo bảng riêng trước đây. Không cần hỏi lại các quyết định đã chốt. Theo yêu cầu “code Wave 1”, source/test/migration Wave 1 đã được thực hiện; không thay DB chung hoặc gửi thông báo. Nhật ký kết quả ở mục 11.
+Người dùng đã chốt phương án nghiệp vụ được đề xuất, bỏ thưởng vượt trần 100 và chỉ thêm cột/ràng buộc vào bảng hiện có. Bản này thay thế toàn bộ phương án tạo bảng riêng trước đây. Không cần hỏi lại các quyết định đã chốt. Wave 1 và Wave 2 đã có source/test, worker đối soát và API; không thay DB chung hoặc gửi thông báo qua mạng. Nhật ký Wave 1 ở mục 11, Wave 2 ở mục 12, Wave 3 ở mục 13.
 
-Đường dẫn source dưới đây tính từ gốc repository LegendsTeamVN.BadmintonClub. Danh mục bao gồm cả Wave 2–3 chưa triển khai; chỉ các artifact ghi trong mục 11 đã được tạo. Các thuật ngữ assessment, entry và snapshot chỉ mô tả dữ liệu nghiệp vụ, không có entity/table riêng tương ứng.
+Đường dẫn source dưới đây tính từ gốc repository LegendsTeamVN.BadmintonClub. Danh mục bao gồm delivery Wave 3 chưa triển khai; artifact đã có được ghi tại mục 11–12. Các thuật ngữ assessment, entry và snapshot chỉ mô tả dữ liệu nghiệp vụ, không có entity/table riêng tương ứng.
 
 ## 1. Phạm vi và cơ sở hiện tại
 
@@ -339,7 +339,7 @@ Architecture baseline 37/37; ghi tổng thực tế nếu bổ sung test, không
 
 Đã chốt: readiness chặt toàn buổi; nguồn hành vi mới và trung lập khi thiếu chứng cứ; mức thưởng/phạt/ngưỡng tại 5.1; bỏ thưởng vượt trần theo thứ tự chuẩn; R/T/D và I/O tại 5.3; review một lần trong 7 ngày; quyền công khai tại 6; chỉ buổi mới từ cutover; backend + contract FE; **không tạo bảng mới** theo mục 3.
 
-EffectiveFromUtc cụ thể được ghi lúc bật tính năng. Không cần duyệt lại nghiệp vụ hoặc phương án lưu trữ. Lượt triển khai hiện tại giới hạn Wave 1; chưa làm worker/API/delivery Wave 2–3. Không thay DB chung/deploy/gửi thật/commit.
+EffectiveFromUtc cụ thể được ghi lúc bật tính năng. Không cần duyệt lại nghiệp vụ hoặc phương án lưu trữ. Lượt triển khai hiện tại đã có engine/worker/API và delivery Wave 3; kết quả kiểm chứng và giới hạn ở mục 13. Không thay DB chung/deploy/gửi thật/commit.
 
 ## 11. Bàn giao source Wave 1 — 06/11/2026
 
@@ -359,4 +359,94 @@ EffectiveFromUtc cụ thể được ghi lúc bật tính năng. Không cần du
 | Migration source/model | Sinh thành công; không pending model changes; SQL kiểm không tạo/xóa bảng. EF CLI 9.0.11 có cảnh báo cũ hơn runtime 10.0.10. |
 | PostgreSQL sandbox | Chưa kiểm chứng Up/Down thực, unique/FK và stale writer thực; Docker daemon không chạy, chưa có UC20_TEST_POSTGRES. Fixture đã có allowlist localhost:55440/uc20_test và DB ngẫu nhiên riêng. |
 
-**Còn để nghiệm thu đầy đủ Wave 1:** chạy ba test PostgreSQL khi sandbox sẵn sàng. Không dùng InMemory/mapping test thay bằng chứng PostgreSQL. Source có thể được review và tiếp nối Wave 2, nhưng không ghi Wave 1 đã đạt toàn bộ điều kiện sandbox.
+**Trạng thái tại lúc bàn giao Wave 1 (đã bổ sung ở mục 12):** khi đó còn ba test PostgreSQL cần chạy khi sandbox sẵn sàng. Không dùng InMemory/mapping test thay bằng chứng PostgreSQL. Source có thể được review và tiếp nối Wave 2, nhưng không ghi Wave 1 đã đạt toàn bộ điều kiện sandbox.
+
+
+## 12. Bàn giao Wave 2 — 06/11/2026
+
+**Trạng thái:** đã triển khai và kiểm chứng engine/worker/API trong sandbox; delivery Wave 3 chưa triển khai. Đã chạy bổ sung ba ca PostgreSQL còn thiếu của Wave 1. Không sửa migration cũ, không tạo bảng, không đổi DB chung, không bật cờ hoặc gửi nhà cung cấp thật.
+
+### Source và ranh giới
+
+- Domain bổ sung `BadmintonSession.Assessment.cs`: readiness/defer, chọn tập chấm, tạo evidence và finalize bằng policy Wave 1. `GroupReview.MatchesSubmission` chuẩn hóa replay; NotificationType thêm REPUTATION, giữ giá trị enum cũ.
+- Application có `IReputationRepository`, `IReputationReadRepository`, source contract, DTO request/response/push riêng; hai command ProcessSessionAssessment/SubmitSessionReview và năm query có sealed Handler/Validator. GET lấy actor từ JWT; audit kiểm quyền DB trong đúng nhóm. Handler không chứa SQL hoặc công thức điểm.
+- Persistence có hai repository trên bảng hiện hữu. Khóa nhóm → buổi NO KEY UPDATE, user ORDER BY UUID NO KEY UPDATE; đọc lịch sử người chơi theo batch xuyên nhóm và gồm soft-delete, dùng EndTime snapshot. Quyền LedgerView đọc một snapshot truy vấn DB, loại guest; không dùng cache role để chốt O. Không truy vấn riêng từng người nhận lời mời.
+- UnitOfWorkBehavior commit snapshot/booking/projection/Notification/Outbox cùng transaction. Domain event đối soát ghi hai kind UC20, EventId xác định từ kind/buổi/booking/người nhận. Retry Finalized không phát lại event; lỗi Outbox rollback toàn bộ UC20 và không liên quan transaction nhận tiền.
+- Infrastructure chỉ có ReputationAssessmentWorker ở wave này: gọi ISender trong scope mới, batch/interval/cutover, lịch thử lại hữu hạn. Không có public endpoint chạy job, không tạo user hệ thống giả.
+- Presentation có ReviewEndpoint, ReputationEndpoint, ReputationAuditEndpoint; chỉ inject ISender, dùng result.Match, typed response metadata; audit dùng SessionUpdate và kiểm lại quyền tại Application. Exception handler trả 409 Reputation.Conflict cho stale version/unique review/xung đột khóa UC20.
+- Đã cập nhật UC20-BE, API_DOCUMENTATION và tiến độ FR23. Không đánh dấu toàn bộ FR23 hoàn thành.
+
+### Kiểm chứng thực tế
+
+| Kiểm tra | Kết quả |
+|---|---|
+| `dotnet build --no-restore -m:1` cuối cùng | 0 lỗi; 1 cảnh báo NU1510 đã có ở package Infrastructure, không thêm cảnh báo UC20. |
+| `python3 .agents/skills/verify-architecture/scripts/verify_architecture.py` | 37/37 đạt. |
+| UnitTests toàn bộ | 360 passed, 0 failed/skipped. |
+| Features.Reputation cuối cùng | 29 passed, 0 failed/skipped; gồm 11 ca PostgreSQL thật, HTTP/JWT, worker, engine/review/validator và mapping. |
+| Application hồi quy rộng | 236 passed, 139 skipped, 0 failed, ở lần chạy trước khi thêm ca hai review khác nhau cùng nhóm; ca mới cùng các ca UC20 đã chạy lại trong bộ 29 ở trên. Các ca skip là hạ tầng của phân hệ khác, không coi là đạt. |
+| Migration Wave 1 trên PostgreSQL | Up/Down rỗng giữ số bảng; JSON round-trip, stale writer bị chặn, Down có dữ liệu bị chặn, unique kể cả soft-delete và FK sai nhóm đã đạt. |
+| Transaction và concurrency | Hai worker cùng buổi; hai nhóm cùng user; buổi cũ đến muộn và nguồn soft-delete; fault Outbox rollback/retry; replay review và hai review khác nhau cùng nhóm đều đạt. |
+| Quyền và lock graph | Snapshot dùng role tùy chỉnh thực từ DB, loại guest, đổi quyền không thay snapshot; UC16 settlement source, UC18 CASH và UC19 group lock chạy đồng thời với assessment trên PostgreSQL đạt. Đây là kiểm khóa/repository và CASH, không phải gọi SePay thật. |
+| HTTP/feature flag | JWT, input/pagination, card không PII, audit chặn cả global Admin thiếu quyền nhóm, 503 khi tắt cờ; worker tắt không tạo scope/claim, lỗi một buổi không chặn phần còn lại của batch. |
+| `git diff --check` | Đạt. |
+
+Sandbox sử dụng PostgreSQL 16 ở localhost:55440/uc20_test và từng DB `uc20_test_<guid>` do fixture tạo/xóa. Sự cố duyệt quyền/socket ban đầu đã được giải quyết; không còn ca UC20 bị skip vì thiếu sandbox. Không dùng DB trong appsettings.
+
+### Đầu vào Wave 3
+
+Giữ Enabled/ProcessingEnabled/ReviewsEnabled/DispatchEnabled mặc định false; khi bật cần EffectiveFromUtc UTC cố định. Wave 3 triển khai delivery riêng cho ReviewInvitationPush/ReputationUpdatedPush, kiểm quyền/hạn từng kênh, client dedupe bằng EventId và GET lại projection. Tiếp tục E2E/rollout và hồi quy hạ tầng chưa chạy, Postman UC20, FCM/SignalR/thiết bị thật theo phạm vi đã chốt. Bằng chứng Wave 2 không thay cho nghiệm thu delivery hoặc SePay thật.
+
+
+## 13. Bàn giao Wave 3 — 06/11/2026
+
+Đã triển khai `ReputationNotificationWorker`, `IReputationRealtimePublisher` và `SignalRReputationRealtimePublisher`; đăng ký DI cùng worker assessment. Worker chỉ claim ReviewInvitationPush/ReputationUpdatedPush khi Enabled và DispatchEnabled bật. Các worker UC18/19/rotation vẫn claim theo kind riêng. Không gọi mạng trong transaction tính điểm/thu tiền.
+
+`IReputationReadRepository.CanDeliverAsync` kiểm lại tài khoản, booking ownership, buổi Finalized và nhóm hoạt động. Lời mời cần đúng mốc hết hạn snapshot, chưa hết hạn và chưa có review (kể cả soft-delete). Kiểm trước FCM và SignalR, giữa các batch token; tắt cờ giữa lượt gửi đưa Outbox vào retry. Nguồn không còn hợp lệ được hoàn tất mà không gửi. Lease/timeout và backoff tái sử dụng Outbox hiện có; retry giữ nguyên EventId, không rebuild điểm.
+
+SignalR gửi theo UserId với tên ReviewInvitation/ReputationUpdated. FCM payload tối thiểu eventId/sessionId/bookingId/kind. FE dedupe EventId và GET lại; không cộng điểm từ thông báo. Delivery ít nhất một lần: lỗi kênh sau có thể khiến kênh trước gửi lại. Không có cam kết exactly-once với nhà cung cấp.
+
+Đã tạo collection/environment/README tại `../postman/UC20`, sáu endpoint, token trống và runWrites=false. JSON tạo bằng serializer; bộ Postman chưa chạy với tài khoản thật. Đã đồng bộ contract API, trạng thái plan và tiến độ FR23. Hai file Postman đã kiểm tra cú pháp JSON bằng json.tool.
+
+Kiểm chứng:
+
+- Application chạy tuần tự: **244 passed, 139 skipped, 0 failed**. Trong đó **36 test UC20 đạt**, không skip; có 12 ca PostgreSQL, delivery retry/khóa cờ/thu hồi quyền, HTTP/JWT, engine và worker. Mốc hết hạn chính xác, ownership sai, đã review và notification cập nhật điểm được kiểm trên PostgreSQL thật.
+- UnitTests: **360/360 passed**. Architecture script: **37/37 passed**. Build cuối: **0 lỗi**, một cảnh báo NU1510 package cũ.
+- Lượt hồi quy đồng thời ban đầu có hai timeout khởi tạo DB UC20 và một assertion thời gian Redis; chạy Application tuần tự đã đạt, không sửa timeout/assertion. Infrastructure chạy lại tuần tự: **85 passed, 4 skipped, 0 failed**; ca Redis giới hạn ba giây đã đạt lại mà không đổi assertion.
+- Migration/rollback không thêm thay đổi schema ở Wave 3; các test Up/Down guard, số bảng không đổi, cutover/flags, rebuild, stale writer và concurrency của Wave 1–2 vẫn nằm trong bộ UC20 đã chạy lại.
+
+Giới hạn nghiệm thu: chưa gọi SePay/FCM thật hoặc kiểm thiết bị/transport SignalR thật, chưa chạy Postman bằng JWT thật; các ca skip cần hạ tầng riêng của phân hệ khác vẫn chưa được nghiệm thu. Không áp migration DB chung, không bật cờ hoặc commit. Source cả ba wave đã có; bật môi trường và kiểm nhà cung cấp/FE là bước nghiệm thu riêng theo phạm vi đã chốt.
+
+
+## 14. Quyết định bỏ cờ tính năng UC20
+
+Theo yêu cầu mới, đã xóa Enabled, ProcessingEnabled, ReviewsEnabled và DispatchEnabled khỏi options, handler và worker. API, review, engine và delivery luôn hoạt động; không còn Reputation.Disabled. Những chỉ dẫn bật/tắt tại mục bàn giao trước là lịch sử, được thay thế bởi mục này. EffectiveFromUtc giữ vai trò giới hạn nguồn, mặc định cố định 2026-11-06T00:00:00Z; BatchSize=32, IntervalSeconds=30. Không tự lấy giờ restart hoặc chấm toàn bộ lịch sử cũ. JWT/RBAC, hạn review và kiểm nguồn giao dịch vẫn giữ.
+
+Kiểm chứng sau bỏ cờ: Features.Reputation 32 passed, 0 failed/skipped trên PostgreSQL sandbox; các ca Disabled được bỏ vì trạng thái này không còn tồn tại. Architecture script 37/37 đạt. Build không có lỗi; các cảnh báo package/Firebase/seeder hiện hữu được ghi nhận riêng.
+
+
+## 15. Kiểm thử lại BE theo yêu cầu
+
+Đã kiểm thử lại sau khi bỏ cờ và bổ sung HTTP dùng PostgreSQL/repository thật, vòng đời Outbox thật, SignalR gửi đúng UserId và audit có quyền DB. Phát hiện/sửa CreatedAt review lệch precision giữa response tạo mới và replay; Domain chuẩn hóa microsecond, giữ assertion so sánh response nguyên vẹn.
+
+Kết quả cuối: UC20 36/36, Domain 360/360, Infrastructure với Redis 89/89, architecture 37/37; build 0 lỗi, 1 cảnh báo package cũ. Hồi quy Application 244 passed/139 skipped/0 failed; các ca skip thuộc hạ tầng phân hệ khác, không tính là đạt. Báo cáo chi tiết và giới hạn tại [UC20-BE-test-report](UC20-BE-test-report.md). Chưa thử provider/thiết bị thật hoặc DB chung; không commit.
+
+
+## 16. Cấu hình DB chung và chuẩn hóa bàn giao
+
+Người dùng xác nhận chỉ cấu hình code, không tạo DB/chạy migration. UC20 sử dụng BadmintonDbContext qua ConnectionStrings:Database của ứng dụng; không có connection riêng. Đã khai báo Reputation tường minh trong API appsettings.json, giữ luôn hoạt động và cutover cố định. Test tiếp tục dùng sandbox allowlist riêng.
+
+Kiểm tra local thấy localhost:5432/BadmintonClub không tồn tại. PostgreSQL khởi động tạm để kiểm tra đã được dừng theo phạm vi mới; không tạo DB hoặc áp migration, không có backup hợp lệ của DB chung. Không lấy trạng thái DB ghi ở lượt UC18/máy khác làm trạng thái của máy hiện tại.
+
+UC20-BE.md đã viết lại theo cấu trúc UC19 (mục 0–10): rà luồng, API/quyền, luồng nghiệp vụ, request, dữ liệu hiển thị, policy, lỗi, thông báo/cấu hình/triển khai, kiểm chứng, việc còn lại và checklist FE. Tài liệu phân biệt rõ cấu hình runtime dùng DB chung với schema DB chưa được áp.
+
+Kiểm tra sau cấu hình/tài liệu: build 0 lỗi, 1 cảnh báo NU1510 cũ; architecture 37/37; appsettings JSON hợp lệ và git diff --check đạt. Không chạy lại các ca nghiệp vụ không đổi, không kết nối test vào DB chung.
+
+
+## 17. Gom endpoint theo tài nguyên
+
+Theo yêu cầu, đã gộp hai route review vào UserEndpoint và route reputation-audit vào SessionEndpoint; xóa ReviewEndpoint.cs/ReputationAuditEndpoint.cs. ReputationEndpoint giữ riêng. SessionEndpoint map từ nhóm API gốc rồi tách sessions và clubs/... để bảo toàn URL audit, không tạo alias hoặc đổi URL cũ. Tên operation, JWT/SessionOperations, SessionUpdate và DTO vẫn giữ.
+
+Đã cập nhật test HTTP UC20 dùng UserEndpoint/SessionEndpoint, bổ sung assertion route audit/quyền và route review vào kiểm tra User hiện có. Không đổi nghiệp vụ, cấu hình DB hoặc migration.
+
+Kiểm chứng sau gộp: UC20 và User/Session route tests chạy tuần tự đạt 51/51, không skip; build 0 lỗi/1 cảnh báo NU1510 cũ; architecture 37/37; git diff --check đạt. Lượt Application rộng đầu có 7 timeout khởi tạo/migrate DB sandbox (238 passed/139 skipped), không sửa assertion/timeout; các ca UC20 đó đã được chạy lại đạt trong bộ 51. Không coi lần chạy rộng đó là toàn bộ Application đạt.

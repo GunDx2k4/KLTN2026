@@ -1501,3 +1501,19 @@ Luồng tự kết nối: GET/PUT `/api/v1/sepay/application` yêu cầu `Integr
 
 
 UC19 Wave 3: LedgerUpdatedPush được tạo nguyên tử qua LedgerRecordedDomainEvent (kể cả thu UC18), worker gửi FCM/SignalR sau commit và kiểm lại quyền/nguồn nhóm. SignalR LedgerUpdated chỉ tới user đích; payload định danh, client khử trùng EventId và GET lại dữ liệu. Enabled/DispatchEnabled là chốt gửi, RealtimeEnabled kiểm kênh SignalR; mặc định false. Xem contract UC19-BE về retry, rollback và giới hạn kiểm chứng provider giả.
+
+
+## UC20 / FR23 — Uy tín và đánh giá buổi (Wave 2)
+
+Contract chi tiết, DTO, phân trang, mã lỗi và cờ bật tại [UC20-BE](Detail%20Design/UC20-BE.md). Tất cả API cần JWT; UC20 luôn hoạt động.
+
+| Method | Route | Phạm vi |
+|---|---|---|
+| GET | `/api/v1/user/me/reviews/invitations` | Lời mời còn hạn và review của chính mình, gồm guest tham gia |
+| POST | `/api/v1/user/me/reviews` | SessionId/Rating/Comment, một review/người/buổi |
+| GET | `/api/v1/reputation/players/{userId}` | Card điểm/nhãn tối thiểu, không PII |
+| GET | `/api/v1/reputation/me/entries` | Nhật ký booking của chính mình |
+| GET | `/api/v1/reputation/group-quality?groupId=...` | Tổng hợp chất lượng, không nội dung review riêng |
+| GET | `/api/v1/clubs/{clubId}/sessions/{sessionId}/reputation-audit` | SessionUpdate trong đúng nhóm, kiểm lại quyền DB |
+
+POST trả 200 cả tạo mới và replay cùng nội dung; 400 input sai, 403 ngoài quyền, 404 nguồn không tồn tại, 409 chưa sẵn sàng/hết hạn/khác nội dung/concurrency. Invitations/entries/audit hỗ trợ page/pageSize (mặc định 1/20, size tối đa 100). Không có endpoint set điểm hoặc gọi job. Thông báo UC20 ghi bền vững rồi được ReputationNotificationWorker gửi FCM/SignalR sau commit; FE khử trùng EventId và tải lại GET.

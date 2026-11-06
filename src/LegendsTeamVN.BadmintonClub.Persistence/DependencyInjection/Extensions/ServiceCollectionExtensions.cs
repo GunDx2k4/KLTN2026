@@ -16,6 +16,8 @@ public static class ServiceCollectionExtensions
 
         services.AddPostgreSQLDbContextUnitOfWork<BadmintonDbContext>(connectionStrings);
 
+        services.AddScoped<LegendsTeamVN.BadmintonClub.Application.Abstractions.IReputationRepository, ReputationRepository>();
+        services.AddScoped<LegendsTeamVN.BadmintonClub.Application.Abstractions.IReputationReadRepository, ReputationReadRepository>();
         services.AddScoped<IClubRepository, ClubRepository>();
         services.AddScoped<IClubMemberRepository, ClubMemberRepository>();
         services.AddScoped<IGroupRoleRepository, GroupRoleRepository>();

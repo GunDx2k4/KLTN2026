@@ -1,4 +1,5 @@
 using LegendsTeamVN.BadmintonClub.Domain.Entities;
+using LegendsTeamVN.BadmintonClub.Domain.Exceptions;
 using LegendsTeamVN.BadmintonClub.Domain.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -44,7 +45,8 @@ public sealed class ReputationPostgresTests
         current.CancelWithEvidence(session, user.Id, ReputationCancellationSource.Booking, now);
         await first.SaveChangesAsync();
         stale.UpdateQueueOrder(2);
-        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => second.SaveChangesAsync());
+        var conflict = await Assert.ThrowsAsync<ReputationConflictException>(() => second.SaveChangesAsync());
+        Assert.IsType<DbUpdateConcurrencyException>(conflict.InnerException);
         await using var verify = fixture.Open();
         var stored = await verify.SessionBookings.SingleAsync();
         Assert.Single(stored.CancellationHistory);
@@ -77,8 +79,8 @@ public sealed class ReputationPostgresTests
         var duplicate = new GroupReview(user.Id, club.Id, 4);
         db.GroupReviews.Add(duplicate);
         db.Entry(duplicate).Property(x => x.SessionId).CurrentValue = session.Id;
-        var unique = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
-        Assert.Equal(PostgresErrorCodes.UniqueViolation, ((PostgresException)unique.InnerException!).SqlState);
+        var unique = await Assert.ThrowsAsync<ReputationConflictException>(() => db.SaveChangesAsync());
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, ((PostgresException)Assert.IsType<DbUpdateException>(unique.InnerException).InnerException!).SqlState);
         db.ChangeTracker.Clear();
         var wrongGroup = new GroupReview(secondUser.Id, other.Id, 4);
         db.GroupReviews.Add(wrongGroup);

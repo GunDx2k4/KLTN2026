@@ -61,6 +61,18 @@ public sealed class LedgerHttpTests
         app.UseRouting(); app.UseAuthentication(); app.UseAuthorization();
         app.Urls.Add("http://127.0.0.1:0");
         await app.StartAsync();
+        var swagger = app.Services.GetRequiredService<Swashbuckle.AspNetCore.Swagger.ISwaggerProvider>().GetSwagger("v1");
+        var operations = swagger.Paths.Values.SelectMany(p => p.Operations.Values).ToArray();
+        var expense = Assert.Single(operations, o => o.OperationId == "CreateLedgerExpense");
+        var form = expense.RequestBody.Content["multipart/form-data"].Schema;
+        Assert.Equal("binary", form.Properties["invoice"].Format);
+        Assert.Contains("requestId", form.Required);
+        Assert.Contains("amount", form.Required);
+        Assert.Contains("description", form.Required);
+        var download = Assert.Single(operations, o => o.OperationId == "GetLedgerAttachment");
+        foreach (var contentType in new[] { "application/pdf", "image/png", "image/jpeg" })
+            Assert.Equal("binary", download.Responses["200"].Content[contentType].Schema.Format);
+
         using var client = new HttpClient { BaseAddress = new Uri(app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.Single()) };
         var path = $"/api/v1/clubs/{group}/ledger";
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync(path)).StatusCode);

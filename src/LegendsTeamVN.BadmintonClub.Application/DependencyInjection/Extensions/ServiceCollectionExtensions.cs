@@ -33,6 +33,11 @@ public static class ServiceCollectionExtensions
         services.Insert(transactionIndex, ServiceDescriptor.Transient(typeof(MediatR.IPipelineBehavior<Features.Ledger.CreateExpense.CreateLedgerExpenseCommand, LegendsTeamVN.Core.Utilities.Results.Result<DTOs.Ledger.Responses.LedgerWriteResponse>>), typeof(Features.Ledger.LedgerLockBehavior<Features.Ledger.CreateExpense.CreateLedgerExpenseCommand>)));
         services.Insert(transactionIndex, ServiceDescriptor.Transient(typeof(MediatR.IPipelineBehavior<Features.Ledger.IssueMonthlyContribution.IssueMonthlyContributionCommand, LegendsTeamVN.Core.Utilities.Results.Result<DTOs.Ledger.Responses.LedgerWriteResponse>>), typeof(Features.Ledger.LedgerLockBehavior<Features.Ledger.IssueMonthlyContribution.IssueMonthlyContributionCommand>)));
         services.Insert(transactionIndex, ServiceDescriptor.Transient(typeof(MediatR.IPipelineBehavior<Features.Ledger.RecordMonthlyContribution.RecordMonthlyContributionCommand, LegendsTeamVN.Core.Utilities.Results.Result<DTOs.Ledger.Responses.LedgerWriteResponse>>), typeof(Features.Ledger.LedgerLockBehavior<Features.Ledger.RecordMonthlyContribution.RecordMonthlyContributionCommand>)));
+        services.AddOptions<ReputationOptions>().BindConfiguration(ReputationOptions.SectionName)
+            .Validate(o => o.BatchSize is >= 1 and <= 100 && o.IntervalSeconds is >= 5 and <= 300,
+                "BatchSize phải từ 1 đến 100; IntervalSeconds phải từ 5 đến 300.")
+            .Validate(o => o.EffectiveFromUtc.Kind == DateTimeKind.Utc,
+                "Cần EffectiveFromUtc UTC cố định cho UC20.").ValidateOnStart();
         services.AddOptions<LedgerOptions>().BindConfiguration(LedgerOptions.SectionName);
         services.AddOptions<ReconciliationOptions>().BindConfiguration(ReconciliationOptions.SectionName);
         services.TryAddSingleton<TimeProvider>(TimeProvider.System);

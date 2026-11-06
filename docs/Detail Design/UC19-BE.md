@@ -110,7 +110,7 @@ FE tải lại khi mở trang, đổi nhóm/bộ lọc, sau POST thành công ho
 | Application | Features/Ledger chứa CQRS slices và điều phối; Abstractions chứa ILedgerReadRepository/ILedgerWriteRepository/ILedgerLock/ILedgerRealtimePublisher; DTOs/Ledger tách Requests, Responses, Notifications |
 | Persistence | LedgerReadRepository/LedgerWriteRepository thực thi query, aggregate, scope và SQL khóa; Configurations ánh xạ dữ liệu/ràng buộc; migration và snapshot thuộc Migrator |
 | Infrastructure | RedisLedgerLock, LedgerNotificationWorker, SignalRLedgerRealtimePublisher triển khai dịch vụ ngoài |
-| Presentation | LedgerEndpoint chỉ inject ISender, xử lý transport/quyền/kết quả; LedgerOperationFilter mô tả Swagger multipart và binary download |
+| Presentation | LedgerEndpoint chỉ inject ISender, xử lý transport/quyền/kết quả; cấu hình Swagger multipart và binary download nằm trong LedgerEndpoint (không còn thư mục OpenApi riêng) |
 
 Handler/Validator sealed; không tính tiền hoặc viết SQL trong Handler. Domain không phụ thuộc EF/HTTP/Redis/SignalR. Presentation không tham chiếu trực tiếp Persistence. Endpoint giữ xử lý multipart có giới hạn; Domain kiểm bất biến khoản chi và dữ liệu hóa đơn.
 

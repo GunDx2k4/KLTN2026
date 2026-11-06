@@ -33,6 +33,9 @@ public class GroupReview : AggregateRoot<Guid>
         CreatedAt = DateTime.UtcNow;
     }
 
+    public bool MatchesSubmission(int rating, string? comment) => Rating == rating &&
+        Comment == (string.IsNullOrWhiteSpace(comment) ? null : comment.Trim());
+
     public void UpdateReview(int rating, string? criteria, string? comment)
     {
         if (SessionId.HasValue) throw new InvalidOperationException("Đánh giá buổi đã gửi không được sửa.");
@@ -56,7 +59,7 @@ public class GroupReview : AggregateRoot<Guid>
         return new GroupReview(booking.UserId, session.GroupId, rating, comment: comment)
         {
             SessionId = session.Id,
-            CreatedAt = now
+            CreatedAt = new DateTime(now.Ticks - now.Ticks % 10, DateTimeKind.Utc)
         };
     }
 }

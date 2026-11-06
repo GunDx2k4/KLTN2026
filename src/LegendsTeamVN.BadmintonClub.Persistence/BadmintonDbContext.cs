@@ -44,6 +44,18 @@ public class BadmintonDbContext(DbContextOptions<BadmintonDbContext> options, IP
         {
             return await base.SaveChangesAsync(cancellationToken);
         }
+        catch (DbUpdateConcurrencyException ex) when (ex.Entries.Any(e => e.Entity is AppUser or ClubGroup or BadmintonSession or SessionBooking))
+        {
+            throw new ReputationConflictException(ex);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException pg &&
+            (pg.SqlState == PostgresErrorCodes.UniqueViolation && pg.ConstraintName == "IX_group_review_id_session_id_user" ||
+             pg.SqlState is "55P03" or "40P01" or "40001" &&
+             (ChangeTracker.Entries<BadmintonSession>().Any(e => e.Property(x => x.ReputationVersion).IsModified) ||
+              ChangeTracker.Entries<GroupReview>().Any(e => e.State == EntityState.Added && e.Entity.SessionId.HasValue))))
+        {
+            throw new ReputationConflictException(ex);
+        }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException
             { SqlState: PostgresErrorCodes.LockNotAvailable or PostgresErrorCodes.DeadlockDetected or PostgresErrorCodes.SerializationFailure })
         {
