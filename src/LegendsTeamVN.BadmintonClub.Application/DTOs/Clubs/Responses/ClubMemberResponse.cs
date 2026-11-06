@@ -13,5 +13,9 @@ public record ClubMemberResponse(
     ClubMemberStatus Status,
     string? Nickname,
     DateTime JoinedAt,
-    int Role = 1
+    int Role = 1,
+    string? FullName = null,
+    string? AvatarUrl = null,
+    string? MemberType = "MONTHLY",
+    DateTime? MonthlyExpiryDate = null
 );
