@@ -32,7 +32,7 @@
 | **FR20** | Khởi tạo mã VietQR thanh toán nhúng sẵn tiền & mã duy nhất | Hạch toán Vật tư & Sổ quỹ (F4) | BE hoàn thiện, POC/decoder đạt; người dùng xác nhận hai app quét đúng; đã nối DB chung local và bàn giao FE | 8 route triển khai, Enabled/WritesEnabled bật trên API54796; FCM tắt, UC18 riêng |
 | **FR21** | Tiếp nhận biến động số dư ngân hàng để tự động xác nhận thanh toán | Hạch toán Vật tư & Sổ quỹ (F4) | Lõi đã áp DB chung local; bổ sung BE Admin/OAuth theo CLB, FE để sau; chưa deploy server hoặc nghiệm thu provider thực | Webhook/list/detail/manual, CASH UC16 và 12 route thiết lập OAuth |
 | **FR22** | Quản trị Sổ quỹ mở nội bộ minh bạch (Thu, Chi, Dư nợ) | Hạch toán Vật tư & Sổ quỹ (F4) | UC19 Wave 1–3: đọc/ghi nguyên tử, DomainEvent và worker sau commit; chưa deploy/provider thật | 5 GET + 3 POST UC19 |
-| **FR23** | Đánh giá tín nhiệm hai chiều (Điểm thành viên & Điểm CLB) | Đánh giá & Tín nhiệm (F5) | ⏳ *Sẵn sàng DB, cần thêm Endpoint* | 0 API |
+| **FR23** | Đánh giá tín nhiệm hai chiều (Điểm thành viên & Điểm CLB) | Đánh giá & Tín nhiệm (F5) | Wave 1: Domain/mapping/migration source; DB sandbox chưa kiểm chứng, chưa worker/endpoint | 0 API |
 
 > **Thống kê tổng hợp cũ** (không dùng làm bằng chứng UC17/UC18; cập nhật FR20 ngày 01/11/2026 tại dòng tương ứng và hợp đồng UC17):
 > - **Đã hoàn thành và chạy thực tế**: **16 / 23 FR** (FR01 → FR16).
@@ -269,8 +269,8 @@ Các phân hệ dưới đây đã có sẵn cấu trúc bảng và mô hình th
   - *Mục tiêu*:
     - **Điểm uy tín thành viên**: Tự động tăng khi tham gia đúng giờ, thanh toán sòng phẳng; tự động trừ điểm khi hủy hẹn sát giờ (báo vắng sát giờ hoặc không đến).
     - **Điểm chất lượng hội nhóm**: Tính theo điểm đánh giá của thành viên sau buổi chơi kết hợp tính minh bạch của sổ quỹ.
-  - *Bảng dữ liệu đã có*: `member_review`, `group_review`.
-  - *Endpoint dự kiến*: `POST /api/v1/reviews/member`, `POST /api/v1/reviews/club`.
+  - *Lưu trữ UC20 đã chốt*: mở rộng `app_user`, `club_group`, `badminton_session`, `session_booking`, `group_review`; không tạo bảng mới. `member_review` không dùng làm nhật ký hệ thống.
+  - *Endpoint dự kiến Wave 2*: `POST /api/v1/user/me/reviews`, GET invitations/card/entries/group-quality/audit theo [UC20-BE](Detail%20Design/UC20-BE.md). Chưa có API UC20 chạy thật.
 
 ---
 

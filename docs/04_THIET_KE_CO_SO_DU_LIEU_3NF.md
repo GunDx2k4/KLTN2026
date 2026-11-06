@@ -593,3 +593,25 @@ Số dư chỉ tính từ ledger đã ghi nhận. Nghĩa vụ tháng UNPAID và 
 ### UC19 Wave 2 — Mốc tư cách hội viên tháng
 
 Migration `20261105065216_TrackMonthlyMembershipPeriod` thêm `group_member.monthly_membership_since` timestamptz nullable. Mốc ghi nhận thời điểm thực tế bắt đầu liên tục MONTHLY ACTIVE, thay đổi loại/trạng thái sẽ đặt lại hoặc xóa hiệu lực; không backfill từ JoinedAt/MonthlyExpiryDate. Legacy null bị chặn khi phát hành/thu tháng. Domain không nhận cờ xác nhận lịch sử từ client. Nhóm/phí/ledger/hạn/Notification/Outbox được khóa và ghi trong cùng transaction theo nghiệp vụ; RequestId và nguồn tháng có unique. Các migration Down UC19 khóa bảng trước khi kiểm guard để không có ghi chen giữa kiểm dữ liệu và drop; cần dừng writer khi hạ schema và chỉ kiểm trên sandbox đã xác nhận.
+
+### UC20 Wave 1 — Mở rộng bảng hiện có, không tạo bảng mới
+
+Migration source `20261105162124_AddSessionReputation`, kế tiếp `20261105065216_TrackMonthlyMembershipPeriod`. Chưa xác nhận áp trên DB chung/sandbox. Các kiểu timestamp bên dưới là timestamptz UTC; version là bigint NOT NULL DEFAULT 0 và concurrency token EF.
+
+| Bảng | Cột bổ sung |
+|---|---|
+| app_user | reputation_baseline_score numeric(5,2) NULL; reputation_version; reputation_computed_at NULL; reputation_policy_version varchar(40) NULL. CHECK điểm/baseline trong 0–100. |
+| club_group | quality_version; quality_computed_at NULL; quality_policy_version varchar(40) NULL; quality_summary jsonb NULL. CHECK điểm hiện hành 1–5, summary là object khi có. |
+| badminton_session | reputation_processing_status varchar(30) NOT NULL DEFAULT 'Pending'; financial_reconciled_at, reputation_processed_at, reputation_next_attempt_at NULL; reputation_pending_reason varchar(200) NULL; reputation_policy_version varchar(40) NULL; reputation_version; reputation_snapshot jsonb NULL. |
+| session_booking | cancellation_history jsonb NOT NULL DEFAULT []; reputation_evidence jsonb NULL; reputation_corrections jsonb NOT NULL DEFAULT []; reputation_raw_delta numeric(5,2) NULL; reputation_computed_at NULL; reputation_policy_version varchar(40) NULL; reputation_review_eligible boolean NOT NULL DEFAULT false; reputation_version. |
+| group_review | id_session uuid NULL. Null là review cũ không gắn buổi; UC20 phải có buổi, không backfill SessionId giả. |
+
+Trạng thái xử lý UC20 chỉ Pending/DataInsufficient/Finalized, độc lập Status buổi. Finalized yêu cầu timestamp/policy/snapshot. Snapshot JSON chứa SchemaVersion=1, SessionId/GroupId, giờ buổi/publish, PolicyVersion, Quality (tử/mẫu số hóa đơn/quyền xem sổ, người/sân) và FinancialEvidence theo từng fee: ID/số tiền/trạng thái/nguồn ledger/ngân hàng/thời điểm nhận. Review đến sau không thay snapshot vận hành.
+
+Booking JSON: CancellationHistory là mảng fact (EventId, CancelledAt, ActorId, PreviousStatus, Source, StartTime, DeadlineBooking, RecruitmentId); ReputationEvidence là object SchemaVersion=1, attendance/check-in/thanh toán và fact hủy được dùng; ReputationCorrections là mảng dự phòng cho correction có audit, chưa có workflow public v1. Null delta nghĩa chưa chấm, delta 0 là đã chấm trung lập. CHECK kết quả chấm phải đủ delta trong [-23,2], evidence/policy/thời gian. Snapshot/version không thay FK bên trong JSONB; Domain kiểm cấu trúc sâu.
+
+Giữ unique SessionId/UserId của booking, thêm alternate key cùng cặp phục vụ FK. group_review có partial unique (id_session,id_user) WHERE id_session IS NOT NULL, không loại soft-delete. Composite FK review → booking theo buổi/người và review → badminton_session theo buổi/nhóm; buổi có alternate key (id_session,id_group). CHECK rating 1–5 và comment <=2.000 ký tự áp cho review có id_session. Review cũ được giữ nguyên.
+
+FK booking → user/session và review → user/group/session/booking dùng RESTRICT để không cascade mất nguồn. Hard-delete với dữ liệu cũ có booking/review cũng bị ràng buộc chặt hơn. SaveChanges guard chặn xóa booking có lịch sử/chấm điểm, sửa nguồn đã chốt và sửa/xóa review buổi. Nguồn đã soft-delete không được tự loại khỏi truy vấn rebuild nội bộ.
+
+Migration chỉ ALTER/AddColumn/index/CHECK/FK; không CreateTable/DropTable, không bảng phụ EF cho JSONB, không DbSet mới. Up preflight chặn điểm cũ ngoài miền. Down khóa bảng trước khi kiểm dữ liệu UC20, chặn cả Pending có lịch sử/lý do/nguồn và Notification/Outbox UC20. Không dùng Down sau khi đã có dữ liệu; không tự backfill hoặc tính lại điểm trong migration. Chi tiết policy/API và giới hạn kiểm thử tại [UC20-BE](Detail%20Design/UC20-BE.md).

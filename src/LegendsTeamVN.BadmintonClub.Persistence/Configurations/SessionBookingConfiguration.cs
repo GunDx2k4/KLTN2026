@@ -77,5 +77,6 @@ public class SessionBookingConfiguration : IEntityTypeConfiguration<SessionBooki
             .WithMany(r => r.Bookings)
             .HasForeignKey(b => b.RecruitmentId)
             .OnDelete(DeleteBehavior.SetNull);
+        ReputationModelConfiguration.ConfigureBooking(builder);
     }
 }

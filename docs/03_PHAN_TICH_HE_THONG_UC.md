@@ -283,9 +283,19 @@ graph TD
 - **Chi tiết**: [Kế hoạch đã chốt](Detail%20Design/UC19-BE-plan.md), [Hợp đồng Wave 1](Detail%20Design/UC19-BE.md).
 
 ### UC20: Đánh giá tín nhiệm & Tính điểm uy tín hai chiều
-- **FR đáp ứng**: FR23 (F5.1, F5.2) | **Tác nhân**: Hệ thống tự động, Người chơi.
-- **Tiền điều kiện**: Buổi sinh hoạt kết thúc và quá trình thanh toán hoàn tất.
+- **FR đáp ứng**: FR23 (F5.1, F5.2) | **Tác nhân**: Hệ thống tự động, toàn bộ người chơi, ban điều hành nhóm.
+- **Tiền điều kiện**: Buổi hết giờ, COMPLETED, khoản thu đã publish; các fee/ledger khớp toàn buổi, PAID hoặc EXEMPT. COMPLETED đơn lẻ không đủ.
 - **Luồng chính**:
-  1. *Hệ thống tự động tính điểm*: Người chơi đi đúng giờ, không hủy hẹn sát giờ, thanh toán ngay được cộng điểm uy tín cá nhân (`reputation_score`); người hủy hẹn sát giờ hoặc trễ hẹn bị trừ điểm.
-  2. *Đánh giá hội nhóm*: Người chơi chấm điểm CLB (1-5 sao) về tính minh bạch sổ quỹ, mật độ người/sân và văn hóa chơi ➔ Hệ thống cập nhật điểm chất lượng nhóm `group_quality_score`.
-- **Hậu điều kiện**: Điểm tín nhiệm hai chiều được hiển thị công khai trên hồ sơ cá nhân và hồ sơ nhóm.
+  1. Nhận sự kiện buổi hoàn tất đối soát tài chính.
+  2. Lập lời mời đánh giá và kiểm nhật ký tham gia/thanh toán theo hai nhánh nghiệp vụ.
+  3. Người tham gia quyết định gửi 1–5 sao và phản hồi hoặc bỏ qua.
+  4. Phân tích hóa đơn, Sổ quỹ mở và số người/sân có trận thực tế.
+  5. Tổng hợp review đã nhận và chỉ số có dữ liệu, cập nhật chất lượng nhóm.
+  6. Chấm hành vi cá nhân theo UC20-V1; ghi nguồn trên booking và tính lại projection theo thứ tự chuẩn.
+  7. Sau commit kết quả tự động, công khai điểm/nhãn qua hồ sơ và Khám phá; không đợi tất cả review.
+  8. Người chơi xem điểm mới. Review đến sau chỉ cập nhật chất lượng nhóm.
+  9. Kết thúc lần xử lý; retry cùng buổi không cộng điểm lại.
+- **3a**: Bỏ qua không tạo review/sao 0, vẫn xử lý chỉ số vận hành.
+- **6a/6b**: Vi phạm có nguồn bị phạt; dưới 80 gắn cảnh báo, từ 80 không có/gỡ nhãn. Không tự chặn booking.
+- **Hậu điều kiện**: Điểm, nguồn tính và policy được giữ trên bảng hiện có; review buổi duy nhất theo người/buổi; điểm công khai không lộ tài chính hoặc PII.
+- **Trạng thái**: Wave 1 mới có Domain/mapping/migration source và test; worker/API/delivery thuộc Wave 2–3. [Hợp đồng UC20-BE](Detail%20Design/UC20-BE.md).

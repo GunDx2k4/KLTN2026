@@ -39,6 +39,7 @@ public class BadmintonDbContext(DbContextOptions<BadmintonDbContext> options, IP
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
+        ReputationWriteGuard.Apply(ChangeTracker);
         try
         {
             return await base.SaveChangesAsync(cancellationToken);
@@ -65,6 +66,16 @@ public class BadmintonDbContext(DbContextOptions<BadmintonDbContext> options, IP
         {
             throw new SettlementPublicationConflictException("Settlement.PaymentCodeConflict", "Mã thanh toán bị trùng, chưa phát hành khoản thu.", ex);
         }
+    }
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        ReputationWriteGuard.Apply(ChangeTracker);
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        ReputationWriteGuard.Apply(ChangeTracker);
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
