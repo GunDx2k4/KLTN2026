@@ -46,5 +46,6 @@ public class GroupReviewConfiguration : IEntityTypeConfiguration<GroupReview>
             .WithMany(g => g.Reviews)
             .HasForeignKey(gr => gr.GroupId)
             .OnDelete(DeleteBehavior.Cascade);
+        ReputationModelConfiguration.ConfigureReview(builder);
     }
 }

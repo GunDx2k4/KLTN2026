@@ -13,7 +13,10 @@ var builder = WebApplication.CreateBuilder(args);
 // Hub browser transports carry a token in the query string. Never persist those request log events.
 builder.AddCoreSerilog(logger => logger.Filter.ByExcluding(e =>
     e.Properties.TryGetValue("QueryString", out var query) && query is Serilog.Events.ScalarValue { Value: string value } &&
-    value.Contains("access_token=", StringComparison.OrdinalIgnoreCase)));
+    (value.Contains("access_token=", StringComparison.OrdinalIgnoreCase) ||
+     value.Contains("code=", StringComparison.OrdinalIgnoreCase) ||
+     value.Contains("state=", StringComparison.OrdinalIgnoreCase) ||
+     value.Contains("ticket=", StringComparison.OrdinalIgnoreCase))));
 
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection(JwtOptions.SectionName));
 var jwtOptions = new JwtOptions();

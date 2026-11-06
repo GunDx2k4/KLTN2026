@@ -251,6 +251,32 @@ public class SessionFee : AggregateRoot<Guid>
             ? result : throw new ArgumentException("Loại giá không hợp lệ.", nameof(priceType));
     }
 
+    public PaymentReconciliationDecision ConfirmBankPayment(BadmintonSession session, GroupBankAccount bank,
+        string expectedGateway, PaymentReconciliationEvidence evidence, DateTime now,
+        Guid? reconciledBy = null, string? reason = null)
+    {
+        if (now.Kind != DateTimeKind.Utc) throw new ArgumentException("Thời điểm xác nhận phải là UTC.", nameof(now));
+        var decision = PaymentReconciliationPolicy.Evaluate(this, session, bank, expectedGateway, evidence, reconciledBy, reason);
+        if (decision != PaymentReconciliationDecision.MATCHED) return decision;
+        PaymentStatus = PaymentStatus.PAID;
+        PaidAt = PaymentTimestamp(now);
+        RaiseDomainEvent(new Events.PaymentConfirmedDomainEvent(Id, SessionId, UserId, session.GroupId,
+            Enums.PaymentMethod.BANK_TRANSFER, evidence.ProviderTransactionId, reconciledBy, reason, PaidAt.Value));
+        return decision;
+    }
+
+    public bool ConfirmCashPayment(BadmintonSession session, Guid actor, DateTime now)
+    {
+        if (session.Id != SessionId || session.IsDeleted || IsDeleted || actor == Guid.Empty || now.Kind != DateTimeKind.Utc)
+            throw new InvalidOperationException("Thông tin xác nhận tiền mặt không hợp lệ.");
+        if (PaymentStatus == PaymentStatus.PAID) return false;
+        MarkAsPaid(Enums.PaymentMethod.CASH, actor);
+        PaidAt = PaymentTimestamp(now);
+        RaiseDomainEvent(new Events.PaymentConfirmedDomainEvent(Id, SessionId, UserId, session.GroupId,
+            Enums.PaymentMethod.CASH, null, actor, null, PaidAt.Value));
+        return true;
+    }
+
     public void MarkAsPaid(PaymentMethod paymentMethod, Guid? cashCollectedBy = null)
     {
         if (PaymentStatus == PaymentStatus.PAID) return;

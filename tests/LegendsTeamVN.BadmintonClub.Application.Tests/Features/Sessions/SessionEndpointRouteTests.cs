@@ -78,6 +78,19 @@ public sealed class SessionEndpointRouteTests
     }
 
     [Fact]
+    public async Task ReputationAuditRetainsClubSessionPathAndPermission()
+    {
+        await using var app = CreateApplication();
+        var route = Assert.Single(Routes(app), e => e.Metadata.GetMetadata<IEndpointNameMetadata>()?.EndpointName == "GetReputationAudit");
+        Assert.Equal("api/v{version:apiversion}/clubs/{clubId:guid}/sessions/{sessionId:guid}/reputation-audit", route.RoutePattern.RawText!.Trim('/'));
+        Assert.Equal("GET", Assert.Single(route.Metadata.GetMetadata<HttpMethodMetadata>()!.HttpMethods));
+        Assert.Equal("SessionOperations", Assert.Single(route.Metadata.GetOrderedMetadata<IAuthorizeData>()).Policy);
+        var requirement = Assert.Single(route.Metadata.GetOrderedMetadata<AuthorizationPolicy>()
+            .SelectMany(policy => policy.Requirements).OfType<GroupPermissionRequirement>());
+        Assert.Equal(GroupPermissions.Operations.SessionUpdate, requirement.Permission);
+    }
+
+    [Fact]
     public async Task UserAndSessionRoutes_HaveNoDuplicateNamesOrMethodPaths()
     {
         await using var app = CreateApplication();

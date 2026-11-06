@@ -1,3 +1,4 @@
+using LegendsTeamVN.Core.Utilities.Results;
 using LegendsTeamVN.BadmintonClub.Domain.Enums;
 using LegendsTeamVN.Core.Domain.Entities;
 
@@ -95,6 +96,18 @@ public class GroupFeeRule : Entity<Guid>
         int roundRule)
     {
         UpdateFees(ParseFeeMode(feeMode), monthlyFee, dailyMemberFee, guestFee, femaleDiscountMonthly, femaleDiscountDaily, femaleDiscountGuest, roundRule);
+    }
+
+    public Result<decimal> CalculateMonthlyContribution(short gender)
+    {
+        if (!Enum.IsDefined((Gender)gender))
+            return Result.Failure<decimal>(Error.Validation("Ledger.InvalidGender", "Giới tính không hợp lệ."));
+        var discount = gender == (short)Gender.Female ? FemaleDiscountMonthly : 0m;
+        if (!Services.LedgerBalance.IsValidAmount(MonthlyFee) || discount < 0 ||
+            decimal.Round(discount, 2) != discount || discount > MonthlyFee ||
+            !Services.LedgerBalance.IsValidAmount(MonthlyFee - discount))
+            return Result.Failure<decimal>(Error.Conflict("Ledger.MonthlyPolicyUnsupported", "Biểu phí không hợp lệ hoặc chưa hỗ trợ miễn phí tháng."));
+        return Result.Success(MonthlyFee - discount);
     }
 
     private static FeeMode ParseFeeMode(string feeMode)

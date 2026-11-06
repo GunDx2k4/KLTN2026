@@ -5,6 +5,7 @@
 
 # dotenv files
 .env
+reconciliation-evidence/
 
 # User-specific files
 *.rsuser

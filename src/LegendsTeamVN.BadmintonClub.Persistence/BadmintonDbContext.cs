@@ -32,14 +32,45 @@ public class BadmintonDbContext(DbContextOptions<BadmintonDbContext> options, IP
     public DbSet<MatchPlayer> MatchPlayers => Set<MatchPlayer>();
     public DbSet<SessionFee> SessionFees => Set<SessionFee>();
     public DbSet<BankTransaction> BankTransactions => Set<BankTransaction>();
+    public DbSet<MonthlyContribution> MonthlyContributions => Set<MonthlyContribution>();
+    public DbSet<LedgerAttachment> LedgerAttachments => Set<LedgerAttachment>();
     public DbSet<GroupLedger> GroupLedgers => Set<GroupLedger>();
 
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
+        ReputationWriteGuard.Apply(ChangeTracker);
         try
         {
             return await base.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException ex) when (ex.Entries.Any(e => e.Entity is AppUser or ClubGroup or BadmintonSession or SessionBooking))
+        {
+            throw new ReputationConflictException(ex);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException pg &&
+            (pg.SqlState == PostgresErrorCodes.UniqueViolation && pg.ConstraintName == "IX_group_review_id_session_id_user" ||
+             pg.SqlState is "55P03" or "40P01" or "40001" &&
+             (ChangeTracker.Entries<BadmintonSession>().Any(e => e.Property(x => x.ReputationVersion).IsModified) ||
+              ChangeTracker.Entries<GroupReview>().Any(e => e.State == EntityState.Added && e.Entity.SessionId.HasValue))))
+        {
+            throw new ReputationConflictException(ex);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException
+            { SqlState: PostgresErrorCodes.LockNotAvailable or PostgresErrorCodes.DeadlockDetected or PostgresErrorCodes.SerializationFailure })
+        {
+            throw new LedgerWriteConflictException("Ledger.Busy", "Sổ quỹ đang được cập nhật, hãy thử lại với cùng mã yêu cầu.", ex);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException
+            { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: "IX_group_ledger_id_group_request_id" or "IX_group_ledger_monthly_contribution_id" or "IX_monthly_contribution_id_group_user_id_contribution_month" })
+        {
+            throw new LedgerWriteConflictException("Ledger.Busy", "Sổ quỹ đang được cập nhật, hãy thử lại với cùng mã yêu cầu.", ex);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException
+            { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: "IX_bank_transaction_provider_transaction_id" or "ux_bank_transaction_company_provider" or
+                "IX_group_ledger_fee_id" or "IX_group_ledger_bank_transaction_id" })
+        {
+            throw new ReconciliationWriteConflictException(ex);
         }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException
             { SqlState: PostgresErrorCodes.UniqueViolation, ConstraintName: "IX_session_fee_payment_code" } &&
@@ -47,6 +78,16 @@ public class BadmintonDbContext(DbContextOptions<BadmintonDbContext> options, IP
         {
             throw new SettlementPublicationConflictException("Settlement.PaymentCodeConflict", "Mã thanh toán bị trùng, chưa phát hành khoản thu.", ex);
         }
+    }
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        ReputationWriteGuard.Apply(ChangeTracker);
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        ReputationWriteGuard.Apply(ChangeTracker);
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

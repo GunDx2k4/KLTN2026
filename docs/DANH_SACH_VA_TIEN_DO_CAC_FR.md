@@ -1,7 +1,7 @@
 # 🏸 BẢNG TỔNG HỢP VÀ TIẾN ĐỘ TOÀN BỘ CÁC YÊU CẦU CHỨC NĂNG (FR01 - FR23)
 > **Dự án**: Hệ thống quản lý nhóm cầu lông phong trào (Badminton Club Management System)  
 > **Tài liệu tham chiếu gốc**: `KLHK1262714_BC1_Hệ thống quản lý nhóm cầu lông phong trào.docx`  
-> **Cập nhật ngày**: 14/10/2026  
+> **Cập nhật UC18/FR21**: 05/11/2026, thêm BE Admin/OAuth theo CLB; các phân hệ khác giữ mốc kiểm chứng tương ứng
 > **Trạng thái hệ thống**: Backend (.NET 10 Clean Architecture) & Mobile (Flutter)
 
 ---
@@ -30,9 +30,9 @@
 | **FR18** | Ghi nhận số cầu, chi phí sân và phụ phí thực tế | Hạch toán Vật tư & Sổ quỹ (F4) | BE kiểm chứng Đợt 5 ngày 30/10/2026; gói triển khai Đợt 6 đã chuẩn bị; FE/DB đích chưa triển khai | 4 API quyết toán |
 | **FR19** | Phân bổ chi phí theo rule và loại hội viên | Hạch toán Vật tư & Sổ quỹ (F4) | BE kiểm chứng Domain/API/transaction/Redis/outbox; xem báo cáo UC16 và runbook | 4 API quyết toán + API biểu phí |
 | **FR20** | Khởi tạo mã VietQR thanh toán nhúng sẵn tiền & mã duy nhất | Hạch toán Vật tư & Sổ quỹ (F4) | BE hoàn thiện, POC/decoder đạt; người dùng xác nhận hai app quét đúng; đã nối DB chung local và bàn giao FE | 8 route triển khai, Enabled/WritesEnabled bật trên API54796; FCM tắt, UC18 riêng |
-| **FR21** | Tiếp nhận biến động số dư ngân hàng để tự động xác nhận thanh toán | Hạch toán Vật tư & Sổ quỹ (F4) | ⏳ *Sẵn sàng DB, cần thêm Webhook* | 0 API |
-| **FR22** | Quản trị Sổ quỹ mở nội bộ minh bạch (Thu, Chi, Dư nợ) | Hạch toán Vật tư & Sổ quỹ (F4) | ⏳ *Sẵn sàng DB, cần thêm Endpoint* | 0 API |
-| **FR23** | Đánh giá tín nhiệm hai chiều (Điểm thành viên & Điểm CLB) | Đánh giá & Tín nhiệm (F5) | ⏳ *Sẵn sàng DB, cần thêm Endpoint* | 0 API |
+| **FR21** | Tiếp nhận biến động số dư ngân hàng để tự động xác nhận thanh toán | Hạch toán Vật tư & Sổ quỹ (F4) | Lõi đã áp DB chung local; bổ sung BE Admin/OAuth theo CLB, FE để sau; chưa deploy server hoặc nghiệm thu provider thực | Webhook/list/detail/manual, CASH UC16 và 12 route thiết lập OAuth |
+| **FR22** | Quản trị Sổ quỹ mở nội bộ minh bạch (Thu, Chi, Dư nợ) | Hạch toán Vật tư & Sổ quỹ (F4) | UC19 Wave 1–3: đọc/ghi nguyên tử, DomainEvent và worker sau commit; chưa deploy/provider thật | 5 GET + 3 POST UC19 |
+| **FR23** | Đánh giá tín nhiệm hai chiều (Điểm thành viên & Điểm CLB) | Đánh giá & Tín nhiệm (F5) | Wave 3: source engine/API/delivery đã có, sandbox đã kiểm chứng; chưa nghiệm thu thiết bị/provider thật | 6 API |
 
 > **Thống kê tổng hợp cũ** (không dùng làm bằng chứng UC17/UC18; cập nhật FR20 ngày 01/11/2026 tại dòng tương ứng và hợp đồng UC17):
 > - **Đã hoàn thành và chạy thực tế**: **16 / 23 FR** (FR01 → FR16).
@@ -251,16 +251,16 @@ Các phân hệ dưới đây đã có sẵn cấu trúc bảng và mô hình th
   - *Bảng dữ liệu đã có*: `session_fee`, `group_bank_account`.
   - *API canonical đã map*: GET `/api/v1/user/me/fees`, GET `.../{feeId}`, POST `.../{feeId}/cash-request`, POST `.../{feeId}/transfer-notice`; GET/PUT `/api/v1/clubs/{clubId}/payment-bank-account`. JWT/ownership cho cá nhân; BankManage/FeeManage thật theo DB.
   - POST `.../{feeId}/bank-transfer` cấp/lấy lại payload và snapshot; GET `.../{feeId}/qr.png` trả PNG có JWT/ownership/no-store, không ghi DB. Dùng Anpero `1.0.1-uc17.1` vá metadata một dòng được duyệt, không đổi mã/encoder. Chưa quét hai bank apps. Không có alias GET `/sessions/{sessionId}/fees/me/qr` theo dự kiến cũ.
-  - Migration `20261031155325_AddPersonalFeePayment` additive chỉ kiểm DB test riêng; chưa áp DB chung/production. Không tự đổi PaymentCode UC16, viết encoder hoặc thay thư viện. QRCoder là renderer, không chứng minh payload chuẩn.
+  - Migration `20261031155325_AddPersonalFeePayment` additive đã kiểm DB test riêng và áp DB chung local; DB server/production chưa được áp trong đợt này. Không tự đổi PaymentCode UC16, viết encoder hoặc thay thư viện. QRCoder là renderer, không chứng minh payload chuẩn.
   - *Giới hạn*: image round-trip tự động đạt, người dùng xác nhận hai bank apps quét đúng; UC18/ledger hoàn chỉnh/FE chưa được nghiệm thu. [Contract bàn giao FE UC17](Detail%20Design/UC17-BE.md). DB chung local đã migrate, REST bật; GET nghĩa vụ/receipt vẫn đọc khi Payments tắt. FCM tiền mặt vẫn tắt; không coi self-report là đã nhận tiền.
-- **FR21 - Đối soát & Xác nhận thanh toán ngân hàng tự động**:
-  - *Mục tiêu*: Tiếp nhận webhook biến động số dư tài khoản ngân hàng (Casso / SePay / VietinBank), tự động khớp nội dung chuyển khoản với mã định danh hóa đơn, xác nhận thanh toán sang trạng thái `PAID` mà không cần thủ quỹ kiểm tra sao kê thủ công.
-  - *Bảng dữ liệu đã có*: `bank_transaction`.
-  - *Endpoint dự kiến*: `POST /api/v1/webhooks/bank-transfer`.
+- **FR21 - Đối soát và xác nhận thanh toán SePay**:
+  - Đã có POST `/api/v1/webhooks/sepay/{bankAccountId}`, GET list/detail và POST confirm dưới `/api/v1/clubs/{groupId}/reconciliations`; mở rộng CASH pay UC16 với ledger/Notification/Outbox cùng transaction.
+  - HMAC raw bytes/timestamp, bank binding, Redis và DB locks/unique nguồn; retry/collision, exact-match và manual có audit. Thiếu/thừa tiền giữ MANUAL_CHECK; không cộng dồn/xóa nợ/hoàn tiền trong v1.
+  - Source, kiểm chứng tự động và rollout DB chung local có bằng chứng tại [UC18-BE](Detail%20Design/UC18-BE.md). Local đã tới migration `20261104074142_AddPaymentReconciliation`, API54796 profile CASH; dữ liệu cũ 53 bảng giữ nguyên. Chưa bật Live, chưa áp DB server/deploy hoặc xác minh company/gateway và request Test Mode thực. Cờ options mặc định false; Development local bật WritesEnabled, webhook/dispatch tắt.
 - **FR22 - Quản trị Sổ quỹ mở nội bộ minh bạch**:
   - *Mục tiêu*: Công khai minh bạch dòng tiền thu/chi, số dư quỹ khả dụng và danh sách người còn nợ tiền cho toàn thể hội viên theo dõi; cho phép thủ quỹ tạo phiếu thu/chi ngoài sân.
-  - *Bảng dữ liệu đã có*: `group_ledger`.
-  - *Endpoint dự kiến*: `GET /api/v1/clubs/{clubId}/ledger`, `POST /api/v1/clubs/{clubId}/ledger/transactions`.
+  - *Wave 1–2*: Source đã có `group_ledger`, `monthly_contribution`, `ledger_attachment` và 5 GET tổng quan/lịch sử/công nợ/candidates/hóa đơn cùng 3 POST phát hành/thu tháng/chi. Migration chỉ kiểm trên sandbox.
+  - *Wave 3*: Đã có worker gửi thông báo UC19 và sự kiện thu UC18, kiểm sandbox/provider giả; chưa nghiệm thu dispatch thật hoặc deploy. [Hợp đồng Wave 1](Detail%20Design/UC19-BE.md).
 
 ---
 
@@ -269,8 +269,8 @@ Các phân hệ dưới đây đã có sẵn cấu trúc bảng và mô hình th
   - *Mục tiêu*:
     - **Điểm uy tín thành viên**: Tự động tăng khi tham gia đúng giờ, thanh toán sòng phẳng; tự động trừ điểm khi hủy hẹn sát giờ (báo vắng sát giờ hoặc không đến).
     - **Điểm chất lượng hội nhóm**: Tính theo điểm đánh giá của thành viên sau buổi chơi kết hợp tính minh bạch của sổ quỹ.
-  - *Bảng dữ liệu đã có*: `member_review`, `group_review`.
-  - *Endpoint dự kiến*: `POST /api/v1/reviews/member`, `POST /api/v1/reviews/club`.
+  - *Lưu trữ UC20 đã chốt*: mở rộng `app_user`, `club_group`, `badminton_session`, `session_booking`, `group_review`; không tạo bảng mới. `member_review` không dùng làm nhật ký hệ thống.
+  - *Endpoint đã triển khai Wave 2*: `POST /api/v1/user/me/reviews`, GET invitations/card/entries/group-quality/audit theo [UC20-BE](Detail%20Design/UC20-BE.md). API đã kiểm qua HTTP cục bộ; delivery đã có kiểm thử tự động, chưa bật tính năng trên môi trường chung.
 
 ---
 

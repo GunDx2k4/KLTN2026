@@ -148,5 +148,6 @@ public class BadmintonSessionConfiguration : IEntityTypeConfiguration<BadmintonS
             .WithOne(l => l.Session)
             .HasForeignKey(l => l.SessionId)
             .OnDelete(DeleteBehavior.SetNull);
+        ReputationModelConfiguration.ConfigureSession(builder);
     }
 }
