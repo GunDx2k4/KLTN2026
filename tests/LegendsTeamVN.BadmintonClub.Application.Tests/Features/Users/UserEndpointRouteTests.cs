@@ -43,7 +43,10 @@ public sealed class UserEndpointRouteTests
             ("DeleteUser", "DELETE", "{id:guid}"),
             ("ToggleUserLock", "PUT", "{id:guid}/lock"),
             ("UpdateUserRoles", "PUT", "{id:guid}/roles"),
-            ("ResetUserPassword", "POST", "{id:guid}/reset-password")
+            ("ResetUserPassword", "POST", "{id:guid}/reset-password"),
+            ("GetMyNotifications", "GET", "me/notifications"),
+            ("MarkNotificationAsRead", "PUT", "me/notifications/{id:guid}/read"),
+            ("MarkAllNotificationsAsRead", "PUT", "me/notifications/read-all")
         };
 
         foreach (var (name, method, suffix) in expected)
