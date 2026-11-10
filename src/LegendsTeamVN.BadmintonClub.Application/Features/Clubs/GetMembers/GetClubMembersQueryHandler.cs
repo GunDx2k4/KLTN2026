@@ -23,7 +23,7 @@ public sealed class GetClubMembersQueryHandler(
             return Result.Failure<List<ClubMemberResponse>>(Error.NotFound("Club.NotFound", "Không tìm thấy câu lạc bộ."));
         }
 
-        var members = await clubMemberRepository.FindAll(m => m.GroupId == request.ClubId, m => m.RoleEntity)
+        var members = await clubMemberRepository.FindAll(m => m.GroupId == request.ClubId, m => m.RoleEntity, m => m.User)
             .OrderBy(m => m.JoinedAt)
             .ToListAsync(cancellationToken);
 
@@ -36,6 +36,11 @@ public sealed class GetClubMembersQueryHandler(
         var result = members.Select(m =>
         {
             users.TryGetValue(m.UserId, out var user);
+            var fullName = !string.IsNullOrWhiteSpace(m.User?.FullName)
+                ? m.User.FullName
+                : user?.UserName;
+            var avatarUrl = m.User?.AvatarUrl;
+
             return new ClubMemberResponse(
                 Id: m.Id,
                 ClubId: m.GroupId,
@@ -47,7 +52,11 @@ public sealed class GetClubMembersQueryHandler(
                 Status: m.Status,
                 Nickname: m.Nickname,
                 JoinedAt: m.JoinedAt,
-                Role: m.RoleEntity?.GetRoleCode() ?? 1
+                Role: m.RoleEntity?.GetRoleCode() ?? 1,
+                FullName: fullName,
+                AvatarUrl: avatarUrl,
+                MemberType: m.MemberType,
+                MonthlyExpiryDate: m.MonthlyExpiryDate
             );
         }).ToList();
 

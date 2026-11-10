@@ -3,6 +3,9 @@ using LegendsTeamVN.BadmintonClub.Application.DTOs.Reputation.Responses;
 using LegendsTeamVN.BadmintonClub.Application.Features.Reputation.GetReviewInvitations;
 using LegendsTeamVN.BadmintonClub.Application.Features.Reputation.SubmitSessionReview;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Users.Requests;
+using LegendsTeamVN.BadmintonClub.Application.Features.Notifications.GetMy;
+using LegendsTeamVN.BadmintonClub.Application.Features.Notifications.MarkAllRead;
+using LegendsTeamVN.BadmintonClub.Application.Features.Notifications.MarkRead;
 using LegendsTeamVN.BadmintonClub.Application.Features.Users.Create;
 using LegendsTeamVN.BadmintonClub.Application.Features.Users.Delete;
 using LegendsTeamVN.BadmintonClub.Application.Features.Users.GetAllPermissions;
@@ -52,6 +55,12 @@ public class UserEndpoint : EndpointGroupBase
         payments.MapPost("{feeId:guid}/cash-request", RequestCashPayment).WithName("RequestCashPayment");
         payments.MapPost("{feeId:guid}/bank-transfer", PrepareBankTransfer).WithName("PrepareBankTransfer");
         payments.MapPost("{feeId:guid}/transfer-notice", ReportBankTransfer).WithName("ReportBankTransfer");
+
+        var notifGroup = group.MapGroup("me/notifications").WithTags("Notifications").RequireAuthorization();
+        notifGroup.MapGet("", GetMyNotifications).WithName("GetMyNotifications");
+        notifGroup.MapPut("{id:guid}/read", MarkNotificationAsRead).WithName("MarkNotificationAsRead");
+        notifGroup.MapPut("read-all", MarkAllNotificationsAsRead).WithName("MarkAllNotificationsAsRead");
+
         var usersGroup = group.MapGroup("").WithTags("Users");
         var fr05Group = group.MapGroup("").WithTags("FR05 - Quản lý hồ sơ cá nhân & Trình độ");
 
@@ -184,6 +193,24 @@ public class UserEndpoint : EndpointGroupBase
     {
         var result = await sender.Send(new Application.Features.Payments.TransferNotice.ReportBankTransferCommand(feeId), ct);
         return result.Match(onSuccess: data => Results.Ok(data));
+    }
+
+    private static async Task<IResult> GetMyNotifications(ISender sender, CancellationToken ct)
+    {
+        var result = await sender.Send(new GetMyNotificationsQuery(), ct);
+        return result.Match(onSuccess: data => Results.Ok(data));
+    }
+
+    private static async Task<IResult> MarkNotificationAsRead(Guid id, ISender sender, CancellationToken ct)
+    {
+        var result = await sender.Send(new MarkNotificationAsReadCommand(id), ct);
+        return result.Match(onSuccess: () => Results.NoContent());
+    }
+
+    private static async Task<IResult> MarkAllNotificationsAsRead(ISender sender, CancellationToken ct)
+    {
+        var result = await sender.Send(new MarkAllNotificationsAsReadCommand(), ct);
+        return result.Match(onSuccess: () => Results.NoContent());
     }
 
     private static async Task<IResult> GetProfile(ISender sender)

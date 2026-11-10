@@ -97,6 +97,7 @@ public static class ServiceCollectionExtensions
         // Đăng ký Service Notification
         services.AddScoped<INotificationService, FirebaseNotificationService>();
         services.AddScoped<IExternalAuthService, ExternalAuthService>();
+        services.AddScoped<IMediaStorageService, CloudinaryStorageService>();
         return services;
     }
     // Shared by the API and isolated UC15 HTTP verification; no Firebase or workers are initialized here.
