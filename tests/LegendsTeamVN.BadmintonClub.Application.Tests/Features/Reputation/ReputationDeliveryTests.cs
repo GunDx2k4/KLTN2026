@@ -42,7 +42,7 @@ public sealed class ReputationDeliveryTests
             Assert.Equal(JsonSerializer.Serialize(push), message.Payload);
         }
         else await outbox.Received(1).CompleteAsync(message.Id, message.LeaseId!.Value, Arg.Any<DateTime>(), Arg.Any<CancellationToken>());
-        if (allowed && !fail) await realtime.Received(1).PublishAsync(message.Kind, push, Arg.Any<CancellationToken>());
+        if (allowed) await realtime.Received(fail ? 2 : 1).PublishAsync(message.Kind, push, Arg.Any<CancellationToken>());
         else await realtime.DidNotReceiveWithAnyArgs().PublishAsync(default!, default!, default);
         if (!allowed) await devices.DidNotReceiveWithAnyArgs().GetActiveTokensAsync(default, default);
     }

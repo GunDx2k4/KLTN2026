@@ -44,10 +44,6 @@ public class BadmintonDbContext(DbContextOptions<BadmintonDbContext> options, IP
         {
             return await base.SaveChangesAsync(cancellationToken);
         }
-        catch (DbUpdateConcurrencyException ex) when (ex.Entries.Any(e => e.Entity is AppUser or ClubGroup or BadmintonSession or SessionBooking))
-        {
-            throw new ReputationConflictException(ex);
-        }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException pg &&
             (pg.SqlState == PostgresErrorCodes.UniqueViolation && pg.ConstraintName == "IX_group_review_id_session_id_user" ||
              pg.SqlState is "55P03" or "40P01" or "40001" &&
@@ -82,13 +78,32 @@ public class BadmintonDbContext(DbContextOptions<BadmintonDbContext> options, IP
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         ReputationWriteGuard.Apply(ChangeTracker);
-        return base.SaveChanges(acceptAllChangesOnSuccess);
+        try
+        {
+            return base.SaveChanges(acceptAllChangesOnSuccess);
+        }
+        catch (DbUpdateConcurrencyException ex) when (IsReputationEntityConflict(ex))
+        {
+            throw new ReputationConflictException(ex);
+        }
     }
-    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
         ReputationWriteGuard.Apply(ChangeTracker);
-        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        try
+        {
+            return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException ex) when (IsReputationEntityConflict(ex))
+        {
+            throw new ReputationConflictException(ex);
+        }
     }
+
+    private static bool IsReputationEntityConflict(DbUpdateConcurrencyException exception) =>
+        exception.Entries.Count > 0 && exception.Entries.All(entry =>
+            entry.Entity is AppUser or ClubGroup or BadmintonSession or SessionBooking);
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

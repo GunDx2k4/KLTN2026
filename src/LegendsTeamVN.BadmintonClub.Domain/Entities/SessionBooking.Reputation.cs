@@ -34,6 +34,11 @@ public partial class SessionBooking
         ReputationVersion++;
     }
 
+    public BookingCancellationFact? GetReputationCancellation() =>
+        CancellationHistory.LastOrDefault(c => c.PreviousStatus == BookingStatus.CONFIRMED
+            && c.CancelledAt >= c.DeadlineBooking && c.CancelledAt < c.StartTime)
+        ?? CancellationHistory.LastOrDefault();
+
     public void RecordReputation(ReputationEvidence evidence, DateTime now)
     {
         ReputationPolicy.RequireUtc(now);
@@ -43,8 +48,7 @@ public partial class SessionBooking
             throw new InvalidOperationException("Kết quả uy tín đã được chốt.");
         }
         if (evidence.Attendance != Status || evidence.CheckinAt != CheckinAt
-            || evidence.Cancellation is not null && evidence.Cancellation != CancellationHistory.LastOrDefault()
-            || Status == BookingStatus.ABSENT && evidence.Cancellation != CancellationHistory.LastOrDefault())
+            || evidence.Cancellation != GetReputationCancellation())
             throw new ArgumentException("Bằng chứng không khớp đăng ký.");
         var delta = ReputationPolicy.Evaluate(evidence);
         ReputationEvidence = evidence;

@@ -26,7 +26,7 @@ public partial class BadmintonSession
                 : source.BankTransactionId.HasValue ? ReputationPaymentEvidence.Bank : ReputationPaymentEvidence.Cash;
             booking.RecordReputation(new(1, booking.Status, snapshot.StartTime, booking.CheckinAt,
                 snapshot.SettlementPublishedAt, source?.ReceivedAt, payment, source?.FeeId,
-                source?.BankTransactionId, booking.CancellationHistory.LastOrDefault()), now);
+                source?.BankTransactionId, booking.GetReputationCancellation()), now);
         }
         FinalizeReputation(snapshot, fees, ledger, banks, now);
         return true;

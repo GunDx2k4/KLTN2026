@@ -61,7 +61,7 @@ public static class ReputationPolicy
             BookingStatus.CHECKED_IN when evidence.CheckinAt.HasValue =>
                 evidence.CheckinAt <= evidence.StartTime.AddMinutes(15) ? 1m : -3m,
             BookingStatus.NO_SHOW => -20m,
-            BookingStatus.ABSENT when evidence.Cancellation is { PreviousStatus: BookingStatus.CONFIRMED } fact
+            BookingStatus.ABSENT or BookingStatus.WAITING when evidence.Cancellation is { PreviousStatus: BookingStatus.CONFIRMED } fact
                 && fact.CancelledAt >= fact.DeadlineBooking && fact.CancelledAt < fact.StartTime => -10m,
             _ => 0m
         };

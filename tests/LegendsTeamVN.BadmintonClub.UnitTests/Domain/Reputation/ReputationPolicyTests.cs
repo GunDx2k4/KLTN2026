@@ -97,4 +97,32 @@ public sealed class ReputationPolicyTests
         Assert.False(user.ReputationScore < ReputationPolicy.RiskThreshold);
         Assert.Throws<InvalidOperationException>(() => user.UpdateReputation(100));
     }
+
+    [Theory]
+    [InlineData(BookingStatus.WAITING, -10)]
+    [InlineData(BookingStatus.ABSENT, -10)]
+    [InlineData(BookingStatus.CHECKED_IN, 1)]
+    [InlineData(BookingStatus.NO_SHOW, -20)]
+    public void LaterWaitingCancellationDoesNotEraseOfficialViolation(BookingStatus finalStatus, int expected)
+    {
+        var session = new BadmintonSession(Guid.NewGuid(), "UC20", Start, Start.AddHours(2), "Court", courtCount: 1);
+        var booking = new SessionBooking(session.Id, Guid.NewGuid(), Guid.NewGuid());
+        booking.CancelWithEvidence(session, booking.UserId, ReputationCancellationSource.Recruitment, Start.AddHours(-1));
+        var violation = booking.CancellationHistory[0];
+        session.UpdateSession("UC20", Start.AddDays(1), Start.AddDays(1).AddHours(2), "Court", 1, 6, Start.AddDays(1).AddHours(-2));
+        booking.UpdateStatus(BookingStatus.WAITING);
+        booking.CancelWithEvidence(session, booking.UserId, ReputationCancellationSource.Booking, Start);
+        booking.UpdateStatus(finalStatus);
+        if (finalStatus == BookingStatus.CHECKED_IN)
+        {
+            booking.UpdateStatus(BookingStatus.CONFIRMED);
+            booking.MarkPresent(booking.UserId, session.StartTime);
+        }
+        Assert.Equal(violation, booking.GetReputationCancellation());
+        var evidence = new ReputationEvidence(1, finalStatus, session.StartTime, booking.CheckinAt, null, null,
+            ReputationPaymentEvidence.Unknown, null, null, booking.GetReputationCancellation());
+        Assert.Throws<ArgumentException>(() => booking.RecordReputation(evidence with { Cancellation = null }, session.EndTime));
+        booking.RecordReputation(evidence, session.EndTime);
+        Assert.Equal(expected, booking.ReputationRawDelta);
+    }
 }

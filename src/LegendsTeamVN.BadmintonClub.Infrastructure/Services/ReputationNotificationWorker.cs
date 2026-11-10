@@ -68,17 +68,33 @@ public sealed class ReputationNotificationWorker(IServiceScopeFactory scopes, Ti
                 return allowed;
         }
         if (!await Authorized()) return;
-        var tokens = await services.GetRequiredService<IDeviceRepository>().GetActiveTokensAsync(push.RecipientId, ct);
-        foreach (var batch in tokens.Where(t => !string.IsNullOrWhiteSpace(t)).Distinct(StringComparer.Ordinal).Chunk(500))
+        var failures = new List<Exception>();
+        try
         {
-            if (!await Authorized()) return;
-            var data = new Dictionary<string, string> { ["eventId"] = push.EventId.ToString(), ["sessionId"] = push.SessionId.ToString(), ["bookingId"] = push.BookingId.ToString(), ["kind"] = message.Kind };
-            if (await services.GetRequiredService<INotificationService>().SendMulticastNotificationAsync(batch,
-                message.Kind == "ReviewInvitationPush" ? "Mời đánh giá buổi chơi" : "Uy tín đã cập nhật",
-                "Mở ứng dụng để xem thông tin mới.", data, ct) != batch.Length)
-                throw new InvalidOperationException("Một số thông báo chưa được gửi.");
+            using var pushTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            pushTimeout.CancelAfter(TimeSpan.FromSeconds(10));
+            var tokens = await services.GetRequiredService<IDeviceRepository>().GetActiveTokensAsync(push.RecipientId, pushTimeout.Token);
+            foreach (var batch in tokens.Where(t => !string.IsNullOrWhiteSpace(t)).Distinct(StringComparer.Ordinal).Chunk(500))
+            {
+                if (!await Authorized()) return;
+                var data = new Dictionary<string, string> { ["eventId"] = push.EventId.ToString(), ["sessionId"] = push.SessionId.ToString(), ["bookingId"] = push.BookingId.ToString(), ["kind"] = message.Kind };
+                if (await services.GetRequiredService<INotificationService>().SendMulticastNotificationAsync(batch,
+                    message.Kind == "ReviewInvitationPush" ? "Mời đánh giá buổi chơi" : "Uy tín đã cập nhật",
+                    "Mở ứng dụng để xem thông tin mới.", data, pushTimeout.Token) != batch.Length)
+                    throw new InvalidOperationException("Một số thông báo chưa được gửi.");
+            }
         }
-        if (await Authorized())
-            await services.GetRequiredService<IReputationRealtimePublisher>().PublishAsync(message.Kind, push, ct);
+        catch (Exception ex) when (!ct.IsCancellationRequested) { failures.Add(ex); }
+        ct.ThrowIfCancellationRequested();
+        if (!await Authorized()) return;
+        try
+        {
+            using var realtimeTimeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            realtimeTimeout.CancelAfter(TimeSpan.FromSeconds(10));
+            await services.GetRequiredService<IReputationRealtimePublisher>().PublishAsync(message.Kind, push, realtimeTimeout.Token);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested) { failures.Add(ex); }
+        ct.ThrowIfCancellationRequested();
+        if (failures.Count > 0) throw new AggregateException("Chưa gửi đủ các kênh thông báo uy tín.", failures);
     }
 }
