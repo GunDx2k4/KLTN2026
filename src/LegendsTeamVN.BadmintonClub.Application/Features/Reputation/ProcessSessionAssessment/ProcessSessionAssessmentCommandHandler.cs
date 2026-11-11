@@ -14,7 +14,7 @@ public sealed class ProcessSessionAssessmentCommandHandler(IReputationRepository
     {
         var settings = options.CurrentValue;
         var source = await repository.LockSessionAsync(request.SessionId, ct);
-        if (source is null || source.Session.StartTime < settings.EffectiveFromUtc)
+        if (source is null || source.Session.StartTime < settings.EffectiveFromUtc.UtcDateTime)
             return Result.Failure<AssessmentResponse>(ReputationErrors.NotFound);
         var session = source.Session;
         if (session.ReputationProcessingStatus == ReputationProcessingStatus.Finalized)

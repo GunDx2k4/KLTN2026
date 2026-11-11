@@ -29,7 +29,7 @@ public sealed class ReputationAssessmentWorker(IServiceScopeFactory scopes, IOpt
         IReadOnlyList<Guid> ids;
         await using (var scope = scopes.CreateAsyncScope())
             ids = await scope.ServiceProvider.GetRequiredService<IReputationReadRepository>()
-                .FindDueAsync(settings.EffectiveFromUtc, now, settings.BatchSize, retryAfter.Keys.ToArray(), ct);
+                .FindDueAsync(settings.EffectiveFromUtc.UtcDateTime, now, settings.BatchSize, retryAfter.Keys.ToArray(), ct);
         foreach (var id in ids)
         {
             try

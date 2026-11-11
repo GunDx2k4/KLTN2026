@@ -23,7 +23,7 @@ public sealed class ReputationEngineTests
     internal static IOptionsMonitor<ReputationOptions> Options()
     {
         var options = Substitute.For<IOptionsMonitor<ReputationOptions>>();
-        options.CurrentValue.Returns(new ReputationOptions { EffectiveFromUtc = Now.AddDays(-30) });
+        options.CurrentValue.Returns(new ReputationOptions { EffectiveFromUtc = new DateTimeOffset(Now.AddDays(-30)) });
         return options;
     }
     internal static (ReputationAssessmentSource Source, AppUser User) Source(decimal price = 0, int daysAgo = 1, AppUser? user = null, bool late = false, ClubGroup? group = null)

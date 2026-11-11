@@ -36,7 +36,7 @@ public static class ServiceCollectionExtensions
         services.AddOptions<ReputationOptions>().BindConfiguration(ReputationOptions.SectionName)
             .Validate(o => o.BatchSize is >= 1 and <= 100 && o.IntervalSeconds is >= 5 and <= 300,
                 "BatchSize phải từ 1 đến 100; IntervalSeconds phải từ 5 đến 300.")
-            .Validate(o => o.EffectiveFromUtc.Kind == DateTimeKind.Utc,
+            .Validate(o => o.EffectiveFromUtc.Offset == TimeSpan.Zero,
                 "Cần EffectiveFromUtc UTC cố định cho UC20.").ValidateOnStart();
         services.AddOptions<LedgerOptions>().BindConfiguration(LedgerOptions.SectionName);
         services.AddOptions<ReconciliationOptions>().BindConfiguration(ReconciliationOptions.SectionName);

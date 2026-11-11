@@ -37,7 +37,7 @@ public sealed class ReputationHttpTests
         { ["Jwt:Issuer"] = "uc20-tests", ["Jwt:Audience"] = "uc20-tests", ["Jwt:SecretKey"] = new string('k', 64) }).Build());
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddApplication();
-        var settings = new ReputationOptions { EffectiveFromUtc = ReputationEngineTests.Now.AddDays(-30) };
+        var settings = new ReputationOptions { EffectiveFromUtc = new DateTimeOffset(ReputationEngineTests.Now.AddDays(-30)) };
         builder.Services.AddSingleton<IOptionsMonitor<ReputationOptions>>(new TestOptionsMonitor<ReputationOptions>(settings));
         var actor = Guid.NewGuid();
         var current = Substitute.For<ICurrentUserService>(); current.UserId.Returns(actor);
