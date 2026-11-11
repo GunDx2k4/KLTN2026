@@ -255,34 +255,47 @@ graph TD
 - **Hậu điều kiện**: Xem được khoản/biên lai; yêu cầu và tiến trình được lưu nguyên tử/idempotent. Tự báo chuyển khoản không chứng minh ngân hàng nhận tiền, không tự ghi bank transaction/ledger.
 - **Hiện trạng 01/11/2026**: Backend UC17 hoàn thiện, dùng Anpero `1.0.1-uc17.1` vá metadata được duyệt; POC/decoder ảnh độc lập đạt, người dùng xác nhận quét đúng trên hai app. Đã backup/restore kiểm chứng và áp migration vào DB dùng chung local BadmintonClub; API54796 bật REST UC17, FCM tắt. Không đổi encoder/PaymentCode hoặc bank cũ; UC18 chưa triển khai, self-report vẫn chờ đối soát. [Hợp đồng bàn giao FE và vận hành](Detail%20Design/UC17-BE.md).
 
-### UC18: Đối soát & Tự động gạch nợ qua Webhook ngân hàng
-- **Giới hạn hiện trạng**: Luồng bên dưới là mục tiêu FR21, chưa được nghiệm thu trong UC17. Test writer mô phỏng không thay bằng chứng webhook thật. Chưa bật chuyển khoản thật khi thiếu UC18 hoặc quy trình đối soát thủ công được phê duyệt.
-- **FR đáp ứng**: FR21 (F4.4) | **Tác nhân**: Cổng thanh toán ngân hàng (SePay), Hệ thống.
-- **Tiền điều kiện**: Người chơi đã chuyển khoản; bản ghi `session_fee` đang ở trạng thái `UNPAID`.
-- **Luồng chính**:
-  1. Ngân hàng nhận tiền ➔ Cổng thanh toán bắn Webhook HTTP POST về máy chủ Backend.
-  2. Middleware kiểm tra chữ ký bí mật `webhook_secret_key` của tài khoản nhóm.
-  3. Hệ thống phân tích nội dung chuyển khoản để trích xuất `payment_code` và số tiền nhận được.
-  4. Khớp lệnh chính xác: Cập nhật bản ghi `session_fee` sang trạng thái `PAID`, gán `paid_at = now()`.
-  5. Tạo bản ghi giao dịch ngân hàng đối soát `bank_transaction` (`MATCHED`).
-  6. Tự động kết chuyển một dòng thu tiền vào Sổ quỹ mở của nhóm (`group_ledger`).
-  7. Bắn thông báo đẩy (FCM) xác nhận thanh toán thành công đến điện thoại của người chơi.
-- **Hậu điều kiện**: Tự động xác nhận thanh toán 100%, thủ quỹ không cần kiểm tra sao kê thủ công.
+### UC18: Đối soát & xác nhận thanh toán
+
+- **Hiện trạng 04/11/2026**: Backend đã có source, kiểm chứng HTTP/DB/Redis/Postman và áp migration UC18 trên DB chung local BadmintonClub; API54796 chạy profile CASH, webhook/dispatch tắt. Chưa áp DB server/deploy hoặc nghiệm thu request SePay Test Mode thực, company/gateway mục tiêu/FCM thiết bị thật. [Hợp đồng và vận hành UC18](Detail%20Design/UC18-BE.md).
+- **FR đáp ứng**: FR21 (F4.4). **Tác nhân**: SePay, hệ thống, người có FeeManage trong đúng CLB.
+- **Tiền điều kiện auto**: khoản thu đã phát hành, UNPAID/BANK_TRANSFER, có QR snapshot; kết nối SePay đúng ngân hàng/company đã hoạt động, HMAC lưu mã hóa ngoài Git và cờ nhận/ghi bật. Không bắt buộc người chơi tự báo chuyển khoản. Bổ sung ngày 05/11: Admin hệ thống cấu hình ứng dụng OAuth, chủ CLB/BankManage authorize → callback → complete bằng JWT → chọn ngân hàng → activate; company và quyền tách theo CLB, FE làm sau.
+- **Luồng ngân hàng**:
+  1. Nhận POST `/api/v1/webhooks/sepay/{bankAccountId}`, kiểm raw body/timestamp/HMAC và tài khoản/gateway; không dùng JWT người chơi hoặc cột webhook_secret_key cũ để xác thực.
+  2. Redis lock ngoài Unit of Work; DB khóa provider ID/reference, session, fee và transaction theo thứ tự thống nhất.
+  3. Retry cùng ID/cùng bằng chứng trả kết quả bền vững; cùng ID khác bằng chứng báo collision, không ghi đè.
+  4. Đúng một PaymentCode đầy đủ, đúng bank/nhóm/QR snapshot và số tiền nguyên VND đúng bằng phải đóng: chuyển PAID, bank MATCHED, tạo một INFLOW/SESSION_FEE.
+  5. Lưu Notification/Outbox cùng transaction; commit rồi ACK HTTP 200 success=true. Worker gửi sau commit và có retry riêng.
+- **Ngoại lệ**: thiếu/sai/đa mã, thiếu/thừa tiền, fee đã PAID hoặc chưa có snapshot giữ MANUAL_CHECK. Tiền ra no-op, không ghi thu. Bằng chứng sai bank binding được cô lập ngoài danh sách CLB và trả non-success. Tiền chờ đối soát chưa cộng vào quỹ xác nhận.
+- **Manual**: list/detail/confirm yêu cầu FeeManage thực tế theo DB; cho chọn FeeId khi lỗi mã với lý do/audit, vẫn đúng nhóm/bank/tiền và fee UNPAID/BANK_TRANSFER/có snapshot. Không cộng dồn, xóa chênh lệch, đổi phương thức hoặc bỏ qua reference collision.
+- **CASH**: giữ route pay UC16, xác nhận PAID/ledger/Notification/Outbox nguyên tử, không tạo BankTransaction giả; retry không backfill PAID lịch sử.
+- **Hậu điều kiện**: chỉ xác nhận khi đủ bằng chứng; ledger nguồn duy nhất, audit và thông báo bền vững. Không suy quét QR hoặc self-report là đã nhận tiền; không tuyên bố mọi giao dịch đều tự khớp hoặc UC19 đã hoàn tất.
 
 ---
 
 ### UC19: Quản trị & Theo dõi Sổ quỹ mở minh bạch
-- **FR đáp ứng**: FR22 (F4.5) | **Tác nhân**: Toàn thể hội viên (Xem), Thủ quỹ/Host (Quản trị).
-- **Tiền điều kiện**: Là thành viên của nhóm đang chọn.
-- **Luồng chính**:
-  - *Hội viên*: Xem toàn bộ lịch sử thu tiền buổi chơi, thu quỹ tháng, chi tiền sân, chi mua cầu và số dư khả dụng của quỹ nhóm theo thời gian thực.
-  - *Thủ quỹ*: Tạo phiếu chi mua cầu số lượng lớn, chi liên hoan, hoặc ghi nhận thu tiền mặt cho người chơi không chuyển khoản.
-- **Hậu điều kiện**: Mọi biến động dòng tiền được công khai minh bạch.
+- **FR đáp ứng**: FR22 (F4.5). Hội viên ACTIVE MONTHLY/DAILY có LedgerView xem; người có LedgerManage quản trị theo quyền thực tế từng nhóm.
+- **Luồng chính**: Mở sổ nhóm → kiểm quyền → xem số dư theo sổ đã ghi nhận, thu/chi và công nợ phí buổi/phí tháng đã phát hành. “Khoản đóng của tôi” lọc theo người đóng của nguồn phí, không theo người xác nhận.
+- **Luồng chi**: Quản trị nhập tiền/lý do/hóa đơn; transaction có khóa nhóm kiểm quỹ; đủ tiền mới ghi OUTFLOW, thiếu tiền không ghi bất kỳ dữ liệu liên quan. Quyết toán chi phí không tự chứng minh thực chi quỹ.
+- **Luồng tháng theo B**: Phát hành thủ công nghĩa vụ kỳ hiện tại với snapshot biểu phí → hiện UNPAID, không tăng quỹ → xác nhận thực thu đủ một lần → PAID, INFLOW và gia hạn cuối kỳ Việt Nam nguyên tử. Trường hợp ngoài chính sách v1 bị chặn có lý do, không tự tạo nợ.
+- **Đồng bộ**: Lưu Notification/Outbox cùng giao dịch, gửi FCM/SignalR sau commit. Số dư không phải số dư ngân hàng; MANUAL_CHECK chưa được cộng.
+- **Hiện trạng Wave 1–2**: Đã có Domain/schema, 5 GET và 3 POST phát hành/thu tháng/chi có Redis, khóa DB và transaction. Notification/Outbox lưu nguyên tử, đã nối DomainEvent UC18/UC19 và worker FCM/SignalR sau commit; cờ mặc định false, provider thật chưa nghiệm thu. Migration chỉ kiểm sandbox; legacy thiếu mốc tư cách tháng bị chặn, không tự backfill.
+- **Chi tiết**: [Kế hoạch đã chốt](Detail%20Design/UC19-BE-plan.md), [Hợp đồng Wave 1](Detail%20Design/UC19-BE.md).
 
 ### UC20: Đánh giá tín nhiệm & Tính điểm uy tín hai chiều
-- **FR đáp ứng**: FR23 (F5.1, F5.2) | **Tác nhân**: Hệ thống tự động, Người chơi.
-- **Tiền điều kiện**: Buổi sinh hoạt kết thúc và quá trình thanh toán hoàn tất.
+- **FR đáp ứng**: FR23 (F5.1, F5.2) | **Tác nhân**: Hệ thống tự động, toàn bộ người chơi, ban điều hành nhóm.
+- **Tiền điều kiện**: Buổi hết giờ, COMPLETED, khoản thu đã publish; các fee/ledger khớp toàn buổi, PAID hoặc EXEMPT. COMPLETED đơn lẻ không đủ.
 - **Luồng chính**:
-  1. *Hệ thống tự động tính điểm*: Người chơi đi đúng giờ, không hủy hẹn sát giờ, thanh toán ngay được cộng điểm uy tín cá nhân (`reputation_score`); người hủy hẹn sát giờ hoặc trễ hẹn bị trừ điểm.
-  2. *Đánh giá hội nhóm*: Người chơi chấm điểm CLB (1-5 sao) về tính minh bạch sổ quỹ, mật độ người/sân và văn hóa chơi ➔ Hệ thống cập nhật điểm chất lượng nhóm `group_quality_score`.
-- **Hậu điều kiện**: Điểm tín nhiệm hai chiều được hiển thị công khai trên hồ sơ cá nhân và hồ sơ nhóm.
+  1. Nhận sự kiện buổi hoàn tất đối soát tài chính.
+  2. Lập lời mời đánh giá và kiểm nhật ký tham gia/thanh toán theo hai nhánh nghiệp vụ.
+  3. Người tham gia quyết định gửi 1–5 sao và phản hồi hoặc bỏ qua.
+  4. Phân tích hóa đơn, Sổ quỹ mở và số người/sân có trận thực tế.
+  5. Tổng hợp review đã nhận và chỉ số có dữ liệu, cập nhật chất lượng nhóm.
+  6. Chấm hành vi cá nhân theo UC20-V1; ghi nguồn trên booking và tính lại projection theo thứ tự chuẩn.
+  7. Sau commit kết quả tự động, công khai điểm/nhãn qua hồ sơ và Khám phá; không đợi tất cả review.
+  8. Người chơi xem điểm mới. Review đến sau chỉ cập nhật chất lượng nhóm.
+  9. Kết thúc lần xử lý; retry cùng buổi không cộng điểm lại.
+- **3a**: Bỏ qua không tạo review/sao 0, vẫn xử lý chỉ số vận hành.
+- **6a/6b**: Vi phạm có nguồn bị phạt; dưới 80 gắn cảnh báo, từ 80 không có/gỡ nhãn. Không tự chặn booking.
+- **Hậu điều kiện**: Điểm, nguồn tính và policy được giữ trên bảng hiện có; review buổi duy nhất theo người/buổi; điểm công khai không lộ tài chính hoặc PII.
+- **Trạng thái**: Wave 1 mới có Domain/mapping/migration source và test; worker/API/delivery thuộc Wave 2–3. [Hợp đồng UC20-BE](Detail%20Design/UC20-BE.md).

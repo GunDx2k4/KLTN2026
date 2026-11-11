@@ -7,7 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\ThirdParty\Anpero.Payment.QrPayload\Anpero.Payment.QrPayload.csproj" />
+    <ProjectReference Include="..\..\infrastructure\ThirdParty\Anpero.Payment.QrPayload\Anpero.Payment.QrPayload.csproj" />
     <ProjectReference Include="..\BuildingBlocks\LegendsTeamVN.Core.Infrastructure\LegendsTeamVN.Core.Infrastructure.csproj" />
     <ProjectReference Include="..\LegendsTeamVN.BadmintonClub.Application\LegendsTeamVN.BadmintonClub.Application.csproj" />
     <ProjectReference Include="..\BuildingBlocks\LegendsTeamVN.Core.Utilities\LegendsTeamVN.Core.Utilities.csproj" />

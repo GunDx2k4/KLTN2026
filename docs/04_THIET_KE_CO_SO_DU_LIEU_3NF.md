@@ -71,7 +71,10 @@ erDiagram
     badminton_session ||--o{ group_ledger : "kết chuyển thu chi"
 
     session_match ||--o{ match_player : "gồm 4 người chơi"
-    session_fee ||--o| bank_transaction : "đối soát tự động"
+    session_fee o|--o{ bank_transaction : "liên kết bằng chứng"
+    group_bank_account o|--o{ bank_transaction : "tài khoản nhận đã xác thực"
+    session_fee o|--o| group_ledger : "nguồn thu UC18 duy nhất"
+    bank_transaction o|--o| group_ledger : "nguồn ngân hàng duy nhất"
 ```
 
 ---
@@ -444,19 +447,32 @@ Lưu hóa đơn thu tiền cá nhân của từng người chơi sau khi chốt 
 
 ---
 
-### 3.21. Bảng `bank_transaction` (Giao Dịch Ngân Hàng Đối Soát)
-Lưu log giao dịch Webhook từ cổng thanh toán SePay.
+### 3.21. Bảng `bank_transaction` (Giao dịch ngân hàng đối soát)
 
-| Tên Cột | Kiểu Dữ Liệu | Ràng Buộc | Giá Trị Mặc Định | Mô Tả Nghiệp Vụ |
-| :--- | :--- | :--- | :--- | :--- |
-| `id_transaction` | UUID | PK, NOT NULL | `gen_random_uuid()` | Khóa chính giao dịch ngân hàng |
-| `id_fee` | UUID | FK, NULL | - | Tham chiếu `session_fee.id_fee` |
-| `recipient_account`| VARCHAR(50)| NOT NULL | - | Số tài khoản ngân hàng thụ hưởng |
-| `reference_code` | VARCHAR(100) | UNIQUE, NOT NULL | - | Mã tham chiếu sao kê ngân hàng |
-| `amount_received`| DECIMAL(18,2)| NOT NULL | - | Số tiền thực nhận được |
-| `transfer_content`| TEXT | NOT NULL | - | Nội dung chuyển khoản thực tế từ khách |
-| `transaction_time`| TIMESTAMP | NOT NULL | - | Thời gian giao dịch phía ngân hàng |
-| `reconciliation_status`| VARCHAR(30)| NOT NULL | `'MATCHED'` | Trạng thái: `MATCHED` (Khớp tự động), `MANUAL_CHECK` |
+Schema source UC18 theo migration `20261104074142_AddPaymentReconciliation`; chỉ kiểm trên DB riêng, chưa xác nhận đã áp DB chung.
+
+| Cột | Kiểu PostgreSQL | Ràng buộc / nghĩa |
+|---|---|---|
+| `id_transaction` | uuid | PK, Guid.NewGuid() tại Domain |
+| `id_fee` | uuid | Nullable, FK session_fee; chỉ liên kết khi xác nhận hợp lệ |
+| `recipient_account` | varchar(100) | NOT NULL; giữ số 0 đầu |
+| `reference_code` | varchar(100) | Nullable; index tra cứu, không còn unique toàn cục |
+| `amount_received` | numeric(18,2) | NOT NULL; mới nhận từ provider phải dương và nguyên VND |
+| `transfer_content` | text | NOT NULL; nội dung gốc, không sửa để đoán mã |
+| `transaction_time` | timestamp with time zone | NOT NULL; chuyển từ giờ Việt Nam sang UTC |
+| `reconciliation_status` | varchar(50) | MATCHED hoặc MANUAL_CHECK; default MANUAL_CHECK cho source mới |
+| `provider_transaction_id` | bigint | Nullable cho legacy; unique cùng provider_company_id khi đã biết company, kể cả soft-delete |
+| `provider_company_id` | varchar(100) | Nullable cho legacy; company lấy từ kết nối OAuth, không nhận từ FE/webhook payload |
+| `bank_account_id` | uuid | Nullable cho legacy; FK RESTRICT group_bank_account |
+| `gateway` | varchar(100) | Tên gateway từ bằng chứng |
+| `sub_account` | varchar(100) | Bằng chứng VA; v1 không tự đối soát subAccount không rỗng |
+| `transfer_type` | varchar(3) | in/out |
+| `reason_code` | varchar(100) | Lý do chờ kiểm tra |
+| `reconciled_by` | uuid | Nullable; FK RESTRICT app_user, người xác nhận manual |
+| `reconciled_at` | timestamp with time zone | Thời điểm xác nhận UTC |
+| `reconciliation_note` | varchar(2000) | Lý do manual, không dùng để sửa số tiền |
+
+CHECK `ck_bank_transaction_uc18` bảo vệ dòng có provider ID: ID dương, bank/gateway/subAccount/chiều tiền đầy đủ, tiền dương nguyên VND; MATCHED phải có fee và thời điểm; audit manual đủ người/lý do. Dòng legacy giữ metadata null, không suy liên kết hoặc đổi tiền cũ. Unique company/provider ID bảo vệ các company độc lập; unique provider ID riêng cho dòng chưa biết company tiếp tục bảo vệ legacy. Reference xét cùng company hoặc legacy chưa rõ company, trong transaction có advisory lock. Preflight trước đổi unique reference; Down guard chặn khi có cấu hình hoặc dữ liệu UC18/reference không tương thích.
 
 ---
 
@@ -465,15 +481,19 @@ Lưu vết toàn bộ dòng tiền thu chi của câu lạc bộ.
 
 | Tên Cột | Kiểu Dữ Liệu | Ràng Buộc | Giá Trị Mặc Định | Mô Tả Nghiệp Vụ |
 | :--- | :--- | :--- | :--- | :--- |
-| `id_ledger` | UUID | PK, NOT NULL | `gen_random_uuid()` | Khóa chính giao dịch quỹ |
+| `id_ledger` | UUID | PK, NOT NULL | Guid.NewGuid() tại Domain | Khóa chính giao dịch quỹ |
 | `id_group` | UUID | FK, NOT NULL | - | Tham chiếu `club_group.id_group` |
 | `id_session` | UUID | FK, NULL | - | Tham chiếu buổi chơi nếu kết chuyển từ buổi |
 | `actor_id` | UUID | FK, NOT NULL | - | Người lập phiếu / Người nộp tiền (`app_user`) |
-| `transaction_type`| VARCHAR(20) | NOT NULL | - | Loại: `INFLOW` (Tiền vào), `OUTFLOW` (Tiền ra) |
+| `transaction_type`| VARCHAR(50) | NOT NULL | - | Loại: `INFLOW` (Tiền vào), `OUTFLOW` (Tiền ra) |
 | `category` | VARCHAR(50) | NOT NULL | - | `SESSION_FEE`, `COURT_RENT`, `SHUTTLE_EXPENSE`, `MONTHLY_FUND`, `OTHER` |
 | `amount` | DECIMAL(18,2)| NOT NULL | - | Số tiền giao dịch (`> 0`) |
 | `description` | TEXT | NOT NULL | - | Nội dung ghi chú thu chi |
-| `created_at` | TIMESTAMP | NOT NULL | `now()` | Thời điểm ghi sổ quỹ |
+| `created_at` | TIMESTAMP WITH TIME ZONE | NOT NULL | `now()` | Thời điểm ghi sổ quỹ UTC |
+
+UC18 bổ sung `fee_id` UUID nullable, FK RESTRICT session_fee và `bank_transaction_id` UUID nullable, FK RESTRICT bank_transaction. Mỗi cột có unique index khi khác null, không loại soft-delete. CASH chỉ có FeeId; ngân hàng có cả hai nguồn; legacy không backfill. CHECK nguồn mới bắt buộc fee/session, Amount > 0 và INFLOW/SESSION_FEE. Không liên kết bank source khi FeeId null.
+
+ActorId auto là người nộp theo fee; CASH/manual là người xác nhận. Không tạo UUID hệ thống giả. Dữ liệu tiền MANUAL_CHECK chưa ghi vào quỹ xác nhận; không coi phần nguồn thu UC18 là toàn bộ UC19/FR22.
 
 ---
 
@@ -496,6 +516,20 @@ Bổ sung ngoài 22 bảng nghiệp vụ ban đầu để giao nhận SignalR/FC
 | `last_error` | VARCHAR(2000), NULL | Loại lỗi gần nhất, không lưu token |
 
 Có thêm các cột audit/soft-delete theo AggregateRoot hiện tại. Index trên `(next_attempt_at, created_at)` cho bản ghi chưa delivered, attempts < 10. Worker claim bằng SKIP LOCKED; network chạy ngoài transaction claim. Xem hợp đồng và vận hành tại [UC13-BE.md](Detail%20Design/UC13-BE.md).
+
+### 3.24. Bảng kỹ thuật `sepay_application_settings` (Ứng dụng OAuth toàn hệ thống)
+
+Bổ sung 05/11/2026; các cột dùng đúng tên có dấu nháy trong migration EF. `Id` integer singleton bằng 1; `ClientId` varchar(255), `ProtectedClientSecret` text, `PublicApiBaseUrl`/`FrontendBaseUrl` varchar(500), `Enabled` boolean, `Revision` uuid concurrency token, `UpdatedBy` uuid và `UpdatedAt` UTC. GET API chỉ trả `hasClientSecret`, không trả ciphertext hoặc secret. Callback URL được suy từ backend origin đã cấu hình, không lưu thêm một bản có thể lệch nhau.
+
+Client secret được mã hóa bằng Data Protection; key ring nằm trên volume bền vững riêng, cần backup cùng DB. Quyền API là `Integrations.SepayManage`; migration cấp quyền cho các role vốn đã có `Roles.AssignPermissions`, không cần chạy demo seeder. Không thay client ID/backend origin khi còn kết nối chưa ngắt xong.
+
+### 3.25. Bảng kỹ thuật `club_sepay_connection` (Kết nối ngân hàng SePay theo CLB)
+
+`Id` UUID; `GroupId`/`BankAccountId` FK RESTRICT đến CLB/ngân hàng, không xóa lịch sử khi đổi ngân hàng. `CompanyId` bigint dương lấy từ provider; `ProviderBankAccountId`/`ProviderWebhookId` bigint nullable; `Gateway` varchar(100). Token OAuth và HMAC chỉ lưu dạng `ProtectedTokens`/`ProtectedWebhookSecret` text đã mã hóa. `ApplicationRevision` tham chiếu phiên cấu hình ứng dụng, `Revision` là concurrency token.
+
+`Status` varchar(20): AUTHORIZED, PROVISIONING, CONNECTED, DISCONNECTING, DISCONNECTED. CHECK yêu cầu CONNECTED có provider bank/webhook ID dương, secret và ConnectedAt. Unique bank khi chưa DISCONNECTED; unique `(CompanyId, ProviderBankAccountId)` khi đã chọn bank và chưa DISCONNECTED, tránh cùng ngân hàng provider bị gắn đồng thời vào nhiều cấu hình CLB. Audit gồm AuthorizedBy/AuthorizedAt, ConnectedAt, DisconnectedBy/DisconnectedAt. Ngắt hoàn tất xóa token/khóa trong record nhưng giữ audit và company; DISCONNECTING giữ dữ liệu cần dọn provider, chặn xác thực webhook tại BE.
+
+State OAuth và ticket xác nhận không lưu thành bảng: khóa Redis chỉ giữ hash của nonce, có hạn 10 phút, dùng một lần. Dữ liệu token đang chờ complete trong Redis được mã hóa và gắn user/CLB/bank/revision; callback không tự tạo kết nối. Cấu hình/kết nối không làm thay đổi Amount, PAID hay ledger. Down bị chặn khi đã có cấu hình, kết nối hoặc dữ liệu thanh toán.
 
 ## Bổ sung UC16 — Snapshot phát hành trên bảng hiện hữu
 
@@ -539,3 +573,45 @@ PaymentBankSnapshot là kiểu giá trị ở cuối SessionFee.cs; cột mappin
 Notification PAYMENT tham chiếu `SessionFee/feeId`; outbox dùng bảng rotation_outbox hiện hữu, kind mới CashPaymentRequestedPush, payload EventId/RequestId/FeeId/RecipientId/GroupId/SessionId. Không ghi bank_transaction/ledger từ thao tác khởi tạo/tự báo.
 
 Down chặn nếu còn bất kỳ metadata UC17/snapshot/BIN; không xóa dữ liệu để ép rollback, không hạ UC16. Khi đã dùng, ưu tiên giữ schema và tắt ghi/dispatch; GET lịch sử vẫn đọc. [Hợp đồng và runbook](Detail%20Design/UC17-BE.md). Schema này không có nghĩa POC QR đã đạt hoặc DB đích đã được nâng cấp.
+
+
+## Bổ sung UC19 Wave 1 — Nghĩa vụ tháng và hóa đơn
+
+Schema theo hướng B đã chốt, migration `20261105062612_AddOpenGroupLedger`; không thay lịch sử migration UC18. Chưa áp database vận hành.
+
+| Bảng | Cột chính và ràng buộc |
+|---|---|
+| monthly_contribution | id_monthly_contribution UUID PK; id_group/user_id FK RESTRICT; contribution_month DATE ngày đầu tháng; monthly_fee/female_discount_applied/amount_due numeric(18,2); status UNPAID/PAID; issued_at/issued_by; paid_at/collected_by. Có audit Aggregate. Unique nhóm/người/kỳ kể cả soft-delete; snapshot giá không thay theo biểu phí mới. |
+| group_ledger | Thêm request_id UUID nullable (unique theo id_group khi khác null), monthly_contribution_id UUID nullable FK RESTRICT/unique. Nguồn tháng loại trừ fee_id/bank_transaction_id, chỉ INFLOW/MONTHLY_FUND và amount dương; RequestId UC19 chỉ đi cùng nguồn tháng hoặc khoản OUTFLOW hợp lệ. Không thêm cột balance/contributor/kỳ trùng nguồn. |
+| ledger_attachment | id_attachment UUID PK; ledger_id UUID unique FK RESTRICT; original_file_name, content_type, content_length, sha256, content bytea. Một file JPEG/PNG/PDF <= 5 MiB; chiều dài khớp bytea. Truy vấn lịch sử không tải bytea. |
+
+`group_member.monthly_expiry_date` theo mapping thực tế là timestamptz UTC, không phải DATE. Domain gia hạn tới đầu tháng kế tiếp tại Asia/Ho_Chi_Minh trừ một microsecond; giữ hạn hiện có lớn hơn. Unique/FK không thay kiểm bất biến liên bảng trong Domain/transaction.
+
+Số dư chỉ tính từ ledger đã ghi nhận. Nghĩa vụ tháng UNPAID và SessionFee UNPAID đã phát hành là công nợ, không phải thu quỹ. Không backfill lịch sử đóng tháng từ MonthlyExpiryDate hoặc nội dung mô tả. Down migration chặn cả nghĩa vụ UNPAID chưa có ledger.
+
+
+### UC19 Wave 2 — Mốc tư cách hội viên tháng
+
+Migration `20261105065216_TrackMonthlyMembershipPeriod` thêm `group_member.monthly_membership_since` timestamptz nullable. Mốc ghi nhận thời điểm thực tế bắt đầu liên tục MONTHLY ACTIVE, thay đổi loại/trạng thái sẽ đặt lại hoặc xóa hiệu lực; không backfill từ JoinedAt/MonthlyExpiryDate. Legacy null bị chặn khi phát hành/thu tháng. Domain không nhận cờ xác nhận lịch sử từ client. Nhóm/phí/ledger/hạn/Notification/Outbox được khóa và ghi trong cùng transaction theo nghiệp vụ; RequestId và nguồn tháng có unique. Các migration Down UC19 khóa bảng trước khi kiểm guard để không có ghi chen giữa kiểm dữ liệu và drop; cần dừng writer khi hạ schema và chỉ kiểm trên sandbox đã xác nhận.
+
+### UC20 Wave 1 — Mở rộng bảng hiện có, không tạo bảng mới
+
+Migration source `20261105162124_AddSessionReputation`, kế tiếp `20261105065216_TrackMonthlyMembershipPeriod`. Chưa xác nhận áp trên DB chung/sandbox. Các kiểu timestamp bên dưới là timestamptz UTC; version là bigint NOT NULL DEFAULT 0 và concurrency token EF.
+
+| Bảng | Cột bổ sung |
+|---|---|
+| app_user | reputation_baseline_score numeric(5,2) NULL; reputation_version; reputation_computed_at NULL; reputation_policy_version varchar(40) NULL. CHECK điểm/baseline trong 0–100. |
+| club_group | quality_version; quality_computed_at NULL; quality_policy_version varchar(40) NULL; quality_summary jsonb NULL. CHECK điểm hiện hành 1–5, summary là object khi có. |
+| badminton_session | reputation_processing_status varchar(30) NOT NULL DEFAULT 'Pending'; financial_reconciled_at, reputation_processed_at, reputation_next_attempt_at NULL; reputation_pending_reason varchar(200) NULL; reputation_policy_version varchar(40) NULL; reputation_version; reputation_snapshot jsonb NULL. |
+| session_booking | cancellation_history jsonb NOT NULL DEFAULT []; reputation_evidence jsonb NULL; reputation_corrections jsonb NOT NULL DEFAULT []; reputation_raw_delta numeric(5,2) NULL; reputation_computed_at NULL; reputation_policy_version varchar(40) NULL; reputation_review_eligible boolean NOT NULL DEFAULT false; reputation_version. |
+| group_review | id_session uuid NULL. Null là review cũ không gắn buổi; UC20 phải có buổi, không backfill SessionId giả. |
+
+Trạng thái xử lý UC20 chỉ Pending/DataInsufficient/Finalized, độc lập Status buổi. Finalized yêu cầu timestamp/policy/snapshot. Snapshot JSON chứa SchemaVersion=1, SessionId/GroupId, giờ buổi/publish, PolicyVersion, Quality (tử/mẫu số hóa đơn/quyền xem sổ, người/sân) và FinancialEvidence theo từng fee: ID/số tiền/trạng thái/nguồn ledger/ngân hàng/thời điểm nhận. Review đến sau không thay snapshot vận hành.
+
+Booking JSON: CancellationHistory là mảng fact (EventId, CancelledAt, ActorId, PreviousStatus, Source, StartTime, DeadlineBooking, RecruitmentId); ReputationEvidence là object SchemaVersion=1, attendance/check-in/thanh toán và fact hủy được dùng; ReputationCorrections là mảng dự phòng cho correction có audit, chưa có workflow public v1. Null delta nghĩa chưa chấm, delta 0 là đã chấm trung lập. CHECK kết quả chấm phải đủ delta trong [-23,2], evidence/policy/thời gian. Snapshot/version không thay FK bên trong JSONB; Domain kiểm cấu trúc sâu.
+
+Giữ unique SessionId/UserId của booking, thêm alternate key cùng cặp phục vụ FK. group_review có partial unique (id_session,id_user) WHERE id_session IS NOT NULL, không loại soft-delete. Composite FK review → booking theo buổi/người và review → badminton_session theo buổi/nhóm; buổi có alternate key (id_session,id_group). CHECK rating 1–5 và comment <=2.000 ký tự áp cho review có id_session. Review cũ được giữ nguyên.
+
+FK booking → user/session và review → user/group/session/booking dùng RESTRICT để không cascade mất nguồn. Hard-delete với dữ liệu cũ có booking/review cũng bị ràng buộc chặt hơn. SaveChanges guard chặn xóa booking có lịch sử/chấm điểm, sửa nguồn đã chốt và sửa/xóa review buổi. Nguồn đã soft-delete không được tự loại khỏi truy vấn rebuild nội bộ.
+
+Migration chỉ ALTER/AddColumn/index/CHECK/FK; không CreateTable/DropTable, không bảng phụ EF cho JSONB, không DbSet mới. Up preflight chặn điểm cũ ngoài miền. Down khóa bảng trước khi kiểm dữ liệu UC20, chặn cả Pending có lịch sử/lý do/nguồn và Notification/Outbox UC20. Không dùng Down sau khi đã có dữ liệu; không tự backfill hoặc tính lại điểm trong migration. Chi tiết policy/API và giới hạn kiểm thử tại [UC20-BE](Detail%20Design/UC20-BE.md).

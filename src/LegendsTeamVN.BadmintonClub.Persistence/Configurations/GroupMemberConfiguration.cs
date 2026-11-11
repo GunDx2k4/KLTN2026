@@ -31,6 +31,8 @@ public class GroupMemberConfiguration : IEntityTypeConfiguration<GroupMember>
             .HasMaxLength(50)
             .HasDefaultValue("MONTHLY");
 
+        builder.Property(m => m.MonthlyMembershipSince).HasColumnName("monthly_membership_since");
+
         builder.Property(m => m.MonthlyExpiryDate)
             .HasColumnName("monthly_expiry_date");
 

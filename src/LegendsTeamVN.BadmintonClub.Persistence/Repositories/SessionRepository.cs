@@ -225,7 +225,7 @@ public class SessionRepository(BadmintonDbContext dbContext)
         if (forUpdate)
         {
             await DbContext.Database.ExecuteSqlRawAsync("SET LOCAL lock_timeout = '3s'", cancellationToken);
-            await DbContext.ClubGroups.FromSqlInterpolated($"SELECT * FROM club_group WHERE id_group = {groupId.Value} FOR UPDATE")
+            await DbContext.ClubGroups.FromSqlInterpolated($"SELECT * FROM club_group WHERE id_group = {groupId.Value} FOR NO KEY UPDATE")
                 .IgnoreQueryFilters().AsNoTracking().ToListAsync(cancellationToken);
             await DbContext.BadmintonSessions.FromSqlInterpolated($"SELECT * FROM badminton_session WHERE id_session = {sessionId} FOR UPDATE")
                 .IgnoreQueryFilters().AsNoTracking().ToListAsync(cancellationToken);

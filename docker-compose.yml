@@ -7,6 +7,7 @@ services:
       - "127.0.0.1:8080:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
+      - Seeding__Enabled=true
       - ConnectionStrings__Database=${DB_CONNECTION_STRING}
       - ConnectionStrings__Redis=${REDIS_CONNECTION_STRING}
       - Jwt__Issuer=${JWT_ISSUER}
@@ -16,6 +17,11 @@ services:
       - Settlement__WritesEnabled=${SETTLEMENT_WRITES_ENABLED:-false}
       - Settlement__DispatchEnabled=${SETTLEMENT_DISPATCH_ENABLED:-false}
       - Settlement__PreviewSigningKey=${SETTLEMENT_PREVIEW_SIGNING_KEY:-}
+      - Reconciliation__EvidenceArchiveDirectory=/var/lib/badmintonclub/reconciliation-evidence
+      - Reconciliation__Enabled=${RECONCILIATION_ENABLED:-false}
+      - Reconciliation__WritesEnabled=${RECONCILIATION_WRITES_ENABLED:-false}
+      - Reconciliation__DispatchEnabled=${RECONCILIATION_DISPATCH_ENABLED:-false}
+      - Sepay__KeyDirectory=/var/lib/badmintonclub/sepay-keys
       - MasstransitConfiguration__Host=${RABBITMQ_HOST}
       - MasstransitConfiguration__VHost=${RABBITMQ_VHOST}
       - MasstransitConfiguration__Port=${RABBITMQ_PORT}
@@ -23,6 +29,8 @@ services:
       - MasstransitConfiguration__Password=${RABBITMQ_PASS} 
     volumes:
       - ./sports-venue-cb204-firebase-adminsdk-fbsvc-7f5ec12fb1.json:/app/sports-venue-cb204-firebase-adminsdk-fbsvc-7f5ec12fb1.json:ro
+      - ${RECONCILIATION_EVIDENCE_DIRECTORY:?Cần thư mục bằng chứng UC18 riêng}:/var/lib/badmintonclub/reconciliation-evidence
+      - ${SEPAY_KEY_DIRECTORY:?Cần thư mục khóa mã hóa SePay bền vững}:/var/lib/badmintonclub/sepay-keys
     networks:
       - khoaluan
 
@@ -33,6 +41,7 @@ services:
       - migration
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
+      - Seeding__Enabled=true
       - ConnectionStrings__Database=${DB_CONNECTION_STRING}
       - ConnectionStrings__Redis=${REDIS_CONNECTION_STRING}
       - ConnectionStrings__MigrationsAssembly=LegendsTeamVN.BadmintonClub.Migrator

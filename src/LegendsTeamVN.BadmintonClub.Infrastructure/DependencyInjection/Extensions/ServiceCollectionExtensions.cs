@@ -15,6 +15,7 @@ using Microsoft.IdentityModel.Tokens;
 using LegendsTeamVN.BadmintonClub.Application.DependencyInjection.Options;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using StackExchange.Redis;
+using Microsoft.AspNetCore.DataProtection;
 
 namespace LegendsTeamVN.BadmintonClub.Infrastructure.DependencyInjection.Extensions;
 
@@ -25,12 +26,30 @@ public static class ServiceCollectionExtensions
         services.AddCoreInfrastructure(configuration);
         services.Configure<SettlementOptions>(configuration.GetSection(SettlementOptions.SectionName));
         services.Configure<PaymentsOptions>(configuration.GetSection(PaymentsOptions.SectionName));
+        services.AddDataProtection().SetApplicationName("LegendsTeamVN.BadmintonClub.SePay")
+            .PersistKeysToFileSystem(new DirectoryInfo(configuration["Sepay:KeyDirectory"] ?? Path.Combine(AppContext.BaseDirectory, "sepay-keys")));
+        services.AddScoped<Payments.SepaySetupService>();
+        services.AddScoped<ISepaySetupService>(sp => sp.GetRequiredService<Payments.SepaySetupService>());
+        services.AddScoped<ISepayWebhookCredentials>(sp => sp.GetRequiredService<Payments.SepaySetupService>());
+        services.AddHttpClient<ISepayOAuthClient, Payments.SepayOAuthClient>(client => client.Timeout = TimeSpan.FromSeconds(10))
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+        services.AddScoped<ISepayWebhookVerifier, Payments.SepayWebhookVerifier>();
+        services.AddSingleton<IWebhookEvidenceArchive, Payments.WebhookEvidenceArchive>();
+        services.AddScoped<IReconciliationLock, Payments.RedisReconciliationLock>();
+        services.AddScoped<LegendsTeamVN.BadmintonClub.Application.Abstractions.IReputationRealtimePublisher,
+            LegendsTeamVN.BadmintonClub.Infrastructure.Realtime.SignalRReputationRealtimePublisher>();
+        services.AddHostedService<LegendsTeamVN.BadmintonClub.Infrastructure.Services.ReputationNotificationWorker>();
+        services.AddHostedService<LegendsTeamVN.BadmintonClub.Infrastructure.Services.ReputationAssessmentWorker>();
+        services.AddHostedService<Payments.ReconciliationNotificationWorker>();
         services.AddSingleton<IVietQrImageRenderer, Payments.VietQrImageRenderer>();
         services.AddSingleton<IVietQrPayloadGenerator, Payments.VietQrPayloadGenerator>();
         services.AddHostedService<Payments.CashPaymentNotificationWorker>();
         services.TryAddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(
             configuration.GetConnectionString("Redis") ?? throw new InvalidOperationException("Thiếu ConnectionStrings:Redis cho khóa quyết toán.")));
         services.AddScoped<ISettlementLock, RedisSettlementLock>();
+        services.AddScoped<ILedgerLock, RedisLedgerLock>();
+        services.AddScoped<ILedgerRealtimePublisher, Realtime.SignalRLedgerRealtimePublisher>();
+        services.AddHostedService<LedgerNotificationWorker>();
         services.AddSingleton<ISettlementPreviewTokenService, SettlementPreviewTokenService>();
         services.AddHostedService<SettlementNotificationWorker>();
         // Session operations authentication, realtime and outbox worker.

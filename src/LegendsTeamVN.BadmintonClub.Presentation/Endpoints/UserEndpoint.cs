@@ -1,3 +1,7 @@
+using LegendsTeamVN.BadmintonClub.Application.DTOs.Reputation.Requests;
+using LegendsTeamVN.BadmintonClub.Application.DTOs.Reputation.Responses;
+using LegendsTeamVN.BadmintonClub.Application.Features.Reputation.GetReviewInvitations;
+using LegendsTeamVN.BadmintonClub.Application.Features.Reputation.SubmitSessionReview;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Users.Requests;
 using LegendsTeamVN.BadmintonClub.Application.Features.Notifications.GetMy;
 using LegendsTeamVN.BadmintonClub.Application.Features.Notifications.MarkAllRead;
@@ -33,6 +37,12 @@ public class UserEndpoint : EndpointGroupBase
 
     protected override void Map(RouteGroupBuilder group)
     {
+        var reviews = group.MapGroup("me/reviews").WithTags("FR23 - Đánh giá buổi chơi").RequireAuthorization();
+        reviews.MapGet("invitations", GetReviewInvitations)
+            .Produces<ReputationPageResponse<ReviewInvitationResponse>>(200).WithName("GetReviewInvitations");
+        reviews.MapPost("", SubmitSessionReview)
+            .Produces<SessionReviewResponse>(200).ProducesProblem(400).ProducesProblem(403).ProducesProblem(404)
+            .ProducesProblem(409).WithName("SubmitSessionReview");
         var payments = group.MapGroup("me/fees").WithTags("UC17 - Khoản đóng của tôi").RequireAuthorization("SessionOperations");
         payments.AddEndpointFilter(async (context, next) =>
         {
@@ -136,6 +146,18 @@ public class UserEndpoint : EndpointGroupBase
     }
 
     // --- FR05 Handlers ---
+    private static async Task<IResult> GetReviewInvitations(ISender sender, CancellationToken ct, int page = 1, int pageSize = 20)
+    {
+        var result = await sender.Send(new GetReviewInvitationsQuery(page, pageSize), ct);
+        return result.Match(onSuccess: data => Results.Ok(data));
+    }
+
+    private static async Task<IResult> SubmitSessionReview(SubmitSessionReviewRequest request, ISender sender, CancellationToken ct)
+    {
+        var result = await sender.Send(new SubmitSessionReviewCommand(request.SessionId, request.Rating, request.Comment), ct);
+        return result.Match(onSuccess: data => Results.Ok(data));
+    }
+
     private static async Task<IResult> ListMyFees(ISender sender, CancellationToken ct, int page = 1, int pageSize = 20,
         Guid? groupId = null, Guid? sessionId = null, Domain.Enums.PaymentStatus? paymentStatus = null)
     {

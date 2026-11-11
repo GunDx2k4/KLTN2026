@@ -121,5 +121,6 @@ public class ClubGroupConfiguration : IEntityTypeConfiguration<ClubGroup>
             .WithOne(l => l.Group)
             .HasForeignKey(l => l.GroupId)
             .OnDelete(DeleteBehavior.Cascade);
+        ReputationModelConfiguration.ConfigureGroup(builder);
     }
 }

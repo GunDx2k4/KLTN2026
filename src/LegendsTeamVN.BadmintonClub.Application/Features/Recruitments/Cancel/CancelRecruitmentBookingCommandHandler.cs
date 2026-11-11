@@ -11,7 +11,8 @@ public sealed class CancelRecruitmentBookingCommandHandler(
     IRecruitmentRepository recruitmentRepository,
     ISessionRepository sessionRepository,
     IBookingRepository bookingRepository,
-    ICurrentUserService currentUserService) : ICommandHandler<CancelRecruitmentBookingCommand>
+    ICurrentUserService currentUserService,
+    TimeProvider clock) : ICommandHandler<CancelRecruitmentBookingCommand>
 {
     public async Task<Result> Handle(CancelRecruitmentBookingCommand request, CancellationToken cancellationToken)
     {
@@ -31,7 +32,8 @@ public sealed class CancelRecruitmentBookingCommandHandler(
         var session = await sessionRepository.GetAttendanceAsync(recruitment.SessionId, true, cancellationToken);
         if (session is null)
             return Result.Failure(Error.NotFound("Session.NotFound", "Không tìm thấy buổi chơi."));
-        if (session.Status != SessionStatus.OPEN || DateTime.UtcNow >= session.StartTime)
+        var now = clock.GetUtcNow().UtcDateTime;
+        if (session.Status != SessionStatus.OPEN || now >= session.StartTime)
             return Result.Failure(Error.Conflict("Attendance.ManagedByHost", "Buổi chơi đã bắt đầu. Hãy liên hệ Host hoặc Thủ quỹ để thay đổi điểm danh."));
         var booking = session.Bookings.FirstOrDefault(b => b.RecruitmentId == request.RecruitmentId && b.UserId == userId.Value && b.Status == BookingStatus.CONFIRMED);
 
@@ -40,10 +42,11 @@ public sealed class CancelRecruitmentBookingCommandHandler(
             return Result.Failure(Error.NotFound("Booking.NotFound", "Bạn không có đăng ký giữ chỗ qua bài đăng giao lưu này."));
         }
 
-        booking.UpdateStatus(BookingStatus.ABSENT);
+        booking.CancelWithEvidence(session, userId.Value,
+            Domain.Services.ReputationCancellationSource.Recruitment, now);
         bookingRepository.Update(booking);
 
-        RecruitmentRules.Synchronize(session, DateTime.UtcNow);
+        RecruitmentRules.Synchronize(session, now);
 
         return Result.Success();
     }
