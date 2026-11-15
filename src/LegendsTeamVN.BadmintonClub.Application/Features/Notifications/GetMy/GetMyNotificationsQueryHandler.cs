@@ -35,6 +35,23 @@ public sealed class GetMyNotificationsQueryHandler(
             ))
             .ToListAsync(cancellationToken);
 
+        for (var index = 0; index < notifications.Count; index++)
+        {
+            var notification = notifications[index];
+            if (notification.Title != "Yêu cầu xác nhận tiền mặt" ||
+                notification.ReferenceType != "SessionFee" || !notification.ReferenceId.HasValue)
+                continue;
+
+            var sessionId = await notificationRepository.ResolveCashRequestSessionIdAsync(
+                notification.ReferenceId.Value, userId, cancellationToken);
+            if (sessionId.HasValue)
+                notifications[index] = notification with
+                {
+                    ReferenceType = "SessionSettlement",
+                    ReferenceId = sessionId.Value
+                };
+        }
+
         return Result.Success<IReadOnlyList<NotificationResponse>>(notifications);
     }
 }
