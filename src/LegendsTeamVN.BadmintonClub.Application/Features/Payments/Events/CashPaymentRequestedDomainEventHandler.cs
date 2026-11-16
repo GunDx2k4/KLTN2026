@@ -21,7 +21,7 @@ public sealed class CashPaymentRequestedDomainEventHandler(IPaymentRepository fe
         foreach (var user in recipients)
         {
             notifications.Add(new Notification(user, "Yêu cầu xác nhận tiền mặt", "Người chơi yêu cầu xác nhận khoản nộp tiền mặt.",
-                NotificationType.PAYMENT, "SessionFee", change.FeeId));
+                NotificationType.PAYMENT, "SessionSettlement", change.SessionId));
             outbox.Add(new OutboxMessage("CashPaymentRequestedPush", user,
                 JsonSerializer.Serialize(new CashPaymentRequestedPush(change.Id, change.RequestId, change.FeeId, user, fee.Session.GroupId, change.SessionId)), change.OccurredAt));
         }

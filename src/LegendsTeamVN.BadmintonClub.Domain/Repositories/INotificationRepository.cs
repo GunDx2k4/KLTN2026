@@ -5,4 +5,5 @@ namespace LegendsTeamVN.BadmintonClub.Domain.Repositories;
 
 public interface INotificationRepository : IGenericRepository<Notification, Guid>
 {
+    Task<Guid?> ResolveCashRequestSessionIdAsync(Guid feeId, Guid recipientId, CancellationToken ct);
 }

@@ -13,6 +13,10 @@ public record PermissionGroupModel(
 
 public static class AppPermissions
 {
+    public static class Integrations
+    {
+        public const string SepayManage = "Integrations.SepayManage";
+    }
     public static class SystemGroup
     {
         public const string GroupName = "System";
@@ -49,6 +53,8 @@ public static class AppPermissions
                 "Quản trị hệ thống",
                 Children: new List<PermissionGroupModel>
                 {
+                    new PermissionGroupModel("Integrations", "Kết nối dịch vụ",
+                        Permissions: new List<PermissionItemModel> { new(Integrations.SepayManage, "Cấu hình ứng dụng SePay") }),
                     new PermissionGroupModel(
                         Roles.GroupName,
                         "Nhóm người dùng",

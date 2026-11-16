@@ -12,7 +12,7 @@ namespace LegendsTeamVN.BadmintonClub.Application.Tests.Features.Payments;
 
 public sealed partial class PersonalFeeHttpTests
 {
-    [PaymentIntegrationFact]
+    [ReconciliationIntegrationFact]
     public async Task CashRequestsCommitExactlyOneRequestAndOneEnvelopePerRecipientOnConcurrentRetry()
     {
         await using var f = await Fixture.Create();
@@ -45,7 +45,7 @@ public sealed partial class PersonalFeeHttpTests
         Assert.Null(fee.PaidAt);
     }
 
-    [PaymentIntegrationFact]
+    [ReconciliationIntegrationFact]
     public async Task CashWithoutRecipientFailsWithoutWritingAndCanRetryAfterPermissionGranted()
     {
         await using var f = await Fixture.Create();
@@ -61,7 +61,7 @@ public sealed partial class PersonalFeeHttpTests
         Assert.Equal(HttpStatusCode.OK, (await f.Client.PostAsync(f.FeePath + "/cash-request", null)).StatusCode);
     }
 
-    [PaymentIntegrationFact]
+    [ReconciliationIntegrationFact]
     public async Task FailureInOutboxInsertRollsBackFeeAndNotificationThenRetryCreatesOneRequest()
     {
         await using var f = await Fixture.Create();
@@ -83,7 +83,7 @@ public sealed partial class PersonalFeeHttpTests
         Assert.Equal(1, await db.OutboxMessages.CountAsync());
     }
 
-    [PaymentIntegrationTheory]
+    [ReconciliationIntegrationTheory]
     [InlineData("cash-request")]
     [InlineData("bank-transfer")]
     [InlineData("transfer-notice")]
@@ -97,7 +97,7 @@ public sealed partial class PersonalFeeHttpTests
         Assert.Equal(HttpStatusCode.NotFound, (await f.Client.PostAsync(f.FeePath + "/" + suffix, null)).StatusCode);
     }
 
-    [PaymentIntegrationFact]
+    [ReconciliationIntegrationFact]
     public async Task OldCashConfirmationCannotBypassBankMethodAndSelfReportStaysUnpaid()
     {
         await using var f = await Fixture.Create();
@@ -129,7 +129,7 @@ public sealed partial class PersonalFeeHttpTests
         Assert.Empty(await db.GroupLedgers.ToListAsync());
     }
 
-    [PaymentIntegrationFact]
+    [ReconciliationIntegrationFact]
     public async Task CashConfirmationRequiresActualPermissionAndFlagsAndRetryKeepsReceipt()
     {
         await using var f = await Fixture.Create();
@@ -158,7 +158,7 @@ public sealed partial class PersonalFeeHttpTests
         Assert.Contains("Payments.AlreadyPaid", await repeat.Content.ReadAsStringAsync());
     }
 
-    [PaymentIntegrationFact]
+    [ReconciliationIntegrationFact]
     public async Task SelfReportRequiresPreparedBankRequestAndWritesFlag()
     {
         await using var f = await Fixture.Create();
@@ -173,7 +173,7 @@ public sealed partial class PersonalFeeHttpTests
         Assert.Null(await db.SessionFees.Select(x => x.TransferReportedAt).SingleAsync());
     }
 
-    [PaymentIntegrationFact]
+    [ReconciliationIntegrationFact]
     public async Task MissingBankStopsPreparationAndUnpreparedImageWithoutChangingAnyFee()
     {
         await using var f = await Fixture.Create();
@@ -191,7 +191,7 @@ public sealed partial class PersonalFeeHttpTests
         Assert.Equal("", await db.SessionFees.Select(x => x.QrCodePayload).SingleAsync());
     }
 
-    [PaymentIntegrationFact]
+    [ReconciliationIntegrationFact]
     public async Task CashRetryConcurrentWithOldConfirmationNeverDuplicatesRequestOrLosesPaidState()
     {
         await using var f = await Fixture.Create();
@@ -209,11 +209,13 @@ public sealed partial class PersonalFeeHttpTests
         Assert.Equal(PaymentStatus.PAID, fee.PaymentStatus);
         Assert.Equal(PaymentMethod.CASH, fee.PaymentMethod);
         Assert.Equal(actor, fee.CashCollectedBy);
-        Assert.Equal(1, await db.Notifications.CountAsync());
-        Assert.Equal(1, await db.OutboxMessages.CountAsync());
+        Assert.Equal(2, await db.Notifications.CountAsync());
+        Assert.Equal(1, await db.OutboxMessages.CountAsync(m => m.Kind == "CashPaymentRequestedPush"));
+        Assert.Equal(1, await db.OutboxMessages.CountAsync(m => m.Kind == "PaymentConfirmedPush"));
+        Assert.Single(await db.GroupLedgers.ToListAsync());
     }
 
-    [PaymentIntegrationFact]
+    [ReconciliationIntegrationFact]
     public async Task SelfReportConcurrentWithSimulatedBankEvidenceWriterCannotOverwritePaidState()
     {
         await using var f = await Fixture.Create();
@@ -238,7 +240,7 @@ public sealed partial class PersonalFeeHttpTests
         Assert.NotNull(final.PaidAt);
     }
 
-    [PaymentIntegrationFact]
+    [ReconciliationIntegrationFact]
     public async Task ExistingCashConfirmationWithoutUc17MetadataKeepsItsPreviousBehaviorWhenPaymentsOff()
     {
         await using var f = await Fixture.Create();

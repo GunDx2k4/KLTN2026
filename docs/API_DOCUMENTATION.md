@@ -1,5 +1,7 @@
 # 📖 Tài Liệu Đặc Tả Toàn Diện API & Kế Hoạch Tích Hợp Mobile (API Specification & Mobile Integration Plan)
 
+> **UC18/FR21 cập nhật 05/11/2026:** bổ sung BE cho Admin cấu hình ứng dụng OAuth và chủ CLB/BankManage tự kết nối SePay theo company riêng. Callback trả ticket tạm; POST complete cần JWT đúng người khởi tạo, sau đó chọn ngân hàng và kích hoạt webhook. Token/client secret/HMAC được mã hóa và quản lý qua API/DB. FE để sau. Lõi UC18 đã áp DB chung local ngày 04/11; schema OAuth theo hai migration mới tại [UC18-BE](Detail%20Design/UC18-BE.md). Chưa deploy server hoặc nghiệm thu SePay/FCM thực.
+
 > **Dự án**: Hệ thống Quản lý Nhóm Cầu lông Phong trào (**LegendsTeamVN.BadmintonClub**)  
 > **Phiên bản tài liệu**: 2.1 (Cập nhật chuẩn hóa CQRS, Swagger Tags & Đặc tả chi tiết từng FR)  
 > **Ngày cập nhật**: 14/10/2026  
@@ -1470,4 +1472,48 @@ API pay UC16 cũ chỉ cho người có FeeManage thật xác nhận CASH; BANK_
 
 `paymentInstructions` gồm `{ payload, bank: { bankAccountId, bankBin, bankName, accountNumber, accountHolder }, imagePath }`. imagePath tương đối `/api/v1/user/me/fees/{feeId}/qr.png`. Flutter dùng HTTP client ghép base URL với imagePath, gửi `Authorization: Bearer <token>`, kiểm 200 và `image/png` rồi đưa response bytes vào `Image.memory`. Không gắn JWT vào query string hoặc dùng URL public; 401/404/409 là lỗi JSON, không đưa vào Image.memory. WritesEnabled=false vẫn cho lấy ảnh đã cấp khi Enabled=true; Enabled=false ẩn instructions/ảnh nhưng giữ GET lịch sử và receipt. GET `no-store` không thu hồi được ảnh người dùng đã chụp/lưu.
 
-Ba cờ Payments.Enabled/WritesEnabled/DispatchEnabled mặc định false trong options. Development local hiện Enabled/WritesEnabled=true, DispatchEnabled=false; DB chung BadmintonClub:5432 đã có migration 20261031155325_AddPersonalFeePayment. Seeding:Enabled=false để restart API không chạy demo seeder. Bank cũ chưa có BIN cần người có BankManage cấu hình, không tự backfill/copy bank UAT. Thu tiền/đối soát ngân hàng hoàn chỉnh vẫn thuộc UC18; chưa deploy môi trường production bên ngoài. Không chạy Migrator worker/seeder hoặc bộ test phá dữ liệu trên DB chung.
+Ba cờ Payments.Enabled/WritesEnabled/DispatchEnabled mặc định false trong options. Development local hiện Enabled/WritesEnabled=true, DispatchEnabled=false; DB chung BadmintonClub:5432 đã có migration 20261031155325_AddPersonalFeePayment. Cập nhật cấu hình theo yêu cầu mới: Seeding:Enabled=true cho API Development và API/Migrator Docker; khởi động lại sẽ chạy toàn bộ seeder đã đăng ký, gồm dữ liệu demo và hành vi tài khoản seed. Thay cấu hình chưa đồng nghĩa đã chạy seeder trên DB đích. Bank cũ chưa có BIN cần người có BankManage cấu hình, không tự backfill/copy bank UAT. Thu tiền/đối soát ngân hàng hoàn chỉnh vẫn thuộc UC18; chưa deploy môi trường production bên ngoài. Không chạy Migrator worker/seeder hoặc bộ test phá dữ liệu trên DB chung.
+
+## UC18/FR21 — API đối soát và xác nhận thanh toán
+
+| Method | Route | Quyền / kết quả |
+|---|---|---|
+| POST | `/api/v1/webhooks/sepay/{bankAccountId}` | HMAC riêng bank, không JWT; ACK 200 success=true sau commit/retry bền vững |
+| GET | `/api/v1/clubs/{groupId}/reconciliations` | SessionOperations + FeeManage thực; status, page, pageSize tối đa 100 |
+| GET | `/api/v1/clubs/{groupId}/reconciliations/{transactionId}` | Cùng quyền, đúng bank/group |
+| POST | `/api/v1/clubs/{groupId}/reconciliations/{transactionId}/confirm` | Cùng quyền; body feeId/reason, lý do bắt buộc; manual không bỏ qua điều kiện tiền/bank/fee |
+| POST | `/api/v1/sessions/{sessionId}/settlement/members/{userId}/pay` | CASH UC16; một PAID/ledger/Notification/Outbox, giữ response cũ |
+
+Webhook JSON UTF-8 tối đa 65.536 byte; header X-SePay-Signature và X-SePay-Timestamp. Không dùng bearer JWT người chơi thay HMAC, code đã trích hoặc accumulated thay content/transferAmount. Sai chữ ký/bank 401, payload 400, collision ID 409, quá lớn 413, sai content type 415, lỗi tạm thời/cờ tắt 503. Không ACK trước lưu.
+
+Manual body: `{"feeId":"<uuid>","reason":"Đã đối chiếu người nộp"}`. Detail trả transactionId/providerTransactionId/bankAccountId/feeId/referenceCode/amountReceived/transferContent/transactionTime/status/reasonCode/reconciledBy/reconciledAt/note; không có secret. List trả items/total/page/pageSize, không bọc data. Thời gian UTC, tiền decimal VND. GET no-store và vẫn kiểm quyền khi cờ tắt.
+
+CASH/manual chỉ cần Reconciliation.WritesEnabled; webhook cần cả Enabled và WritesEnabled. DispatchEnabled chỉ gửi sau commit, không chặn lưu thông báo. Giữ guard Payments UC17; không chuyển BANK_TRANSFER sang CASH. PAID cũ không tự backfill. Chi tiết tại [UC18-BE](Detail%20Design/UC18-BE.md); schema ở [thiết kế CSDL](04_THIET_KE_CO_SO_DU_LIEU_3NF.md).
+
+Luồng tự kết nối: GET/PUT `/api/v1/sepay/application` yêu cầu `Integrations.SepayManage`; ngân hàng qua GET/PUT `/api/v1/clubs/{clubId}/payment-bank-account`. Các route `/api/v1/clubs/{groupId}/sepay` yêu cầu BankManage thực: GET trạng thái, POST authorize, POST complete (`ticket`), GET accounts, POST account (`providerBankId`), POST activate, GET connections, DELETE hiện tại hoặc DELETE connections/{connectionId}. GET `/api/v1/sepay/oauth/callback` công khai nhận code/state, redirect về frontend với ticket ở fragment; callback chưa tự tạo kết nối. State/ticket TTL 10 phút, dùng một lần; complete bằng JWT của người đã authorize, danh sách tài khoản chỉ mở trong phiên 15 phút. Ngân hàng phải khớp BIN/số tài khoản CLB; CONNECTED chưa vượt cờ vận hành tổng. DISCONNECTING chặn webhook tại BE ngay cả khi dọn SePay thất bại. Hợp đồng chi tiết và Postman tại mục 1.1 của [UC18-BE](Detail%20Design/UC18-BE.md).
+
+
+## UC19 Wave 1–3 — Sổ quỹ mở
+
+Đã bổ sung 5 GET dưới `/api/v1/clubs/{clubId}/ledger`: tổng quan, `/transactions`, `/debts`, `/monthly-contributions/candidates` và `/transactions/{ledgerId}/attachment`. Kiểm JWT, route/header nhóm và quyền thực từ database; mặc định Ledger:Enabled=false. Wave 2 mở thêm POST `/monthly-contributions`, `/monthly-contributions/{monthlyContributionId}/collect` và `/transactions` (multipart), cần LedgerManage và Enabled/WritesEnabled.
+
+[Hợp đồng, bộ lọc, schema và giới hạn Wave 1](Detail%20Design/UC19-BE.md). Số dư là thu − chi đã ghi sổ, không phải số dư ngân hàng; công nợ tháng/phí buổi chưa thanh toán không tăng quỹ.
+
+
+UC19 Wave 3: LedgerUpdatedPush được tạo nguyên tử qua LedgerRecordedDomainEvent (kể cả thu UC18), worker gửi FCM/SignalR sau commit và kiểm lại quyền/nguồn nhóm. SignalR LedgerUpdated chỉ tới user đích; payload định danh, client khử trùng EventId và GET lại dữ liệu. Enabled/DispatchEnabled là chốt gửi, RealtimeEnabled kiểm kênh SignalR; mặc định false. Xem contract UC19-BE về retry, rollback và giới hạn kiểm chứng provider giả.
+
+
+## UC20 / FR23 — Uy tín và đánh giá buổi (Wave 2)
+
+Contract chi tiết, DTO, phân trang, mã lỗi và cờ bật tại [UC20-BE](Detail%20Design/UC20-BE.md). Tất cả API cần JWT; UC20 luôn hoạt động.
+
+| Method | Route | Phạm vi |
+|---|---|---|
+| GET | `/api/v1/user/me/reviews/invitations` | Lời mời còn hạn và review của chính mình, gồm guest tham gia |
+| POST | `/api/v1/user/me/reviews` | SessionId/Rating/Comment, một review/người/buổi |
+| GET | `/api/v1/reputation/players/{userId}` | Card điểm/nhãn tối thiểu, không PII |
+| GET | `/api/v1/reputation/me/entries` | Nhật ký booking của chính mình |
+| GET | `/api/v1/reputation/group-quality?groupId=...` | Tổng hợp chất lượng, không nội dung review riêng |
+| GET | `/api/v1/clubs/{clubId}/sessions/{sessionId}/reputation-audit` | SessionUpdate trong đúng nhóm, kiểm lại quyền DB |
+
+POST trả 200 cả tạo mới và replay cùng nội dung; 400 input sai, 403 ngoài quyền, 404 nguồn không tồn tại, 409 chưa sẵn sàng/hết hạn/khác nội dung/concurrency. Invitations/entries/audit hỗ trợ page/pageSize (mặc định 1/20, size tối đa 100). Không có endpoint set điểm hoặc gọi job. Thông báo UC20 ghi bền vững rồi được ReputationNotificationWorker gửi FCM/SignalR sau commit; FE khử trùng EventId và tải lại GET.

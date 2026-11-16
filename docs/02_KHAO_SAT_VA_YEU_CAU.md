@@ -88,6 +88,12 @@ Khảo sát nhằm thu thập dữ liệu định lượng và định tính t�
 
 #### Phân hệ 5: Đánh giá Tín nhiệm & Tương tác (F5)
 - **FR23**: Hệ thống tự động tính toán, cập nhật và hiển thị Điểm uy tín hai chiều: tính Điểm tín nhiệm thành viên dựa trên mức độ chuyên cần, tỷ lệ hủy hẹn sát giờ và lịch sử đóng tiền; tính Điểm chất lượng nhóm dựa trên tính minh bạch sổ quỹ, mật độ sân thực tế và đánh giá từ người chơi.
+  - Chỉ xử lý sau khi buổi kết thúc và đối soát toàn bộ phí/ledger hoàn tất; còn phí UNPAID thì chờ. Hai nhánh mời đánh giá và tính điểm tự động không chờ người chơi phản hồi.
+  - Policy UC20-V1: đúng giờ trong 15 phút +1, trả trong 24 giờ từ phát hành phí +1; đến trễ -3, NO_SHOW -20, hủy suất chính thức từ deadline đến trước giờ chơi -10, chuyển khoản muộn -3. Nếu có vi phạm thì chỉ cộng các khoản phạt của buổi. Thiếu chứng cứ và EXEMPT trung lập; CASH xác nhận muộn không tự chứng minh trả muộn.
+  - Uy tín giới hạn 0–100, bỏ thưởng vượt trần từng buổi theo thứ tự EndTime UTC/SessionId; dưới 80 có nhãn “Rủi ro bùng kèo”, phục hồi đến 80 thì gỡ. Giữ baseline điểm hiện hữu, không tự phạt lịch sử cũ.
+  - Người CHECKED_IN, gồm guest, được đánh giá một lần/buổi trong 7 ngày từ đối soát, sao 1–5 và comment tối đa 2.000 ký tự. Không sửa/xóa review buổi ở v1; bỏ qua không ảnh hưởng uy tín.
+  - Chất lượng: 60% sao + 25% minh bạch + 15% mật độ; minh bạch chia đều tỷ lệ hóa đơn và quyền LedgerView của hội viên. Thiếu dữ liệu thì chuẩn hóa trọng số còn lại, không tự gán sao 0/5. Chi tiết tại [UC20-BE](Detail%20Design/UC20-BE.md).
+  - Lưu trên bảng hiện có bằng cột/JSONB/ràng buộc; không tạo bảng mới. Wave 1 có Domain và migration source; worker/API/delivery chưa triển khai.
 
 ---
 

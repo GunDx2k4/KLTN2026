@@ -6,7 +6,7 @@ using LegendsTeamVN.Core.Utilities.Results;
 
 namespace LegendsTeamVN.BadmintonClub.Domain.Entities;
 
-public class BadmintonSession : AggregateRoot<Guid>
+public partial class BadmintonSession : AggregateRoot<Guid>
 {
     public Guid GroupId { get; private set; }
     public string Title { get; private set; } = default!;

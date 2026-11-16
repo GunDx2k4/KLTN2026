@@ -1128,7 +1128,10 @@ public sealed class SettlementTransactionTests : IAsyncLifetime
             var before = await StoredState();
             var cash = new MarkMemberPaidCommand(fixture.SessionId, fixture.UserId);
             var resultPaid = await new UnitOfWorkBehavior<MarkMemberPaidCommand, Result<SessionSettlementResponse>>(verify)
-                .Handle(cash, ct => new MarkMemberPaidCommandHandler(new SessionRepository(verify), workflow.Actor).Handle(cash, ct), default);
+                .Handle(cash, ct => new MarkMemberPaidCommandHandler(new SessionRepository(verify), workflow.Actor,
+                    new LegendsTeamVN.BadmintonClub.Application.Tests.Common.TestOptionsMonitor<LegendsTeamVN.BadmintonClub.Application.DependencyInjection.Options.PaymentsOptions>(new()),
+                    new LegendsTeamVN.BadmintonClub.Application.Tests.Common.TestOptionsMonitor<LegendsTeamVN.BadmintonClub.Application.DependencyInjection.Options.ReconciliationOptions>(new() { WritesEnabled = true }),
+                    new ReconciliationRepository(verify), TimeProvider.System).Handle(cash, ct), default);
             Assert.Equal("Settlement.Exempt", resultPaid.Error.Code);
             Assert.Equal(before, await StoredState());
         }

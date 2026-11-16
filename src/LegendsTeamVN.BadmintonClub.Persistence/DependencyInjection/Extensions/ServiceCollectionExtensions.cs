@@ -16,6 +16,8 @@ public static class ServiceCollectionExtensions
 
         services.AddPostgreSQLDbContextUnitOfWork<BadmintonDbContext>(connectionStrings);
 
+        services.AddScoped<LegendsTeamVN.BadmintonClub.Application.Abstractions.IReputationRepository, ReputationRepository>();
+        services.AddScoped<LegendsTeamVN.BadmintonClub.Application.Abstractions.IReputationReadRepository, ReputationReadRepository>();
         services.AddScoped<IClubRepository, ClubRepository>();
         services.AddScoped<IClubMemberRepository, ClubMemberRepository>();
         services.AddScoped<IGroupRoleRepository, GroupRoleRepository>();
@@ -24,6 +26,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IDeviceRepository, DeviceRepository>();
         services.AddScoped<ISessionRepository, SessionRepository>();
         services.AddScoped<IPaymentRepository, PaymentRepository>();
+        services.AddScoped<IReconciliationRepository, ReconciliationRepository>();
+        services.AddScoped<LegendsTeamVN.BadmintonClub.Application.Abstractions.ILedgerReadRepository, LedgerReadRepository>();
+        services.AddScoped<LegendsTeamVN.BadmintonClub.Application.Abstractions.ILedgerWriteRepository, LedgerWriteRepository>();
+        services.AddScoped<ISepaySetupRepository, SepaySetupRepository>();
         services.AddScoped<IOutboxRepository, OutboxRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<IBookingRepository, BookingRepository>();

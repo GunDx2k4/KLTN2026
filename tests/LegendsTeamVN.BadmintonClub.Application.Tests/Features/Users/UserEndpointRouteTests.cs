@@ -31,6 +31,8 @@ public sealed class UserEndpointRouteTests
         var routes = Routes(app);
         var expected = new (string Name, string Method, string Suffix)[]
         {
+            ("GetReviewInvitations", "GET", "me/reviews/invitations"),
+            ("SubmitSessionReview", "POST", "me/reviews"),
             ("GetUserProfile", "GET", "profile"),
             ("UpdateUserProfile", "PUT", "profile"),
             ("GetMe", "GET", "me"),

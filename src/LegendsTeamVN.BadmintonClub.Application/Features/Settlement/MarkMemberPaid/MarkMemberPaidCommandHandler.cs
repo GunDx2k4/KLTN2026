@@ -10,7 +10,8 @@ using Microsoft.Extensions.Options;
 
 namespace LegendsTeamVN.BadmintonClub.Application.Features.Settlement.MarkMemberPaid;
 
-public sealed class MarkMemberPaidCommandHandler(ISessionRepository sessions, ICurrentUserService currentUser, IOptionsMonitor<PaymentsOptions>? payments = null)
+public sealed class MarkMemberPaidCommandHandler(ISessionRepository sessions, ICurrentUserService currentUser, IOptionsMonitor<PaymentsOptions> payments, IOptionsMonitor<ReconciliationOptions> reconciliation,
+    IReconciliationRepository ledger, TimeProvider clock)
     : ICommandHandler<MarkMemberPaidCommand, SessionSettlementResponse>
 {
     public async Task<Result<SessionSettlementResponse>> Handle(MarkMemberPaidCommand request, CancellationToken ct)
@@ -28,11 +29,14 @@ public sealed class MarkMemberPaidCommandHandler(ISessionRepository sessions, IC
         if (fee.PaymentStatus == PaymentStatus.PAID) return Result.Success(SessionSettlementMapper.Map(session));
         if (fee.PaymentRequestId.HasValue && fee.PaymentMethod == PaymentMethod.BANK_TRANSFER)
             return Result.Failure<SessionSettlementResponse>(Error.Conflict("Payments.PaymentMethodLocked", "Khoản thu đã chọn chuyển khoản, không thể xác nhận tiền mặt."));
-        if (fee.PaymentRequestId.HasValue && payments?.CurrentValue is not { Enabled: true, WritesEnabled: true })
+        if (fee.PaymentRequestId.HasValue && payments.CurrentValue is not { Enabled: true, WritesEnabled: true })
             return Result.Failure<SessionSettlementResponse>(Error.Conflict("Payments.WritesDisabled", "Chức năng thanh toán đang tạm ngừng."));
         if (fee.PaymentStatus == PaymentStatus.EXEMPT || fee.Amount == 0)
             return Result.Failure<SessionSettlementResponse>(Error.Conflict("Settlement.Exempt", "Khoản miễn thu không được xác nhận thanh toán."));
-        fee.MarkAsPaid(PaymentMethod.CASH, actor);
+        if (!reconciliation.CurrentValue.WritesEnabled)
+            return Result.Failure<SessionSettlementResponse>(Error.Conflict("Reconciliation.WritesDisabled", "Xác nhận thanh toán đang tạm dừng."));
+        fee.ConfirmCashPayment(session, actor, clock.GetUtcNow().UtcDateTime);
+        ledger.AddLedger(LegendsTeamVN.BadmintonClub.Domain.Entities.GroupLedger.CreateSessionFeeReceipt(session, fee));
         return Result.Success(SessionSettlementMapper.Map(session));
     }
 }

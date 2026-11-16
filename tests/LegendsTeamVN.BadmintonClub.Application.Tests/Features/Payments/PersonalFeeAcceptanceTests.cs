@@ -20,7 +20,7 @@ internal sealed class RejectPaymentCommitInterceptor(Func<bool> reject) : DbTran
 
 public sealed partial class PersonalFeeHttpTests
 {
-    [PaymentIntegrationFact]
+    [ReconciliationIntegrationFact]
     public async Task CommitFailureRollsBackCashFeeNotificationAndOutboxThenRetrySucceeds()
     {
         await using var f = await Fixture.Create();
@@ -38,7 +38,7 @@ public sealed partial class PersonalFeeHttpTests
         Assert.Equal(1, await db.OutboxMessages.CountAsync());
     }
 
-    [PaymentIntegrationFact]
+    [ReconciliationIntegrationFact]
     public async Task DisablingPaymentsKeepsExistingCashProgressReadableAndBlocksMutations()
     {
         await using var f = await Fixture.Create();

@@ -5,7 +5,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace LegendsTeamVN.BadmintonClub.Migrator;
 
-public class Worker(IServiceProvider serviceProvider, ILogger<Worker> logger, IHostApplicationLifetime hostApplicationLifetime) : BackgroundService
+public class Worker(IServiceProvider serviceProvider, ILogger<Worker> logger, IHostApplicationLifetime hostApplicationLifetime,
+    IConfiguration configuration) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -23,18 +24,23 @@ public class Worker(IServiceProvider serviceProvider, ILogger<Worker> logger, IH
             await badmintonContext.Database.MigrateAsync(stoppingToken);
             logger.LogInformation("BadmintonDbContext migrated successfully.");
 
-            logger.LogInformation("Running data seeders...");
-            var seeders = scope.ServiceProvider.GetServices<LegendsTeamVN.Core.Application.Data.IDataSeeder>()
-                .OrderBy(s => s.Order);
-            foreach (var seeder in seeders)
+            if (configuration.GetValue("Seeding:Enabled", true))
             {
-                logger.LogInformation("Running seeder: {SeederName}", seeder.GetType().Name);
-                await seeder.SeedAsync(stoppingToken);
+                logger.LogInformation("Running data seeders...");
+                var seeders = scope.ServiceProvider.GetServices<LegendsTeamVN.Core.Application.Data.IDataSeeder>()
+                    .OrderBy(s => s.Order);
+                foreach (var seeder in seeders)
+                {
+                    logger.LogInformation("Running seeder: {SeederName}", seeder.GetType().Name);
+                    await seeder.SeedAsync(stoppingToken);
+                }
+                logger.LogInformation("Data seeding completed successfully.");
             }
-            logger.LogInformation("Data seeding completed successfully.");
+            else logger.LogInformation("Đã tắt seeder; chỉ áp dụng database migrations.");
         }
         catch (Exception ex)
         {
+            Environment.ExitCode = 1;
             logger.LogCritical(ex, "An error occurred while migrating databases.");
             throw;
         }

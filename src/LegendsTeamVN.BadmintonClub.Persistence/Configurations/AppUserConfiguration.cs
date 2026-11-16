@@ -135,5 +135,6 @@ public class AppUserConfiguration : IEntityTypeConfiguration<AppUser>
             .WithOne(gl => gl.Actor)
             .HasForeignKey(gl => gl.ActorId)
             .OnDelete(DeleteBehavior.Restrict);
+        ReputationModelConfiguration.ConfigureUser(builder);
     }
 }

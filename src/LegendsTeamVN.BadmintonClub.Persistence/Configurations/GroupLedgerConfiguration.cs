@@ -9,8 +9,26 @@ public class GroupLedgerConfiguration : IEntityTypeConfiguration<GroupLedger>
 {
     public void Configure(EntityTypeBuilder<GroupLedger> builder)
     {
-        builder.ToTable("group_ledger");
+        builder.ToTable("group_ledger", table => table.HasCheckConstraint("ck_group_ledger_uc18_source",
+            "(fee_id IS NULL AND bank_transaction_id IS NULL) OR (fee_id IS NOT NULL AND id_session IS NOT NULL AND amount > 0 AND transaction_type = 'INFLOW' AND category = 'SESSION_FEE')"));
 
+        builder.Property(l => l.FeeId).HasColumnName("fee_id");
+        builder.Property(l => l.BankTransactionId).HasColumnName("bank_transaction_id");
+        builder.HasIndex(l => l.FeeId).IsUnique().HasFilter("fee_id IS NOT NULL");
+        builder.HasIndex(l => l.BankTransactionId).IsUnique().HasFilter("bank_transaction_id IS NOT NULL");
+        builder.HasOne<SessionFee>().WithMany().HasForeignKey(l => l.FeeId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<BankTransaction>().WithMany().HasForeignKey(l => l.BankTransactionId).OnDelete(DeleteBehavior.Restrict);
+
+        builder.Property(l => l.RequestId).HasColumnName("request_id");
+        builder.Property(l => l.MonthlyContributionId).HasColumnName("monthly_contribution_id");
+        builder.HasIndex(l => new { l.GroupId, l.RequestId }).IsUnique().HasFilter("request_id IS NOT NULL");
+        builder.HasIndex(l => l.MonthlyContributionId).IsUnique().HasFilter("monthly_contribution_id IS NOT NULL");
+        builder.HasIndex(l => new { l.GroupId, l.CreatedAt, l.Id });
+        builder.HasOne<MonthlyContribution>().WithMany().HasForeignKey(l => l.MonthlyContributionId).OnDelete(DeleteBehavior.Restrict);
+        builder.ToTable("group_ledger", t => t.HasCheckConstraint("ck_group_ledger_uc19_source",
+            "(monthly_contribution_id IS NULL) OR (fee_id IS NULL AND bank_transaction_id IS NULL AND request_id IS NOT NULL AND transaction_type = 'INFLOW' AND category = 'MONTHLY_FUND' AND amount > 0)"));
+        builder.ToTable("group_ledger", t => t.HasCheckConstraint("ck_group_ledger_uc19_request",
+            "request_id IS NULL OR (amount > 0 AND fee_id IS NULL AND bank_transaction_id IS NULL AND ((monthly_contribution_id IS NOT NULL AND transaction_type = 'INFLOW' AND category = 'MONTHLY_FUND') OR (monthly_contribution_id IS NULL AND transaction_type = 'OUTFLOW' AND category IN ('COURT_RENT','SHUTTLE_EXPENSE','OTHER'))))"));
         builder.HasKey(l => l.Id);
         builder.Property(l => l.Id)
             .HasColumnName("id_ledger");

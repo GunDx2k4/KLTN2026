@@ -8,6 +8,7 @@ using LegendsTeamVN.Core.Infrastructure.DependencyInjection.Extensions;
 using LegendsTeamVN.Core.Utilities.Options;
 using LegendsTeamVN.BadmintonClub.Application.Abstractions;
 using LegendsTeamVN.BadmintonClub.Infrastructure.Services;
+using LegendsTeamVN.BadmintonClub.Persistence;
 
 var builder = Host.CreateApplicationBuilder(args);
 builder.AddCoreSerilog();
@@ -39,10 +40,33 @@ builder.Services.AddCoreInfrastructure(builder.Configuration);
 
 builder.Services.AddPersistence(connectionStrings).AddDataSeederBadminton();
 
-builder.Services.AddHostedService<Worker>();
+var verifyOnly = builder.Configuration.GetValue<bool>("Migrations:VerifyOnly");
+if (!verifyOnly) builder.Services.AddHostedService<Worker>();
 
 var host = builder.Build();
-host.Run();
+if (verifyOnly)
+{
+    using (host)
+    {
+        await using var scope = host.Services.CreateAsyncScope();
+        try
+        {
+            await DatabaseSchemaVerifier.VerifyAsync(scope.ServiceProvider.GetRequiredService<AppIdentityDbContext>());
+            await DatabaseSchemaVerifier.VerifyAsync(scope.ServiceProvider.GetRequiredService<BadmintonDbContext>());
+            host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("SchemaVerification")
+                .LogInformation("Schema Identity và BadmintonClub đã sẵn sàng; không chạy migration hoặc seeder.");
+            return 0;
+        }
+        catch (Exception exception)
+        {
+            host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("SchemaVerification")
+                .LogError("Kiểm tra schema thất bại: {Type}", exception.GetType().Name);
+            return 1;
+        }
+    }
+}
+await host.RunAsync();
+return Environment.ExitCode;
 
 
 

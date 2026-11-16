@@ -9,5 +9,6 @@ public enum NotificationType
     QUEUE = 2,
     PAYMENT = 3,
     MATCH = 4,
-    GUEST_RECRUIT = 5
+    GUEST_RECRUIT = 5,
+    REPUTATION = 6
 }

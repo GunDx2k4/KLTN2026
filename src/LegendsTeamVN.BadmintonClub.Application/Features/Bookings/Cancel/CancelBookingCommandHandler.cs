@@ -29,12 +29,13 @@ public sealed class CancelBookingCommandHandler(
             return Result.Failure(Error.NotFound("Session.NotFound", "Không tìm thấy buổi chơi."));
         }
 
+        var now = clock.GetUtcNow().UtcDateTime;
         if (session.Status != SessionStatus.OPEN)
         {
             return Result.Failure(Error.Conflict("Session.RegistrationClosed", "Buổi chơi đã khóa đăng ký. Hãy liên hệ Host hoặc Thủ quỹ để thay đổi."));
         }
 
-        if (clock.GetUtcNow().UtcDateTime >= session.DeadlineBooking)
+        if (now >= session.DeadlineBooking)
         {
             return Result.Failure(Error.Conflict("Session.DeadlinePassed", "Đã hết hạn thay đổi đăng ký. Hãy liên hệ Host hoặc Thủ quỹ."));
         }
@@ -51,7 +52,8 @@ public sealed class CancelBookingCommandHandler(
         var wasConfirmed = myBooking.Status == BookingStatus.CONFIRMED;
         var cancelledQueueOrder = myBooking.QueueOrder;
 
-        myBooking.UpdateStatus(BookingStatus.ABSENT);
+        myBooking.CancelWithEvidence(session, userId.Value,
+            Domain.Services.ReputationCancellationSource.Booking, now);
         myBooking.UpdateQueueOrder(0);
         bookingRepository.Update(myBooking);
 
@@ -95,7 +97,7 @@ public sealed class CancelBookingCommandHandler(
             }
         }
 
-        RecruitmentRules.Synchronize(session, clock.GetUtcNow().UtcDateTime);
+        RecruitmentRules.Synchronize(session, now);
         return Result.Success();
     }
 }

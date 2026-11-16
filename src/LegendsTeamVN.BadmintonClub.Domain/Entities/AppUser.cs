@@ -3,7 +3,7 @@ using LegendsTeamVN.Core.Domain.Aggregates;
 
 namespace LegendsTeamVN.BadmintonClub.Domain.Entities;
 
-public class AppUser : AggregateRoot<Guid>
+public partial class AppUser : AggregateRoot<Guid>
 {
     public string? PhoneNumber { get; private set; }
     public string? EmailAddress { get; private set; }
@@ -121,6 +121,8 @@ public class AppUser : AggregateRoot<Guid>
 
     public void UpdateReputation(decimal score)
     {
+        if (ReputationBaselineScore.HasValue || score is < 0 or > 100)
+            throw new InvalidOperationException("Điểm uy tín phải được tính từ nguồn đã chốt.");
         ReputationScore = score;
     }
 
