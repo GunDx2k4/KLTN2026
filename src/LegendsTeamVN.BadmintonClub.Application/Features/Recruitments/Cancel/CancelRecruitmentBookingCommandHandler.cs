@@ -33,15 +33,31 @@ public sealed class CancelRecruitmentBookingCommandHandler(
             return Result.Failure(Error.NotFound("Session.NotFound", "Không tìm thấy buổi chơi."));
         if (session.Status != SessionStatus.OPEN || DateTime.UtcNow >= session.StartTime)
             return Result.Failure(Error.Conflict("Attendance.ManagedByHost", "Buổi chơi đã bắt đầu. Hãy liên hệ Host hoặc Thủ quỹ để thay đổi điểm danh."));
-        var booking = session.Bookings.FirstOrDefault(b => b.RecruitmentId == request.RecruitmentId && b.UserId == userId.Value && b.Status == BookingStatus.CONFIRMED);
+        var booking = session.Bookings.FirstOrDefault(b => b.RecruitmentId == request.RecruitmentId && b.UserId == userId.Value &&
+            (b.Status is BookingStatus.WAITING or BookingStatus.CONFIRMED));
 
         if (booking is null)
         {
             return Result.Failure(Error.NotFound("Booking.NotFound", "Bạn không có đăng ký giữ chỗ qua bài đăng giao lưu này."));
         }
 
+        var cancelledQueueOrder = booking.QueueOrder;
         booking.UpdateStatus(BookingStatus.ABSENT);
+        booking.UpdateQueueOrder(0);
         bookingRepository.Update(booking);
+
+        if (cancelledQueueOrder > 0)
+        {
+            var remainingWaiting = session.Bookings
+                .Where(b => b.Status == BookingStatus.WAITING && b.QueueOrder > cancelledQueueOrder && b.Id != booking.Id)
+                .ToList();
+
+            foreach (var remaining in remainingWaiting)
+            {
+                remaining.UpdateQueueOrder(Math.Max(1, remaining.QueueOrder - 1));
+                bookingRepository.Update(remaining);
+            }
+        }
 
         RecruitmentRules.Synchronize(session, DateTime.UtcNow);
 

@@ -198,7 +198,7 @@ public class BadmintonSession : AggregateRoot<Guid>
         Fees.Where(f => !f.IsDeleted && f.PaymentStatus == PaymentStatus.PAID).Sum(f => f.Amount);
 
     public bool CanEditAttendance(DateTime now) =>
-        !IsDeleted && StartTime.AddHours(-1) <= now && now < EndTime &&
+        !IsDeleted && now < EndTime && (Status == SessionStatus.PLAYING || StartTime.AddHours(-1) <= now) &&
         Status is SessionStatus.OPEN or SessionStatus.LOCKED or SessionStatus.PLAYING;
 
     public bool HasAttendanceRoom(SessionBooking? booking) =>
@@ -213,7 +213,8 @@ public class BadmintonSession : AggregateRoot<Guid>
         !Matches.Any(m => !m.IsDeleted && m.Status is MatchStatus.WAITING or MatchStatus.PLAYING &&
             m.Players.Any(p => p.UserId == userId));
 
-    public bool CanStartRotation(DateTime now) => !RotationStartedAt.HasValue && CanEditAttendance(now) && StartTime <= now &&
+    public bool CanStartRotation(DateTime now) => !RotationStartedAt.HasValue && CanEditAttendance(now) &&
+        (Status == SessionStatus.PLAYING || StartTime <= now) &&
         AttendanceCompletedAt.HasValue && Bookings.Count(b => IsPlayerReady(b.UserId, now)) >= 4;
 
     public Result ChangeAttendance(Guid userId, BookingStatus status, Guid actorId, DateTime now, bool generateProposals = true)
@@ -279,10 +280,12 @@ public class BadmintonSession : AggregateRoot<Guid>
 
     public int RemainingRecruitmentSlots(GuestRecruitment recruitment)
     {
-        // Reserve released slots for existing waiters; guests cannot bypass the RSVP queue.
-        if (Bookings.Any(b => !b.IsDeleted && b.Status == BookingStatus.WAITING)) return 0;
-        var sessionFree = MaxPlayers - Bookings.Count(b => b.OccupiesSlot());
-        var recruitmentFree = recruitment.SlotsNeeded - Bookings.Count(b => b.RecruitmentId == recruitment.Id && b.OccupiesSlot());
+        // Reserve released slots for existing regular session waiters; guests cannot bypass the RSVP queue.
+        if (Bookings.Any(b => !b.IsDeleted && b.RecruitmentId == null && b.Status == BookingStatus.WAITING)) return 0;
+        var confirmedGuests = Bookings.Count(b => !b.IsDeleted && b.RecruitmentId == recruitment.Id && b.OccupiesSlot());
+        var recruitmentFree = recruitment.SlotsNeeded - confirmedGuests;
+        var sessionOccupied = Bookings.Count(b => !b.IsDeleted && b.OccupiesSlot());
+        var sessionFree = MaxPlayers - sessionOccupied;
         return Math.Max(0, Math.Min(sessionFree, recruitmentFree));
     }
 
@@ -364,7 +367,7 @@ public class BadmintonSession : AggregateRoot<Guid>
             return Result.Failure(Error.Conflict("Session.InvalidTransition", "Trạng thái buổi chơi không cho phép phát hành khoản thu."));
         if (now.Kind != DateTimeKind.Utc || StartTime.Kind != DateTimeKind.Utc || EndTime.Kind != DateTimeKind.Utc)
             return Result.Failure(Error.Validation("Settlement.UtcRequired", "Thời gian quyết toán phải sử dụng UTC."));
-        if (now < EndTime)
+        if (now < EndTime && Status is not (SessionStatus.PLAYING or SessionStatus.LOCKED))
             return Result.Failure(Error.Conflict("Settlement.NotEnded", "Buổi chơi chưa kết thúc khung giờ thuê sân."));
         if (Matches.Any(m => !m.IsDeleted && m.Status == MatchStatus.PLAYING))
             return Result.Failure(Error.Conflict("Session.ActiveMatches", "Còn trận đang thi đấu, hãy kết thúc trận trước khi chốt buổi."));
@@ -696,7 +699,7 @@ public class BadmintonSession : AggregateRoot<Guid>
     private Result ValidateRotation(DateTime now)
     {
         ValidateRotationPauseMetadata();
-        return !IsDeleted && StartTime <= now && now < EndTime &&
+        return !IsDeleted && now < EndTime && (Status == SessionStatus.PLAYING || StartTime <= now) &&
             Status is SessionStatus.OPEN or SessionStatus.LOCKED or SessionStatus.PLAYING
             ? Result.Success() : Result.Failure(Error.Conflict("Rotation.Closed", "Chỉ điều phối trong thời gian diễn ra buổi chưa đóng."));
     }

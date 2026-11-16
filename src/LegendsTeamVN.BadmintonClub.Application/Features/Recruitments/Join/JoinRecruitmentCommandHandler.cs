@@ -76,10 +76,21 @@ public sealed class JoinRecruitmentCommandHandler(
             return Result.Failure<SessionBookingResponse>(Error.Conflict("Booking.TimeOverlap", "Bạn đã có lịch tham gia buổi chơi khác trong cùng khung giờ này."));
         }
 
-        var takenCount = session.Bookings.Count(b => !b.IsDeleted && b.RecruitmentId == recruitment.Id && b.OccupiesSlot());
-        if (takenCount >= recruitment.SlotsNeeded)
+        if (session.Bookings.Any(b => !b.IsDeleted && b.RecruitmentId == null && b.Status == BookingStatus.WAITING))
+        {
+            return Result.Failure<SessionBookingResponse>(Error.Conflict("Session.WaitlistPending", "Còn thành viên đang chờ duyệt suất trong CLB."));
+        }
+
+        var confirmedGuests = session.Bookings.Count(b => !b.IsDeleted && b.RecruitmentId == recruitment.Id && b.OccupiesSlot());
+        if (confirmedGuests >= recruitment.SlotsNeeded)
         {
             return Result.Failure<SessionBookingResponse>(Error.Conflict("Recruitment.Full", "Rất tiếc, các suất giao lưu đã được nhận đủ."));
+        }
+
+        var sessionOccupied = session.Bookings.Count(b => !b.IsDeleted && b.OccupiesSlot());
+        if (sessionOccupied >= session.MaxPlayers)
+        {
+            return Result.Failure<SessionBookingResponse>(Error.Conflict("Session.Full", "Buổi chơi đã đủ sức chứa."));
         }
 
         var maxQueueOrder = session.Bookings

@@ -59,14 +59,14 @@ public class SessionRepository(BadmintonDbContext dbContext)
     }
     public async Task<IReadOnlyList<Guid>> FindDueRotationIdsAsync(DateTime now, int limit,
         IReadOnlyCollection<Guid> excluded, CancellationToken ct) => await DbContext.BadmintonSessions.AsNoTracking()
-        .Where(s => !s.IsDeleted && s.RotationStartedAt != null && s.StartTime <= now && s.EndTime > now &&
+        .Where(s => !s.IsDeleted && s.RotationStartedAt != null && (s.Status == SessionStatus.PLAYING || (s.StartTime <= now && s.EndTime > now)) &&
             (s.Status == SessionStatus.OPEN || s.Status == SessionStatus.LOCKED || s.Status == SessionStatus.PLAYING) &&
             s.NextProposalCheckAt != null && s.NextProposalCheckAt <= now && !excluded.Contains(s.Id))
         .OrderBy(s => s.NextProposalCheckAt).ThenBy(s => s.Id).Take(limit).Select(s => s.Id).ToListAsync(ct);
 
     public async Task<IReadOnlyList<Guid>> FindRotationRecoveryIdsAsync(DateTime now, Guid? after, int limit, CancellationToken ct) =>
         await DbContext.BadmintonSessions.AsNoTracking().Where(s => !s.IsDeleted && s.RotationStartedAt != null &&
-            s.StartTime <= now && s.EndTime > now &&
+            (s.Status == SessionStatus.PLAYING || (s.StartTime <= now && s.EndTime > now)) &&
             (s.Status == SessionStatus.OPEN || s.Status == SessionStatus.LOCKED || s.Status == SessionStatus.PLAYING) &&
             (after == null || s.Id.CompareTo(after.Value) > 0))
         .OrderBy(s => s.Id).Take(limit).Select(s => s.Id).ToListAsync(ct);

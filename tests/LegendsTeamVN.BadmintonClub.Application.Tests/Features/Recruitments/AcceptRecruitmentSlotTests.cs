@@ -81,9 +81,18 @@ public class AcceptRecruitmentSlotTests
         createdBooking.QueueOrder.Should().Be(1);
         createdBooking.RecruitmentId.Should().Be(recruitment.Id);
 
-        // 2. Bài đăng tự động chuyển sang FILLED vì đã có người trong hàng đợi WAITING
+        // 2. Bài đăng vẫn ở trạng thái ACTIVE vì người chơi mới chỉ ở hàng đợi WAITING chờ Host duyệt
         var updatedRecruitment = dbContext.GuestRecruitments.First(r => r.Id == recruitment.Id);
-        updatedRecruitment.Status.Should().Be(RecruitmentStatus.FILLED);
+        updatedRecruitment.Status.Should().Be(RecruitmentStatus.ACTIVE);
+
+        // 3. Khi Host duyệt (CONFIRMED), suất mới được tính chính thức và chuyển sang FILLED
+        var loadedSession = Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.Include(
+            Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.Include(dbContext.BadmintonSessions, s => s.Bookings),
+            s => s.Recruitments)
+            .First(s => s.Id == session.Id);
+        createdBooking.UpdateStatus(BookingStatus.CONFIRMED);
+        loadedSession.SynchronizeRecruitments(DateTime.UtcNow);
+        loadedSession.Recruitments.First(r => r.Id == recruitment.Id).Status.Should().Be(RecruitmentStatus.FILLED);
     }
 
     [Fact]

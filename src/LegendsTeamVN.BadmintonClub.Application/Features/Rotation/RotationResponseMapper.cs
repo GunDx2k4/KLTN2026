@@ -23,10 +23,10 @@ public static class RotationResponseMapper
             var readyAt = MatchRotationEngine.EligibleAgainAt(session, b.UserId);
             return new(b.UserId, b.User?.FullName ?? "", b.User?.SkillLevel ?? SkillLevel.NB, team, state, b.CheckinAt, lastEnd,
                 readyAt, assigned is null && readyAt > now,
-                session.CanEditAttendance(now) && session.StartTime <= now && session.IsPlayerReady(b.UserId, now),
+                session.CanEditAttendance(now) && (session.Status == SessionStatus.PLAYING || session.StartTime <= now) && session.IsPlayerReady(b.UserId, now),
                 false, b.IsRotationPaused,
                 canEditManually && !b.IsRotationPaused && assigned?.Status != MatchStatus.PLAYING &&
-                    session.RotationStartedAt.HasValue && session.CanEditAttendance(now) && session.StartTime <= now,
+                    session.RotationStartedAt.HasValue && session.CanEditAttendance(now) && (session.Status == SessionStatus.PLAYING || session.StartTime <= now),
                 canResumePaused && b.IsRotationPaused && !session.IsDeleted,
                 PersonalMatchSchedulePolicy.PauseSource(b),
                 !b.IsRotationPaused ? null : b.RotationPauseSource == RotationPauseSource.Self ? "AutoAfterNextStartedMatchFinishes" : "HostOnly",
@@ -51,17 +51,17 @@ public static class RotationResponseMapper
             }).ToList(), m.OriginalLineupSnapshot is { } original ? new(original.SchemaVersion, original.TeamA.ToArray(), original.TeamB.ToArray()) : null,
                 score.TeamATotal, score.TeamBTotal, score.Difference, m.OriginalLineupSnapshot is not null,
                 canEditManually && m.Status == MatchStatus.WAITING && session.RotationStartedAt.HasValue &&
-                    session.CanEditAttendance(now) && session.StartTime <= now,
+                    session.CanEditAttendance(now) && (session.Status == SessionStatus.PLAYING || session.StartTime <= now),
                 canEditManually && m.OriginalLineupSnapshot is not null && m.Status == MatchStatus.WAITING &&
-                    session.CanEditAttendance(now) && session.StartTime <= now,
+                    session.CanEditAttendance(now) && (session.Status == SessionStatus.PLAYING || session.StartTime <= now),
                 canEditManually && m.Status == MatchStatus.WAITING && session.RotationStartedAt.HasValue &&
-                    session.CanEditAttendance(now) && session.StartTime <= now);
+                    session.CanEditAttendance(now) && (session.Status == SessionStatus.PLAYING || session.StartTime <= now));
         }
         var available = MatchRotationEngine.Candidates(session, now).Count;
         var unassigned = MatchRotationEngine.Unassigned(session).Count;
-        var open = session.CanEditAttendance(now) && session.StartTime <= now;
+        var open = session.CanEditAttendance(now) && (session.Status == SessionStatus.PLAYING || session.StartTime <= now);
         var canGenerate = session.RotationStartedAt.HasValue && session.CanEditAttendance(now) &&
-            session.StartTime <= now && session.HasFreeCourt() && available >= 4;
+            (session.Status == SessionStatus.PLAYING || session.StartTime <= now) && session.HasFreeCourt() && available >= 4;
         return new(session.Id, session.Status, session.RotationVersion, now, session.RotationStartedAt,
             session.CanStartRotation(now) && session.HasFreeCourt(), canGenerate,
             open && session.HasFreeCourt() && available < 4 ? (unassigned >= 4 ? "PlayersCoolingDown" : "NotEnoughPlayers") : null,
