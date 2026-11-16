@@ -230,7 +230,8 @@ public sealed class SettlementRotationSafetyTests
         var fee = new SessionFee(session.Id, player.UserId, 50000m, PriceType.GUEST, "OLD", "");
         session.Fees.Add(fee); session.ClearDomainEvents(); var version = session.RotationVersion;
         using var db = TestDbContextFactory.Create(); db.Attach(session);
-        var result = await new MarkMemberPaidCommandHandler(f.Sessions, f.User).Handle(new(session.Id, player.UserId), default);
+        var result = await new MarkMemberPaidCommandHandler(f.Sessions, f.User, new TestOptionsMonitor<PaymentsOptions>(new()),
+            new TestOptionsMonitor<ReconciliationOptions>(new() { WritesEnabled = true }), Substitute.For<IReconciliationRepository>(), TimeProvider.System).Handle(new(session.Id, player.UserId), default);
         db.ChangeTracker.DetectChanges();
         Assert.True(result.IsSuccess); Assert.Equal(PaymentStatus.PAID, fee.PaymentStatus);
         Assert.Equal(EntityState.Modified, db.Entry(fee).State); Assert.Equal(EntityState.Unchanged, db.Entry(session).State);

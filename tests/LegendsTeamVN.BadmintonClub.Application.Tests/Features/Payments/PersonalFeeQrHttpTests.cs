@@ -20,7 +20,7 @@ public sealed partial class PersonalFeeHttpTests
         return (await response.Content.ReadFromJsonAsync<PaymentBankAccountResponse>())!;
     }
 
-    [PaymentIntegrationFact]
+    [ReconciliationIntegrationFact]
     public async Task PrepareConcurrentRetryAndReadImageUseOneImmutableRequestAndValidPayload()
     {
         await using var f = await Fixture.Create();
@@ -62,7 +62,7 @@ public sealed partial class PersonalFeeHttpTests
         }
     }
 
-    [PaymentIntegrationFact]
+    [ReconciliationIntegrationFact]
     public async Task RetryAfterBankRotationAndSelfReportKeepsOriginalSnapshotAndProgress()
     {
         await using var f = await Fixture.Create();
@@ -82,7 +82,7 @@ public sealed partial class PersonalFeeHttpTests
         Assert.Equal(bank.Id, await db.SessionFees.Select(x => x.QrBankAccountId).SingleAsync());
     }
 
-    [PaymentIntegrationFact]
+    [ReconciliationIntegrationFact]
     public async Task ImageRequiresOwnerAndEnabledFlagAndDisappearsAfterPaid()
     {
         await using var f = await Fixture.Create();
@@ -110,7 +110,7 @@ public sealed partial class PersonalFeeHttpTests
         Assert.NotNull(paid.Receipt);
     }
 
-    [PaymentIntegrationFact]
+    [ReconciliationIntegrationFact]
     public async Task PrepareCommitFailureDoesNotPersistOrReturnAUsableQr()
     {
         await using var f = await Fixture.Create();
@@ -129,7 +129,7 @@ public sealed partial class PersonalFeeHttpTests
         Assert.Equal(HttpStatusCode.OK, (await f.Client.PostAsync(f.FeePath + "/bank-transfer", null)).StatusCode);
     }
 
-    [PaymentIntegrationFact]
+    [ReconciliationIntegrationFact]
     public async Task BankRotationConcurrentWithPreparationKeepsCoherentSnapshotAndNewFeesUseNewBank()
     {
         await using var f = await Fixture.Create();
@@ -163,7 +163,7 @@ public sealed partial class PersonalFeeHttpTests
         Assert.Equal(prepared.PaymentInstructions, retry!.PaymentInstructions);
     }
 
-    [PaymentIntegrationFact]
+    [ReconciliationIntegrationFact]
     public async Task OldCashConfirmationConcurrentWithPreparationCannotProducePaidCashAndQr()
     {
         await using var f = await Fixture.Create();
@@ -174,7 +174,8 @@ public sealed partial class PersonalFeeHttpTests
         player.DefaultRequestHeaders.Authorization = f.Client.DefaultRequestHeaders.Authorization;
         f.Login(actor);
         var responses = await Task.WhenAll(player.PostAsync(f.FeePath + "/bank-transfer", null), f.Client.PostAsync(f.PayPath, null));
-        Assert.Equal(1, responses.Count(x => x.StatusCode == HttpStatusCode.OK));
+        Assert.True(responses.Count(x => x.StatusCode == HttpStatusCode.OK) == 1,
+            string.Join(" | ", await Task.WhenAll(responses.Select(async response => $"{response.StatusCode}: {await response.Content.ReadAsStringAsync()}"))));
         Assert.Equal(1, responses.Count(x => x.StatusCode == HttpStatusCode.Conflict));
         await using var db = f.Database.Open();
         var fee = await db.SessionFees.SingleAsync();
@@ -192,7 +193,7 @@ public sealed partial class PersonalFeeHttpTests
         }
     }
 
-    [PaymentIntegrationFact]
+    [ReconciliationIntegrationFact]
     public async Task CashAndBankSelectionRaceCannotCreateTwoMethodsOrRequests()
     {
         await using var f = await Fixture.Create();

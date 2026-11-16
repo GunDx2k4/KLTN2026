@@ -3,7 +3,7 @@ using LegendsTeamVN.Core.Domain.Aggregates;
 
 namespace LegendsTeamVN.BadmintonClub.Domain.Entities;
 
-public class SessionBooking : AggregateRoot<Guid>
+public partial class SessionBooking : AggregateRoot<Guid>
 {
     public Guid SessionId { get; private set; }
     public Guid UserId { get; private set; }

@@ -1,3 +1,5 @@
+using LegendsTeamVN.BadmintonClub.Application.DTOs.Reputation.Responses;
+using LegendsTeamVN.BadmintonClub.Application.Features.Reputation.GetReputationAudit;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Settlement.Requests;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Settlement.Responses;
 using LegendsTeamVN.BadmintonClub.Application.Features.Rotation.Personal.Resume;
@@ -58,11 +60,17 @@ namespace LegendsTeamVN.BadmintonClub.Presentation.Endpoints;
 
 public class SessionEndpoint : EndpointGroupBase
 {
-    protected override string Name => "sessions";
+    protected override string Name => string.Empty;
     protected override string? Tag => null;
 
-    protected override void Map(RouteGroupBuilder group)
+    protected override void Map(RouteGroupBuilder root)
     {
+        var group = root.MapGroup("sessions");
+        var audit = root.MapGroup("clubs/{clubId:guid}/sessions/{sessionId:guid}/reputation-audit")
+            .WithTags("FR23 - Kiểm tra uy tín buổi chơi").RequireAuthorization("SessionOperations");
+        audit.MapGet("", GetReputationAudit)
+            .RequireGroupPermission(GroupPermissions.Operations.SessionUpdate)
+            .Produces<ReputationAuditResponse>(200).WithName("GetReputationAudit");
         var fr13Group = group.MapGroup("").WithTags("FR13 - Khởi tạo buổi chơi");
         var fr08fr10Group = group.MapGroup("").WithTags("FR08-FR10 - Đăng ký giữ chỗ & Hàng đợi");
         var fr11Group = group.MapGroup("").WithTags("FR11 - Phát tín hiệu tìm khách giao lưu");
@@ -322,6 +330,13 @@ public class SessionEndpoint : EndpointGroupBase
     }
 
     // --- FR13 Handlers ---
+    private static async Task<IResult> GetReputationAudit(Guid clubId, Guid sessionId, ISender sender, CancellationToken ct,
+        int page = 1, int pageSize = 20)
+    {
+        var result = await sender.Send(new GetReputationAuditQuery(clubId, sessionId, page, pageSize), ct);
+        return result.Match(onSuccess: data => Results.Ok(data));
+    }
+
     private static async Task<IResult> CreateSession(
         [FromRoute] Guid clubId,
         [FromBody] CreateSessionRequest request,

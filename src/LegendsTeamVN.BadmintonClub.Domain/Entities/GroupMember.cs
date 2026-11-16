@@ -1,3 +1,4 @@
+using LegendsTeamVN.Core.Utilities.Results;
 using LegendsTeamVN.BadmintonClub.Domain.Enums;
 using LegendsTeamVN.Core.Domain.Aggregates;
 
@@ -9,6 +10,7 @@ public class GroupMember : AggregateRoot<Guid>
     public Guid UserId { get; private set; }
     public Guid RoleId { get; private set; }
     public string MemberType { get; private set; } = "MONTHLY";
+    public DateTime? MonthlyMembershipSince { get; private set; }
     public DateTime? MonthlyExpiryDate { get; private set; }
     /// <summary>
     /// Trạng thái thành viên của thành viên nhóm. Miền giá trị: ACTIVE, LEAVED, BANNED.
@@ -41,6 +43,7 @@ public class GroupMember : AggregateRoot<Guid>
         Status = status;
         Nickname = nickname;
         JoinedAt = DateTime.UtcNow;
+        MonthlyMembershipSince = memberType == "MONTHLY" && status == ClubMemberStatus.ACTIVE ? JoinedAt : null;
     }
 
     public void UpdateRole(Guid newRoleId)
@@ -50,6 +53,8 @@ public class GroupMember : AggregateRoot<Guid>
 
     public void UpdateStatus(ClubMemberStatus newStatus)
     {
+        if (Status != newStatus)
+            MonthlyMembershipSince = newStatus == ClubMemberStatus.ACTIVE && MemberType == "MONTHLY" ? DateTime.UtcNow : null;
         Status = newStatus;
     }
 
@@ -58,8 +63,21 @@ public class GroupMember : AggregateRoot<Guid>
         Nickname = nickname;
     }
 
+    public Result RenewMonthlyMembership(DateOnly month)
+    {
+        if (IsDeleted || Status != ClubMemberStatus.ACTIVE || MemberType != "MONTHLY" || month.Day != 1 ||
+            month.Year == 9999 && month.Month == 12 || MonthlyExpiryDate.HasValue && MonthlyExpiryDate.Value.Kind != DateTimeKind.Utc)
+            return Result.Failure(Error.Conflict("Ledger.MonthlyPolicyUnsupported", "Không thể gia hạn hội viên tháng với dữ liệu hiện tại."));
+        var end = MonthlyContribution.PeriodEndUtc(month);
+        if (!MonthlyExpiryDate.HasValue || MonthlyExpiryDate.Value < end)
+            MonthlyExpiryDate = end;
+        return Result.Success();
+    }
+
     public void UpdateMemberType(string memberType, DateTime? monthlyExpiryDate)
     {
+        if (MemberType != memberType)
+            MonthlyMembershipSince = memberType == "MONTHLY" && Status == ClubMemberStatus.ACTIVE ? DateTime.UtcNow : null;
         MemberType = memberType;
         MonthlyExpiryDate = monthlyExpiryDate;
     }

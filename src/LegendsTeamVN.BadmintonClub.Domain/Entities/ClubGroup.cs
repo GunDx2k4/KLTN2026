@@ -3,7 +3,7 @@ using LegendsTeamVN.Core.Domain.Aggregates;
 
 namespace LegendsTeamVN.BadmintonClub.Domain.Entities;
 
-public class ClubGroup : AggregateRoot<Guid>
+public partial class ClubGroup : AggregateRoot<Guid>
 {
     public string GroupName { get; private set; } = default!;
     public string? Code { get; private set; }
@@ -103,6 +103,8 @@ public class ClubGroup : AggregateRoot<Guid>
 
     public void UpdateQualityScore(decimal score)
     {
+        if (QualityComputedAt.HasValue || score is < 1 or > 5)
+            throw new InvalidOperationException("Điểm chất lượng phải được tính từ nguồn đã chốt.");
         GroupQualityScore = score;
     }
 

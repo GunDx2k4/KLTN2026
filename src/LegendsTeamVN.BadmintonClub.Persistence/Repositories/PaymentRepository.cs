@@ -73,7 +73,7 @@ public sealed class PaymentRepository(BadmintonDbContext db) : IPaymentRepositor
     {
         RequireTransaction();
         await db.Database.ExecuteSqlRawAsync("SET LOCAL lock_timeout = '3s'", ct);
-        await db.ClubGroups.FromSqlInterpolated($"SELECT * FROM club_group WHERE id_group = {groupId} FOR UPDATE")
+        await db.ClubGroups.FromSqlInterpolated($"SELECT * FROM club_group WHERE id_group = {groupId} FOR NO KEY UPDATE")
             .IgnoreQueryFilters().AsNoTracking().ToListAsync(ct);
     }
 

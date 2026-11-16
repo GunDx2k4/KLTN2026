@@ -70,9 +70,12 @@ graph TD
 
 ### 2.3. Tự động hóa đối soát thanh toán (VietQR & Webhook SePay)
 - UC16 phát hành Amount/breakdown bất biến và mã G04 29 ký tự, ví dụ `CLB 0123456789AB FEDCBA987654`; UC17 không tính lại tiền hoặc đổi mã.
-- UC17 sinh raw payload qua adapter Anpero.Payment.QrPayload và PNG bằng QRCoder tại BE, snapshot một bank active cùng yêu cầu. Cập nhật 01/11/2026: source upstream được pin commit, giữ license và vá một dòng metadata theo phê duyệt; bản riêng `1.0.1-uc17.1` nằm tại src/ThirdParty. POC/decoder ảnh độc lập đạt; generator runtime đã tích hợp. Chưa nghiệm thu quét hai ứng dụng ngân hàng hoặc bật sử dụng thật.
+- UC17 sinh raw payload qua adapter Anpero.Payment.QrPayload và PNG bằng QRCoder tại BE, snapshot một bank active cùng yêu cầu. Cập nhật 01/11/2026: source upstream được pin commit, giữ license và vá một dòng metadata theo phê duyệt; bản riêng `1.0.1-uc17.1` nằm tại infrastructure/ThirdParty. POC/decoder ảnh độc lập đạt; generator runtime đã tích hợp. Chưa nghiệm thu quét hai ứng dụng ngân hàng hoặc bật sử dụng thật.
 - Phần cá nhân/cash/self-report đã kiểm trên DB riêng: transaction, DB locks, notification/outbox và worker gửi sau commit; tự báo chỉ là UNPAID + chờ đối soát. API pay cũ có guard chống đổi BANK_TRANSFER UC17 thành PAID/CASH. GET nghĩa vụ/receipt vẫn đọc khi Payments tắt.
-- Mục tiêu UC18: nhận webhook xác thực, khớp bằng chứng ngân hàng, ghi PAID/bank_transaction/ledger nguyên tử và thông báo. Chưa được triển khai/nghiệm thu bởi test writer mô phỏng UC17. Cash PAID hiện hữu cũng chưa đồng nghĩa hoàn thiện sổ quỹ. [Contract và rollback UC17](Detail%20Design/UC17-BE.md).
+- UC18/FR21 source đã triển khai và kiểm chứng sandbox ngày 04/11/2026: endpoint ISender → security HMAC/raw body/bank → Redis lock → UnitOfWorkBehavior → sealed handler gọi Domain policy/entity và repository. Domain events tạo Notification/Outbox trước Save/Commit; ACK sau commit, worker FCM sau commit. CASH/manual dùng cùng bất biến ledger nguồn duy nhất. [API và vận hành UC18](Detail%20Design/UC18-BE.md).
+- Bổ sung BE ngày 05/11: cấu hình ứng dụng OAuth toàn hệ thống theo `Integrations.SepayManage`, kết nối CLB theo BankManage. Hai entity `SepayApplicationSettings`/`ClubSepayConnection` quản lý vòng đời và audit; Infrastructure gọi provider cố định, mã hóa secret bằng Data Protection với key ring bền vững. Callback chỉ staging token đã mã hóa trong Redis; ticket một lần phải được xác nhận bằng JWT đúng người/CLB. Các request thiết lập OAuth không nằm trong UoW tài chính dài: repo lưu các bước AUTHORIZED/PROVISIONING/CONNECTED/DISCONNECTING/DISCONNECTED, retry xác minh lại provider. Webhook kiểm lại kết nối sau chờ khóa trong UoW và khóa SHARE để tránh ghi sau khi ngắt đã hoàn tất. Namespace bank transaction theo company/provider ID; dữ liệu legacy giữ guard. FE để sau, không có code FE mới trong đợt này.
+- HMAC verifier/Redis/archive ở Infrastructure; SQL/EF/lock ở Persistence; nghiệp vụ exact-match ở Domain. Bằng chứng sai bank binding được cô lập ngoài UoW, không tạo inbox hoặc lộ sang danh sách CLB theo URL. Group guard tài chính dùng FOR NO KEY UPDATE, tương thích FK KEY SHARE khi chèn ledger; không đảo thứ tự session/fee.
+- Ba cờ Reconciliation mặc định false; Development local đã dùng profile CASH WritesEnabled=true/Enabled=false/DispatchEnabled=false. Đã áp hai migration còn thiếu tới UC18 trên DB chung local BadmintonClub:5432 sau backup/restore rehearsal; API54796 smoke đạt, dữ liệu cũ 53 bảng giữ nguyên. Chưa áp DB server/deploy hoặc nghiệm thu SePay Test Mode/company/gateway/FCM thật; không lấy webhook mock/collection local làm bằng chứng Live.
 
 ---
 
@@ -116,7 +119,7 @@ graph TD
     subgraph Infrastructure ["Infrastructure Layer (External Services)"]
         RedisServ["RedisDistributedLockService, RedisCacheService"]
         FCMServ["FirebaseNotificationService"]
-        SePayServ["SePayWebhookService"]
+        SePayServ["SepayWebhookVerifier / RedisReconciliationLock"]
     end
 
     Presentation --> Application

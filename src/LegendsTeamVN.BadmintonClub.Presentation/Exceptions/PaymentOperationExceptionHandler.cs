@@ -9,7 +9,7 @@ internal sealed class PaymentOperationExceptionHandler : IExceptionHandler
 {
     public async ValueTask<bool> TryHandleAsync(HttpContext context, Exception exception, CancellationToken cancellationToken)
     {
-        if (exception is not PaymentOperationConflictException) return false;
+        if (exception is not (PaymentOperationConflictException or ReconciliationWriteConflictException)) return false;
         context.Response.StatusCode = StatusCodes.Status409Conflict;
         var problem = new ProblemDetails { Status = 409, Title = "Payment conflict", Detail = exception.Message };
         problem.Extensions["code"] = "Payments.Busy";
