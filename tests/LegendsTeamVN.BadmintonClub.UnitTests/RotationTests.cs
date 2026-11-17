@@ -197,6 +197,20 @@ public sealed class RotationTests
     }
 
     [Fact]
+    public void SessionInPlayingStatusAllowsRotationEvenWhenStartTimeIsInFuture()
+    {
+        var s = new BadmintonSession(Guid.NewGuid(), "Early Rotation", Now.AddHours(20), Now.AddHours(22), "Court",
+            courtCount: 1, maxPlayers: 12, status: SessionStatus.PLAYING);
+        s.CompleteAttendance(Actor, Now);
+        for (var i = 0; i < 4; i++) Add(s, i);
+
+        Assert.True(s.CanStartRotation(Now));
+        Assert.True(s.InitializeRotation(Actor, Now).IsSuccess);
+        Assert.Single(s.Matches);
+        Assert.Equal(MatchStatus.WAITING, s.Matches.Single().Status);
+    }
+
+    [Fact]
     public void CannotStartAfterEndButCanFinishAnExistingMatch()
     {
         var s = Session(); s.InitializeRotation(Actor, Now); var first = s.Matches.Single();

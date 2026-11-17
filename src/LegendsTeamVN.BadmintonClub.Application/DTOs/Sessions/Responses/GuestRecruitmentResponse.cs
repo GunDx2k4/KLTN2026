@@ -16,5 +16,7 @@ public sealed record GuestRecruitmentResponse(
     decimal ScanRadiusKm,
     RecruitmentStatus Status,
     DateTime BroadcastAt,
-    double? DistanceKm = null
+    double? DistanceKm = null,
+    string? MyBookingStatus = null,
+    decimal? ClubQualityScore = null
 );

@@ -35,16 +35,41 @@ public sealed class CancelRecruitmentBookingCommandHandler(
         var now = clock.GetUtcNow().UtcDateTime;
         if (session.Status != SessionStatus.OPEN || now >= session.StartTime)
             return Result.Failure(Error.Conflict("Attendance.ManagedByHost", "Buổi chơi đã bắt đầu. Hãy liên hệ Host hoặc Thủ quỹ để thay đổi điểm danh."));
-        var booking = session.Bookings.FirstOrDefault(b => b.RecruitmentId == request.RecruitmentId && b.UserId == userId.Value && b.Status == BookingStatus.CONFIRMED);
+        var booking = session.Bookings.FirstOrDefault(b => b.RecruitmentId == request.RecruitmentId && b.UserId == userId.Value &&
+            (b.Status is BookingStatus.WAITING or BookingStatus.CONFIRMED));
 
         if (booking is null)
         {
             return Result.Failure(Error.NotFound("Booking.NotFound", "Bạn không có đăng ký giữ chỗ qua bài đăng giao lưu này."));
         }
 
-        booking.CancelWithEvidence(session, userId.Value,
-            Domain.Services.ReputationCancellationSource.Recruitment, now);
+        var cancelledQueueOrder = booking.QueueOrder;
+
+        if (booking.Status == BookingStatus.CONFIRMED)
+        {
+            booking.CancelWithEvidence(session, userId.Value,
+                Domain.Services.ReputationCancellationSource.Recruitment, now);
+        }
+        else
+        {
+            booking.UpdateStatus(BookingStatus.ABSENT);
+            booking.UpdateQueueOrder(0);
+        }
+
         bookingRepository.Update(booking);
+
+        if (cancelledQueueOrder > 0)
+        {
+            var remainingWaiting = session.Bookings
+                .Where(b => b.Status == BookingStatus.WAITING && b.QueueOrder > cancelledQueueOrder && b.Id != booking.Id)
+                .ToList();
+
+            foreach (var remaining in remainingWaiting)
+            {
+                remaining.UpdateQueueOrder(Math.Max(1, remaining.QueueOrder - 1));
+                bookingRepository.Update(remaining);
+            }
+        }
 
         RecruitmentRules.Synchronize(session, now);
 

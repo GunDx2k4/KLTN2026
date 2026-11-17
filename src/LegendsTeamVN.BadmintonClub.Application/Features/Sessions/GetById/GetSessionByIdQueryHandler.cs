@@ -73,7 +73,7 @@ public sealed class GetSessionByIdQueryHandler(
             .ToList();
 
         var activeRecruitment = session.Recruitments
-            .Where(r => !r.IsDeleted && r.Status == RecruitmentStatus.ACTIVE && session.Status == SessionStatus.OPEN && session.EndTime > DateTime.UtcNow)
+            .Where(r => !r.IsDeleted && (r.Status == RecruitmentStatus.ACTIVE || r.Status == RecruitmentStatus.FILLED) && session.Status == SessionStatus.OPEN && session.EndTime > DateTime.UtcNow)
             .OrderByDescending(r => r.BroadcastAt)
             .Select(r => new GuestRecruitmentResponse(
                 r.Id,

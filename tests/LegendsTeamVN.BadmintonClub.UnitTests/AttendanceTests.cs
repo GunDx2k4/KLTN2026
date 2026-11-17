@@ -185,6 +185,17 @@ public sealed class AttendanceTests
         Assert.Equal(expected, f.Session.CanEditAttendance(Now.AddMinutes(minutes)));
     }
 
+    [Fact]
+    public async Task SessionInPlayingStatusAllowsEarlyAttendanceBeforeScheduledTime()
+    {
+        var f = new Fixture(SessionStatus.PLAYING);
+        var booking = f.Add();
+        f.Session.UpdateSession("Early match", Now.AddHours(20), Now.AddHours(22), "Court", 1, 2, Now.AddHours(18));
+        var result = await f.Service.UpdateAsync(f.Session.Id, booking.UserId, BookingStatus.CHECKED_IN, default);
+        Assert.True(result.IsSuccess);
+        Assert.Equal(BookingStatus.CHECKED_IN, booking.Status);
+    }
+
     [Theory]
     [InlineData(BookingStatus.CHECKED_IN)]
     [InlineData(BookingStatus.NO_SHOW)]

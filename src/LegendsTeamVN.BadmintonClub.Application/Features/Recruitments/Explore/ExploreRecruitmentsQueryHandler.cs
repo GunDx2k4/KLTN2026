@@ -10,7 +10,6 @@ namespace LegendsTeamVN.BadmintonClub.Application.Features.Recruitments.Explore;
 
 public sealed class ExploreRecruitmentsQueryHandler(
     IRecruitmentRepository recruitmentRepository,
-    IClubMemberRepository clubMemberRepository,
     ICurrentUserService currentUserService) 
     : IQueryHandler<ExploreRecruitmentsQuery, List<GuestRecruitmentResponse>>
 {
@@ -19,32 +18,18 @@ public sealed class ExploreRecruitmentsQueryHandler(
         var now = DateTime.UtcNow;
         var currentUserId = currentUserService.UserId;
 
-        HashSet<Guid> organizerClubIds = [];
-        if (currentUserId.HasValue)
-        {
-            var memberships = await clubMemberRepository.FindAll(
-                    m => m.UserId == currentUserId.Value && m.Status == ClubMemberStatus.ACTIVE,
-                    m => m.RoleEntity)
-                .ToListAsync(cancellationToken);
-
-            foreach (var m in memberships)
-            {
-                if (m.RoleEntity != null && (m.RoleEntity.IsHostRole ||
-                    m.RoleEntity.GetRoleCode() == 3 ||
-                    m.RoleEntity.GetRoleCode() == 5 ||
-                    string.Equals(m.RoleEntity.RoleName, "Host", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(m.RoleEntity.RoleName, "Phó nhóm", StringComparison.OrdinalIgnoreCase)))
-                {
-                    organizerClubIds.Add(m.GroupId);
-                }
-            }
-        }
-
-        var recruitments = await recruitmentRepository.FindAll(r => !r.IsDeleted && r.Status == RecruitmentStatus.ACTIVE)
+        var recruitments = await recruitmentRepository.FindAll(r => !r.IsDeleted &&
+                (r.Status == RecruitmentStatus.ACTIVE || r.Status == RecruitmentStatus.FILLED))
             .Include(r => r.Session)
                 .ThenInclude(s => s.Group)
             .Include(r => r.Session.Bookings)
-            .Where(r => !r.Session.IsDeleted && r.Session.Status == SessionStatus.OPEN && r.Session.EndTime > now)
+            .Where(r => !r.Session.IsDeleted &&
+                r.Session.EndTime > now &&
+                (r.Session.Status == SessionStatus.OPEN ||
+                 (currentUserId.HasValue && r.Session.Bookings.Any(b =>
+                     !b.IsDeleted &&
+                     b.UserId == currentUserId.Value &&
+                     b.Status != BookingStatus.ABSENT))))
             .OrderBy(r => r.Session.StartTime)
             .ToListAsync(cancellationToken);
 
@@ -52,27 +37,27 @@ public sealed class ExploreRecruitmentsQueryHandler(
 
         foreach (var r in recruitments)
         {
+            string? myBookingStatus = null;
             if (currentUserId.HasValue)
             {
-                var isOrganizer = organizerClubIds.Contains(r.Session.GroupId);
-                if (!isOrganizer)
-                {
-                    var hasActiveBooking = r.Session.Bookings.Any(b =>
-                        !b.IsDeleted &&
-                        b.UserId == currentUserId.Value &&
-                        b.Status != BookingStatus.ABSENT);
+                var userBooking = r.Session.Bookings.FirstOrDefault(b =>
+                    !b.IsDeleted &&
+                    b.UserId == currentUserId.Value &&
+                    b.Status != BookingStatus.ABSENT);
 
-                    if (hasActiveBooking)
-                    {
-                        continue;
-                    }
+                if (userBooking != null)
+                {
+                    myBookingStatus = userBooking.Status.ToString();
                 }
             }
 
             var slotsRemaining = RecruitmentRules.RemainingSlots(r.Session, r);
-            if (slotsRemaining <= 0)
+            if (myBookingStatus == null)
             {
-                continue;
+                if (r.Session.Status != SessionStatus.OPEN || r.Status != RecruitmentStatus.ACTIVE || slotsRemaining <= 0)
+                {
+                    continue;
+                }
             }
 
             if (request.MinSkillLevel.HasValue && r.MinSkillLevel > request.MinSkillLevel.Value)
@@ -91,11 +76,6 @@ public sealed class ExploreRecruitmentsQueryHandler(
                     (double)sessionLat.Value,
                     (double)sessionLng.Value
                 );
-
-                if (distanceKm > request.RadiusKm)
-                {
-                    continue;
-                }
             }
 
             result.Add(new GuestRecruitmentResponse(
@@ -112,13 +92,28 @@ public sealed class ExploreRecruitmentsQueryHandler(
                 r.ScanRadiusKm,
                 r.Status,
                 r.BroadcastAt,
-                distanceKm.HasValue ? Math.Round(distanceKm.Value, 1) : null
+                distanceKm.HasValue ? Math.Round(distanceKm.Value, 1) : null,
+                myBookingStatus,
+                r.Session.Group?.GroupQualityScore
             ));
         }
 
         if (request.Latitude.HasValue && request.Longitude.HasValue)
         {
-            result = result.OrderBy(x => x.DistanceKm ?? double.MaxValue).ToList();
+            result = result
+                .OrderBy(x => x.DistanceKm.HasValue ? 0 : 1)
+                .ThenBy(x => x.DistanceKm.HasValue ? Math.Round(x.DistanceKm.Value, 0) : double.MaxValue)
+                .ThenByDescending(x => x.ClubQualityScore ?? 0)
+                .ThenBy(x => x.DistanceKm ?? double.MaxValue)
+                .ThenBy(x => x.StartTime)
+                .ToList();
+        }
+        else
+        {
+            result = result
+                .OrderByDescending(x => x.ClubQualityScore ?? 0)
+                .ThenBy(x => x.StartTime)
+                .ToList();
         }
 
         return Result.Success(result);
