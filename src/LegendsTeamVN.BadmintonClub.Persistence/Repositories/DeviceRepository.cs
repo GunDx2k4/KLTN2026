@@ -10,6 +10,10 @@ public class DeviceRepository(BadmintonDbContext dbContext) : IDeviceRepository
     public async Task<IReadOnlyList<string>> GetActiveTokensAsync(Guid userId, CancellationToken cancellationToken = default) =>
         await dbContext.UserDevices.AsNoTracking().Where(d => d.UserId == userId && d.IsActive && d.DeviceToken != "")
             .Select(d => d.DeviceToken).Distinct().ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<string>> GetActiveTokensByUserIdsAsync(IEnumerable<Guid> userIds, CancellationToken cancellationToken = default) =>
+        await dbContext.UserDevices.AsNoTracking().Where(d => userIds.Contains(d.UserId) && d.IsActive && d.DeviceToken != "")
+            .Select(d => d.DeviceToken).Distinct().ToListAsync(cancellationToken);
     public async Task<UserDevice?> FindByTokenAsync(string deviceToken, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(deviceToken))
