@@ -40,6 +40,7 @@ using LegendsTeamVN.BadmintonClub.Application.Features.Recruitments.Explore;
 using LegendsTeamVN.BadmintonClub.Application.Features.Recruitments.GetBySession;
 using LegendsTeamVN.BadmintonClub.Application.Features.Recruitments.Join;
 using LegendsTeamVN.BadmintonClub.Application.Features.Sessions.Create;
+using LegendsTeamVN.BadmintonClub.Application.Features.Sessions.PassCourt;
 using LegendsTeamVN.BadmintonClub.Application.Features.Sessions.Delete;
 using LegendsTeamVN.BadmintonClub.Application.Features.Sessions.GetById;
 using LegendsTeamVN.BadmintonClub.Application.Features.Sessions.GetListByClub;
@@ -180,6 +181,16 @@ public class SessionEndpoint : EndpointGroupBase
         fr12Group.MapDelete("recruitments/{recruitmentId:guid}/cancel", CancelRecruitmentBooking)
             .WithName("CancelRecruitmentBooking")
             .WithSummary("Khách vãng lai hủy suất giao lưu đã đăng ký (FR12)")
+            .RequireAuthorization();
+
+        fr12Group.MapPost("pass-court", CreateCourtPass)
+            .WithName("CreateCourtPass")
+            .WithSummary("Đăng tin pass sân / nhượng suất độc lập không cần tạo buổi chơi trước")
+            .RequireAuthorization();
+
+        fr12Group.MapPost("recruitments/pass-court", CreateCourtPass)
+            .WithName("CreateCourtPassAlias")
+            .WithSummary("Đăng tin pass sân / nhượng suất độc lập (alias)")
             .RequireAuthorization();
 
         // ======================================
@@ -509,6 +520,15 @@ public class SessionEndpoint : EndpointGroupBase
         var command = new CancelRecruitmentBookingCommand(recruitmentId);
         var result = await sender.Send(command);
         return result.Match(Results.NoContent);
+    }
+
+    private static async Task<IResult> CreateCourtPass(
+        [FromBody] CreateCourtPassRequest request,
+        ISender sender)
+    {
+        var command = new CreateCourtPassCommand(request);
+        var result = await sender.Send(command);
+        return result.Match(id => Results.Created($"/api/v1/sessions/{id}", new { SessionId = id }));
     }
 
     // --- FR14 Handlers ---
