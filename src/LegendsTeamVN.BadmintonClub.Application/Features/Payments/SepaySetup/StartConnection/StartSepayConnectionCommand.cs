@@ -4,4 +4,5 @@ using MediatR;
 
 namespace LegendsTeamVN.BadmintonClub.Application.Features.Payments.SepaySetup.StartConnection;
 
-public sealed record StartSepayConnectionCommand(Guid GroupId) : IRequest<Result<SepayAuthorizationResponse>>;
+public sealed record StartSepayConnectionCommand(Guid GroupId, bool ReturnToMobileApp = false)
+    : IRequest<Result<SepayAuthorizationResponse>>;

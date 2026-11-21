@@ -9,7 +9,8 @@ public interface ISepaySetupService
     Task<SepayApplicationResponse> ConfigureApplicationAsync(Guid actor, ConfigureSepayApplicationRequest input, CancellationToken ct);
     Task<SepayConnectionResponse> GetConnectionAsync(Guid groupId, Guid actor, CancellationToken ct);
     Task<IReadOnlyList<SepayConnectionResponse>> ListConnectionsAsync(Guid groupId, Guid actor, CancellationToken ct);
-    Task<SepayAuthorizationResponse> StartAsync(Guid groupId, Guid actor, CancellationToken ct);
+    Task<SepayAuthorizationResponse> StartAsync(Guid groupId, Guid actor, CancellationToken ct,
+        bool returnToMobileApp = false);
     Task<SepayCallbackResponse> CallbackAsync(string state, string? code, string? error, CancellationToken ct);
     Task<SepayConnectionResponse> CompleteAsync(Guid groupId, Guid actor, string ticket, CancellationToken ct);
     Task<IReadOnlyList<SepayBankAccountResponse>> AccountsAsync(Guid groupId, Guid actor, CancellationToken ct);
