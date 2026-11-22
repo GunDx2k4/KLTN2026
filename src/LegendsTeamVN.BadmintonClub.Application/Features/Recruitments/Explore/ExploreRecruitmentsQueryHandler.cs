@@ -78,17 +78,31 @@ public sealed class ExploreRecruitmentsQueryHandler(
                 );
             }
 
+            var courtLocation = r.Session.CourtLocation ?? string.Empty;
+            var isCourtPass = (r.Session.Title?.Contains("PASS SÂN", StringComparison.OrdinalIgnoreCase) == true) ||
+                              courtLocation.Contains("PASS SÂN", StringComparison.OrdinalIgnoreCase) ||
+                              courtLocation.Contains("[PASS", StringComparison.OrdinalIgnoreCase) ||
+                              courtLocation.Contains("(LH:", StringComparison.OrdinalIgnoreCase) ||
+                              courtLocation.Contains("LH:", StringComparison.OrdinalIgnoreCase);
+
+            if (isCourtPass && !courtLocation.StartsWith("[PASS SÂN]", StringComparison.OrdinalIgnoreCase))
+            {
+                courtLocation = $"[PASS SÂN] {courtLocation}".Trim();
+            }
+
+            var passCost = isCourtPass && r.Session.CourtRentalCost > 0 ? r.Session.CourtRentalCost : r.SharedCost;
+
             result.Add(new GuestRecruitmentResponse(
                 r.Id,
                 r.SessionId,
                 r.Session.Group?.GroupName ?? string.Empty,
-                r.Session.CourtLocation,
+                courtLocation,
                 r.Session.StartTime,
                 r.Session.EndTime,
                 r.SlotsNeeded,
                 slotsRemaining,
                 r.MinSkillLevel,
-                r.SharedCost,
+                passCost,
                 r.ScanRadiusKm,
                 r.Status,
                 r.BroadcastAt,
