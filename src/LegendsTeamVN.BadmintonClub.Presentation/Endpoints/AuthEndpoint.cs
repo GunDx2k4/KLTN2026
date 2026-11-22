@@ -118,19 +118,32 @@ public class AuthEndpoint : EndpointGroupBase
     
     private static async Task<IResult> Refresh(HttpContext context, ISender sender)
     {
-        var refreshToken = context.Request.Cookies["refreshToken"];
+        var tokenFromCookie = context.Request.Cookies["refreshToken"];
+        var tokenFromQuery = context.Request.Query["refreshToken"].FirstOrDefault();
+        var refreshToken = !string.IsNullOrEmpty(tokenFromCookie) ? tokenFromCookie : tokenFromQuery;
+
         if (string.IsNullOrEmpty(refreshToken))
         {
             return Results.Unauthorized();
         }
 
         var authorizationHeader = context.Request.Headers.Authorization.FirstOrDefault();
-        if (string.IsNullOrEmpty(authorizationHeader) || !authorizationHeader.StartsWith("Bearer "))
+        string? accessToken = null;
+
+        if (!string.IsNullOrEmpty(authorizationHeader) && authorizationHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        {
+            accessToken = authorizationHeader.Substring("Bearer ".Length).Trim();
+        }
+        else if (context.Request.Query.TryGetValue("accessToken", out var queryAccess) && !string.IsNullOrEmpty(queryAccess))
+        {
+            accessToken = queryAccess.ToString().Trim();
+        }
+
+        if (string.IsNullOrEmpty(accessToken))
         {
             return Results.Unauthorized();
         }
 
-        var accessToken = authorizationHeader.Substring("Bearer ".Length).Trim();
         var command = new RefreshTokenCommand(accessToken, refreshToken);
         var result = await sender.Send(command);
 
@@ -147,7 +160,12 @@ public class AuthEndpoint : EndpointGroupBase
                         Expires = response.RefreshTokenExpiryTime
                     });
                 }
-                return Results.Ok(new { AccessToken = response.AccessToken });
+                return Results.Ok(new
+                {
+                    AccessToken = response.AccessToken,
+                    RefreshToken = response.RefreshToken,
+                    RefreshTokenExpiryTime = response.RefreshTokenExpiryTime
+                });
             }
         );
     }

@@ -72,6 +72,18 @@ public sealed class GetSessionByIdQueryHandler(
             ))
             .ToList();
 
+        var courtLocation = session.CourtLocation ?? string.Empty;
+        var isCourtPass = session.Title.Contains("PASS SÂN", StringComparison.OrdinalIgnoreCase) ||
+                          courtLocation.Contains("PASS SÂN", StringComparison.OrdinalIgnoreCase) ||
+                          courtLocation.Contains("[PASS", StringComparison.OrdinalIgnoreCase) ||
+                          courtLocation.Contains("(LH:", StringComparison.OrdinalIgnoreCase) ||
+                          courtLocation.Contains("LH:", StringComparison.OrdinalIgnoreCase);
+
+        if (isCourtPass && !courtLocation.StartsWith("[PASS SÂN]", StringComparison.OrdinalIgnoreCase))
+        {
+            courtLocation = $"[PASS SÂN] {courtLocation}".Trim();
+        }
+
         var activeRecruitment = session.Recruitments
             .Where(r => !r.IsDeleted && (r.Status == RecruitmentStatus.ACTIVE || r.Status == RecruitmentStatus.FILLED) && session.Status == SessionStatus.OPEN && session.EndTime > DateTime.UtcNow)
             .OrderByDescending(r => r.BroadcastAt)
@@ -79,13 +91,13 @@ public sealed class GetSessionByIdQueryHandler(
                 r.Id,
                 r.SessionId,
                 session.Group?.GroupName ?? string.Empty,
-                session.CourtLocation,
+                courtLocation,
                 session.StartTime,
                 session.EndTime,
                 r.SlotsNeeded,
                 RecruitmentRules.RemainingSlots(session, r),
                 r.MinSkillLevel,
-                r.SharedCost,
+                isCourtPass && session.CourtRentalCost > 0 ? session.CourtRentalCost : r.SharedCost,
                 r.ScanRadiusKm,
                 r.Status,
                 r.BroadcastAt
@@ -99,7 +111,7 @@ public sealed class GetSessionByIdQueryHandler(
             session.Title,
             session.StartTime,
             session.EndTime,
-            session.CourtLocation,
+            courtLocation,
             session.CourtCount,
             session.TargetPlayerPerCourt,
             session.MaxPlayers,
