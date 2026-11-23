@@ -26,8 +26,9 @@ public sealed class PreviewSettlementQueryHandler(ISessionRepository sessions, I
         var now = clock.GetUtcNow().UtcDateTime;
         var costs = SessionSettlementMapper.Costs(request.Input);
         var adjustments = SessionSettlementMapper.Adjustments(request.Input);
+        var isRepublish = session.PublishedPreviewId.HasValue;
         var allocation = SettlementAllocationEngine.Calculate(session, source.Rule, source.Users, source.Memberships,
-            costs, adjustments, now, request.Input.ConfirmRemainingNoShows);
+            costs, adjustments, now, request.Input.ConfirmRemainingNoShows, allowRepublish: isRepublish);
         if (allocation.IsFailure) return Result.Failure<SettlementPreviewResponse>(allocation.Error);
         var token = tokens.Create(actor, session.GroupId, session.Id, costs, adjustments,
             request.Input.ConfirmRemainingNoShows, tokens.HashSource(session, source.Rule, source.Users, source.Memberships),

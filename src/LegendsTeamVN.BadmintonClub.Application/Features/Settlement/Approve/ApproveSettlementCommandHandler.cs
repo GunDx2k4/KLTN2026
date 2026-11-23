@@ -33,24 +33,34 @@ public sealed class ApproveSettlementCommandHandler(ISessionRepository sessions,
         if (validated.IsFailure) return Fail(validated.Error);
         var identity = validated.Value;
         if (session.PublishedPreviewId.HasValue)
-            return session.PublishedPreviewId == identity.PreviewId && session.PublishedRequestHash == identity.RequestHash &&
-                session.PublishedBy == actor
-                ? Result.Success(SessionSettlementMapper.Map(session))
-                : Fail(Error.Conflict("Settlement.AlreadyPublished", "Buổi chơi đã phát hành từ yêu cầu khác."));
-        if (session.Fees.Count > 0)
+        {
+            if (session.PublishedPreviewId == identity.PreviewId && session.PublishedRequestHash == identity.RequestHash &&
+                session.PublishedBy == actor)
+            {
+                return Result.Success(SessionSettlementMapper.Map(session));
+            }
+            if (session.PublishedAt.HasValue && session.PublishedAt.Value >= identity.IssuedAt)
+            {
+                return Fail(Error.Conflict("Settlement.AlreadyPublished", "Buổi chơi đã phát hành từ yêu cầu khác."));
+            }
+        }
+        else if (session.Fees.Count > 0)
+        {
             return Fail(Error.Conflict("Settlement.LegacyFees", "Buổi chơi đã có khoản thu cũ, không thể phát hành lại."));
+        }
         var now = clock.GetUtcNow().UtcDateTime;
         if (now < identity.IssuedAt || now >= identity.ExpiresAt)
             return Fail(Error.Conflict("Settlement.PreviewExpired", "Bản xem trước đã hết hạn."));
         if (source.Rule is null || tokens.HashSource(session, source.Rule, source.Users, source.Memberships) != identity.SourceHash)
             return Fail(Error.Conflict("Settlement.PreviewStale", "Dữ liệu đã thay đổi, hãy xem trước lại."));
+        var isRepublish = session.PublishedPreviewId.HasValue;
         var allocation = SettlementAllocationEngine.Calculate(session, source.Rule, source.Users, source.Memberships,
-            costs, adjustments, now, request.Input.ConfirmRemainingNoShows);
+            costs, adjustments, now, request.Input.ConfirmRemainingNoShows, allowRepublish: isRepublish);
         if (allocation.IsFailure) return Fail(allocation.Error);
         if (tokens.HashResult(allocation.Value) != identity.ResultHash)
             return Fail(Error.Conflict("Settlement.PreviewStale", "Kết quả đã thay đổi, hãy xem trước lại."));
         var published = session.PublishSettlement(source.Rule, source.Users, source.Memberships, costs, adjustments,
-            identity.PreviewId, identity.RequestHash, actor, now, request.Input.ConfirmRemainingNoShows);
+            identity.PreviewId, identity.RequestHash, actor, now, request.Input.ConfirmRemainingNoShows, allowRepublish: isRepublish);
         if (published.IsFailure) return Fail(published.Error);
         sessions.AddSettlementFees(session.Fees);
         return Result.Success(SessionSettlementMapper.Map(session));

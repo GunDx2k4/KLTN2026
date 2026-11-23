@@ -11,7 +11,7 @@ namespace LegendsTeamVN.BadmintonClub.Application.Features.Settlement;
 internal static class SessionSettlementMapper
 {
     public static SettlementCosts Costs(PreviewSettlementRequest input) =>
-        new(input.ShuttlecockUsed, input.ShuttlecockPrice, input.CourtRentalCost, input.ExtraExpense);
+        new(input.ShuttlecockUsed, input.ShuttlecockPrice, input.CourtRentalCost, input.ExtraExpense, input.MonthlyExemptCourtOnly);
 
     public static SettlementAdjustment[] Adjustments(PreviewSettlementRequest input) =>
         input.Overrides.Select(x => new SettlementAdjustment(x.UserId, x.FinalAmount, x.Reason)).ToArray();

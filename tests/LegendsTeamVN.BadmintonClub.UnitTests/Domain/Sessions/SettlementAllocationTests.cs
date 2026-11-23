@@ -467,6 +467,22 @@ public sealed class SettlementAllocationTests
             f.Session.Fees.Add(fee);
         Assert.Equal(300.03m, f.Session.CalculateCollectedAmount());
     }
+
+    [Fact]
+    public void DynamicMonthlyExemptCourtOnlyChargesShuttleToMonthlyMember()
+    {
+        var f = new Fixture { Costs = new(3, 30000, 300000, 0, MonthlyExemptCourtOnly: true) };
+        var monthly = f.Add("MONTHLY", expiry: Now);
+        var male = f.Add(); var female = f.Add(gender: (short)Gender.Female);
+        f.Rule = new(f.Session.GroupId, femaleDiscountDaily: 10000);
+        var r = f.Calculate().Value;
+        Assert.Equal(390000m, r.TotalCost);
+        Assert.Equal(100000m, r.MonthlyFundCovered);
+        Assert.Equal(30000m, r.Members.Single(m => m.UserId == monthly).FinalAmount);
+        Assert.Equal(130000m, r.Members.Single(m => m.UserId == male).FinalAmount);
+        Assert.Equal(120000m, r.Members.Single(m => m.UserId == female).FinalAmount);
+        Assert.Equal(280000m, r.TotalReceivable);
+    }
 }
 
 internal static class SettlementTestData
@@ -479,4 +495,5 @@ internal static class SettlementTestData
             Guid.NewGuid(), new string('a', 64), actor, now, true);
         Assert.True(result.IsSuccess, result.Error.Message);
     }
+
 }

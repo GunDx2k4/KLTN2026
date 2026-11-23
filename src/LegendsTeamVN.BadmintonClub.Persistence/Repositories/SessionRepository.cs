@@ -280,7 +280,13 @@ public class SessionRepository(BadmintonDbContext dbContext)
     public void AddSettlementFees(IEnumerable<SessionFee> fees)
     {
         foreach (var fee in fees)
-            DbContext.Entry(fee).State = EntityState.Added;
+        {
+            var entry = DbContext.Entry(fee);
+            if (entry.State == EntityState.Detached)
+            {
+                entry.State = EntityState.Added;
+            }
+        }
     }
 
     public Task<bool> CanManageFinanceAsync(Guid groupId, Guid userId, CancellationToken cancellationToken = default) =>

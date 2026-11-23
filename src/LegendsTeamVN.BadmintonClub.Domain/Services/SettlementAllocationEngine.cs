@@ -19,12 +19,13 @@ public static class SettlementAllocationEngine
         SettlementCosts costs,
         IReadOnlyCollection<SettlementAdjustment> adjustments,
         DateTime now,
-        bool confirmRemainingNoShows = false)
+        bool confirmRemainingNoShows = false,
+        bool allowRepublish = false)
     {
         if (session is null || rule is null || users is null || memberships is null || costs is null || adjustments is null ||
             users.Any(u => u is null) || memberships.Any(m => m is null) || adjustments.Any(a => a is null))
             return Fail("Settlement.InvalidRequest", "Dữ liệu quyết toán không được để trống.");
-        var allowed = session.ValidateSettlement(now, confirmRemainingNoShows);
+        var allowed = session.ValidateSettlement(now, confirmRemainingNoShows, allowRepublish);
         if (allowed.IsFailure) return Result.Failure<SettlementAllocation>(allowed.Error);
         if (rule.GroupId != session.GroupId || !Enum.IsDefined(rule.FeeMode) || rule.RoundRule <= 0 ||
             !IsValidAmount(rule.MonthlyFee) || !IsValidAmount(rule.DailyMemberFee) || !IsValidAmount(rule.GuestFee) ||
@@ -81,9 +82,13 @@ public static class SettlementAllocationEngine
                     Message = $"{priceType.Error.Message} Người chơi: {userId}."
                 });
                 var actualShare = courtShares[index] + shuttleShares[index] + extraShares[index];
-                var monthlyCovered = priceType.Value == PriceType.MONTHLY_MEMBER ? actualShare : 0m;
-                var baseAmount = priceType.Value == PriceType.MONTHLY_MEMBER ? 0m : rule.FeeMode == FeeMode.DYNAMIC
-                    ? actualShare : priceType.Value == PriceType.GUEST ? rule.GuestFee : rule.DailyMemberFee;
+                var monthlyCovered = priceType.Value == PriceType.MONTHLY_MEMBER
+                    ? (costs.MonthlyExemptCourtOnly ? courtShares[index] : actualShare)
+                    : 0m;
+                var baseAmount = priceType.Value == PriceType.MONTHLY_MEMBER
+                    ? (costs.MonthlyExemptCourtOnly ? (shuttleShares[index] + extraShares[index]) : 0m)
+                    : rule.FeeMode == FeeMode.DYNAMIC
+                        ? actualShare : priceType.Value == PriceType.GUEST ? rule.GuestFee : rule.DailyMemberFee;
                 var configuredDiscount = user.Gender != (short)Gender.Female ? 0m : priceType.Value switch
                 {
                     PriceType.DAILY_MEMBER => rule.FemaleDiscountDaily,
@@ -149,7 +154,7 @@ public static class SettlementAllocationEngine
     private static Result<SettlementAllocation> Fail(string code, string message) => Result.Failure<SettlementAllocation>(Error.Validation(code, message));
 }
 
-public sealed record SettlementCosts(int ShuttlecockUsed, decimal ShuttlecockPrice, decimal CourtRentalCost, decimal ExtraExpense);
+public sealed record SettlementCosts(int ShuttlecockUsed, decimal ShuttlecockPrice, decimal CourtRentalCost, decimal ExtraExpense, bool MonthlyExemptCourtOnly = false);
 public sealed record SettlementAdjustment(Guid UserId, decimal FinalAmount, string Reason);
 public sealed record SettlementRuleSnapshot(Guid Id, FeeMode FeeMode, decimal DailyMemberFee, decimal GuestFee,
     decimal FemaleDiscountDaily, decimal FemaleDiscountGuest, int RoundRule, DateTime AppliedAt);
