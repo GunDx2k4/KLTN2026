@@ -21,7 +21,8 @@ public sealed class SepaySetupService(ISepaySetupRepository repository, IPayment
     private readonly IDataProtector secrets = protection.CreateProtector("SePay.Secrets.v1");
     private static readonly TimeSpan StateLifetime = TimeSpan.FromMinutes(10);
     private const string Scopes = "bank-account:read webhook:read webhook:write webhook:delete company";
-    private sealed record AuthorizationState(Guid GroupId, Guid Actor, Guid BankAccountId, Guid Revision);
+    private sealed record AuthorizationState(Guid GroupId, Guid Actor, Guid BankAccountId, Guid Revision,
+        bool ReturnToMobileApp = false);
     private sealed record PendingAuthorization(AuthorizationState Authorization, long CompanyId, SepayTokens Tokens);
 
     public async Task<SepayApplicationResponse> GetApplicationAsync(Guid actor, CancellationToken ct)
@@ -58,7 +59,8 @@ public sealed class SepaySetupService(ISepaySetupRepository repository, IPayment
             await repository.GetApplicationAsync(ct));
     }
 
-    public Task<SepayAuthorizationResponse> StartAsync(Guid groupId, Guid actor, CancellationToken ct) =>
+    public Task<SepayAuthorizationResponse> StartAsync(Guid groupId, Guid actor, CancellationToken ct,
+        bool returnToMobileApp = false) =>
         Locked("club:" + groupId, async token =>
         {
             var bank = await Bank(groupId, actor, token);
@@ -66,7 +68,8 @@ public sealed class SepaySetupService(ISepaySetupRepository repository, IPayment
             var existing = await repository.GetConnectionAsync(bank.Id, token);
             if (existing?.Status is "CONNECTED" or "PROVISIONING" or "DISCONNECTING") throw Failure("AlreadyConnected", "Hãy hoàn tất ngắt kết nối hiện tại trước khi cấp quyền lại.");
             var state = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
-            var value = JsonSerializer.Serialize(new AuthorizationState(groupId, actor, bank.Id, app.Revision));
+            var value = JsonSerializer.Serialize(new AuthorizationState(groupId, actor, bank.Id, app.Revision,
+                returnToMobileApp));
             await redis.GetDatabase().StringSetAsync(StateKey(state), value, StateLifetime, When.NotExists).WaitAsync(token);
             var url = "https://my.sepay.vn/oauth/authorize?response_type=code&client_id=" + Uri.EscapeDataString(app.ClientId) +
                 "&redirect_uri=" + Uri.EscapeDataString(app.CallbackUrl) + "&scope=" + Uri.EscapeDataString(Scopes) + "&state=" + state;
@@ -93,7 +96,11 @@ public sealed class SepaySetupService(ISepaySetupRepository repository, IPayment
             var app = await ReadyApplication(token);
             var bank = await Bank(auth.GroupId, auth.Actor, token);
             if (app.Revision != auth.Revision || bank.Id != auth.BankAccountId) throw Failure("ConfigurationChanged", "Cấu hình đã thay đổi. Hãy kết nối lại.");
-            if (!string.IsNullOrEmpty(error) || string.IsNullOrWhiteSpace(code)) return new SepayCallbackResponse(app.ClubReturnUrl(auth.GroupId) + "?sepay=denied");
+            var returnUrl = auth.ReturnToMobileApp
+                ? $"legendsbadminton:///club/{auth.GroupId}/sepay"
+                : app.ClubReturnUrl(auth.GroupId);
+            if (!string.IsNullOrEmpty(error) || string.IsNullOrWhiteSpace(code))
+                return new SepayCallbackResponse(returnUrl + "?sepay=denied");
             if (code.Length > 4096) throw Failure("InvalidCode", "Mã cấp quyền không hợp lệ.", 400);
             var existing = await repository.GetConnectionAsync(bank.Id, token);
             if (existing?.Status is "CONNECTED" or "PROVISIONING" or "DISCONNECTING") throw Failure("AlreadyConnected", "CLB đã có kết nối. Vui lòng tải lại.");
@@ -103,7 +110,7 @@ public sealed class SepaySetupService(ISepaySetupRepository repository, IPayment
             var ticket = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
             var pending = Protect(JsonSerializer.Serialize(new PendingAuthorization(auth, company, tokens)));
             await redis.GetDatabase().StringSetAsync(TicketKey(ticket), pending, StateLifetime, When.NotExists).WaitAsync(token);
-            return new SepayCallbackResponse(app.ClubReturnUrl(auth.GroupId) + "?sepay=authorized&ticket=" + ticket);
+            return new SepayCallbackResponse(returnUrl + "?sepay=authorized&ticket=" + ticket);
         }, ct);
     }
 

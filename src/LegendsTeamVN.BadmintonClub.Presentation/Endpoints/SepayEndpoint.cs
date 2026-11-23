@@ -84,10 +84,11 @@ public sealed class ClubSepayEndpoint : EndpointGroupBase
         context.Response.Headers.CacheControl = "no-store";
         return (await sender.Send(new GetClubSepayConnectionQuery(groupId), ct)).ToSepayHttpResult();
     }
-    private static async Task<IResult> Start(Guid groupId, HttpContext context, ISender sender, CancellationToken ct)
+    private static async Task<IResult> Start(Guid groupId, HttpContext context, ISender sender,
+        CancellationToken ct, bool returnToMobileApp = false)
     {
         context.Response.Headers.CacheControl = "no-store";
-        return (await sender.Send(new StartSepayConnectionCommand(groupId), ct)).ToSepayHttpResult();
+        return (await sender.Send(new StartSepayConnectionCommand(groupId, returnToMobileApp), ct)).ToSepayHttpResult();
     }
     private static async Task<IResult> Accounts(Guid groupId, HttpContext context, ISender sender, CancellationToken ct)
     {
