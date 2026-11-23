@@ -11,5 +11,6 @@ public sealed class StartSepayConnectionCommandHandler(ISepaySetupService servic
     : IRequestHandler<StartSepayConnectionCommand, Result<SepayAuthorizationResponse>>
 {
     public Task<Result<SepayAuthorizationResponse>> Handle(StartSepayConnectionCommand request, CancellationToken ct) =>
-        SepaySetupResult.RunAsync(currentUser, (actor, ct) => service.StartAsync(request.GroupId, actor, ct), ct);
+        SepaySetupResult.RunAsync(currentUser,
+            (actor, ct) => service.StartAsync(request.GroupId, actor, ct, request.ReturnToMobileApp), ct);
 }
