@@ -43,5 +43,7 @@ public sealed record ClubDetailResponse(
     int MemberCount,
     ClubHostResponse? Host,
     List<ClubScheduleResponse> Schedules,
-    ClubUserMembershipStatus CurrentUserStatus
+    ClubUserMembershipStatus CurrentUserStatus,
+    int CourtCount = 1,
+    decimal CourtRentalCost = 0
 );

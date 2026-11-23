@@ -98,7 +98,9 @@ public sealed class GetClubByIdQueryHandler(
             activeMemberCount,
             hostResponse,
             schedulesResponse,
-            new ClubUserMembershipStatus(isMember, roleName, hasPendingJoinRequest, pendingRequestId)
+            new ClubUserMembershipStatus(isMember, roleName, hasPendingJoinRequest, pendingRequestId),
+            club.CourtCount > 0 ? club.CourtCount : 1,
+            club.CourtRentalCost
         );
 
         return Result.Success(response);
