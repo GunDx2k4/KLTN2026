@@ -42,14 +42,15 @@ public class ClubEndpoint : EndpointGroupBase
     protected override void Map(RouteGroupBuilder group)
     {
         var paymentBank = group.MapGroup("{clubId:guid}/payment-bank-account").WithTags("UC17 - Ngân hàng nhận tiền")
-            .RequireAuthorization("SessionOperations").RequireGroupPermission(Domain.Constants.GroupPermissions.Finance.BankManage);
+            .RequireAuthorization("SessionOperations");
         paymentBank.AddEndpointFilter((context, next) =>
         {
             context.HttpContext.Response.Headers.CacheControl = "no-store";
             return next(context);
         });
         paymentBank.MapGet("", GetPaymentBankAccount).WithName("GetPaymentBankAccount");
-        paymentBank.MapPut("", ConfigurePaymentBankAccount).WithName("ConfigurePaymentBankAccount");
+        paymentBank.MapPut("", ConfigurePaymentBankAccount).WithName("ConfigurePaymentBankAccount")
+            .RequireGroupPermission(Domain.Constants.GroupPermissions.Finance.BankManage);
         var generalGroup = group.MapGroup("").WithTags("Clubs");
         var fr03Group = group.MapGroup("").WithTags("FR03 - Quản lý CLB & Thành viên");
         var fr06Group = group.MapGroup("").WithTags("FR06 - Khám phá nhóm theo vị trí");

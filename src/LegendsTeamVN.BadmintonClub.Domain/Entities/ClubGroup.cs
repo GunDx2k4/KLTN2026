@@ -19,6 +19,8 @@ public partial class ClubGroup : AggregateRoot<Guid>
     public bool IsRecruiting { get; private set; }
     public bool IsActive { get; private set; }
     public DateTime CreatedAt { get; private set; }
+    public int CourtCount { get; private set; } = 1;
+    public decimal CourtRentalCost { get; private set; } = 0;
 
     public virtual ICollection<GroupRole> Roles { get; private set; } = new List<GroupRole>();
     public virtual ICollection<GroupSchedule> Schedules { get; private set; } = new List<GroupSchedule>();
@@ -101,6 +103,18 @@ public partial class ClubGroup : AggregateRoot<Guid>
         IsRecruiting = isRecruiting;
     }
 
+    public void UpdateCourtDefaults(int courtCount, decimal courtRentalCost)
+    {
+        if (courtCount > 0)
+        {
+            CourtCount = courtCount;
+        }
+        if (courtRentalCost >= 0)
+        {
+            CourtRentalCost = courtRentalCost;
+        }
+    }
+
     public void UpdateQualityScore(decimal score)
     {
         if (QualityComputedAt.HasValue || score is < 1 or > 5)
@@ -168,7 +182,7 @@ public partial class ClubGroup : AggregateRoot<Guid>
             groupId: Id,
             userId: creatorUserId,
             roleId: hostRole.Id,
-            memberType: "MONTHLY",
+            memberType: "DAILY",
             monthlyExpiryDate: null,
             status: ClubMemberStatus.ACTIVE,
             nickname: roleName
@@ -266,17 +280,20 @@ public partial class ClubGroup : AggregateRoot<Guid>
             ? (!string.IsNullOrWhiteSpace(FixedAddress) ? $"{FixedVenueName}, {FixedAddress}" : FixedVenueName)
             : (!string.IsNullOrWhiteSpace(FixedAddress) ? FixedAddress : $"Sân CLB {GroupName}");
 
+        var courtCount = CourtCount > 0 ? CourtCount : 1;
+        var maxPlayers = courtCount * 6;
+
         var session = new BadmintonSession(
             groupId: Id,
             title: title,
             startTime: startTimeUtc,
             endTime: endTimeUtc,
             courtLocation: location,
-            courtCount: 1,
+            courtCount: courtCount,
             targetPlayerPerCourt: 6,
-            maxPlayers: 6,
+            maxPlayers: maxPlayers,
             deadlineBooking: startTimeUtc.AddHours(-2),
-            courtRentalCost: 0,
+            courtRentalCost: CourtRentalCost,
             status: SessionStatus.OPEN
         );
 

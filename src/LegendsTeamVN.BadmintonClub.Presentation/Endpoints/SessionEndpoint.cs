@@ -338,6 +338,11 @@ public class SessionEndpoint : EndpointGroupBase
             .WithSummary("Đánh dấu thành viên đã thanh toán tiền mặt (FR18-FR20)")
             .Produces<SessionSettlementResponse>()
             .RequireGroupPermission(GroupPermissions.Finance.FeeManage);
+
+        fr18Group.MapPost("{sessionId:guid}/settlement/members/{userId:guid}/cash-request", RequestMemberSettlementCashPayment)
+            .WithName("RequestMemberSettlementCashPayment")
+            .WithSummary("Báo thanh toán tiền mặt cho buổi chơi (FR18-FR20)")
+            .Produces<SessionSettlementResponse>();
     }
 
     // --- FR13 Handlers ---
@@ -754,6 +759,17 @@ public class SessionEndpoint : EndpointGroupBase
         CancellationToken cancellationToken)
     {
         var command = new MarkMemberPaidCommand(sessionId, userId);
+        var result = await sender.Send(command, cancellationToken);
+        return result.Match(Results.Ok);
+    }
+
+    private static async Task<IResult> RequestMemberSettlementCashPayment(
+        [FromRoute] Guid sessionId,
+        [FromRoute] Guid userId,
+        ISender sender,
+        CancellationToken cancellationToken)
+    {
+        var command = new Application.Features.Settlement.RequestCashPayment.RequestMemberSettlementCashPaymentCommand(sessionId, userId);
         var result = await sender.Send(command, cancellationToken);
         return result.Match(Results.Ok);
     }

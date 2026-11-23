@@ -1,5 +1,6 @@
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Settlement.Requests;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Settlement.Responses;
+using LegendsTeamVN.BadmintonClub.Application.DTOs.Payments.Responses;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Sessions.Requests;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Sessions.Responses;
 using LegendsTeamVN.BadmintonClub.Domain.Entities;
@@ -24,13 +25,20 @@ internal static class SessionSettlementMapper
                 f.PaidAt, f.PaymentMethod?.ToString(), f.IsPublished ? new SettlementMemberAllocation(f.UserId,
                     f.Gender!.Value, f.MemberType!, f.MonthlyExpiryDate, f.PriceType, f.CourtShare!.Value, f.ShuttleShare!.Value,
                     f.ExtraShare!.Value, f.MonthlyFundCovered!.Value, f.BaseAmount!.Value, f.DiscountApplied, f.RawAmount!.Value,
-                    f.CalculatedAmount!.Value, f.Amount, f.AdjustmentReason, f.RoundingDelta!.Value, f.AdjustmentDelta!.Value) : null)).ToArray();
+                    f.CalculatedAmount!.Value, f.Amount, f.AdjustmentReason, f.RoundingDelta!.Value, f.AdjustmentDelta!.Value) : null,
+                f.PaymentProgress?.ToString())).ToArray();
+
+        var activeBank = session.Group?.BankAccounts?.FirstOrDefault(b => b.IsActive);
+        var bankResponse = activeBank is not null
+            ? new PaymentBankAccountResponse(activeBank.Id, activeBank.BankBin, activeBank.BankName, activeBank.AccountNumber, activeBank.AccountHolder)
+            : null;
+
         return new(session.Id, published ? "PUBLISHED" : fees.Length > 0 ? "LEGACY" : "UNPUBLISHED",
             session.ShuttlecockUsed, published ? session.ShuttlecockPrice : null, session.CourtRentalCost,
             session.ExtraExpense, published ? session.TotalCost : null, published ? session.TotalReceivable : null,
             session.CalculateCollectedAmount(),
             published ? session.MonthlyFundCovered : null, published ? session.TotalDiscount : null, published ? session.PolicyDelta : null,
             published ? session.RoundingDelta : null, published ? session.AdjustmentDelta : null,
-            published ? session.BalanceDifference : null, session.PublishedAt, session.PublishedBy, fees);
+            published ? session.BalanceDifference : null, session.PublishedAt, session.PublishedBy, fees, bankResponse);
     }
 }

@@ -17,8 +17,10 @@ public sealed class GetSessionSettlementQueryHandler(ISessionRepository sessions
         var session = await sessions.GetSettlementAsync(request.SessionId, false, ct);
         if (session is null)
             return Result.Failure<SessionSettlementResponse>(Error.NotFound("Session.NotFound", "Không tìm thấy buổi chơi."));
-        if (!await sessions.CanViewFinanceAsync(session.GroupId, actor, ct))
-            return Result.Failure<SessionSettlementResponse>(Error.Forbidden("Settlement.Forbidden", "Bạn không có quyền xem tài chính nhóm."));
+        var canView = await sessions.CanViewSettlementAsync(request.SessionId, session.GroupId, actor, ct) ||
+                      await sessions.CanViewFinanceAsync(session.GroupId, actor, ct);
+        if (!canView)
+            return Result.Failure<SessionSettlementResponse>(Error.Forbidden("Settlement.Forbidden", "Bạn không có quyền xem tài chính buổi chơi."));
         return Result.Success(SessionSettlementMapper.Map(session));
     }
 }

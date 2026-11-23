@@ -16,6 +16,7 @@ public interface ISessionRepository : IGenericRepository<BadmintonSession, Guid>
     Task<BadmintonSession?> GetSettlementAsync(Guid sessionId, bool forUpdate, CancellationToken cancellationToken = default);
     Task<(BadmintonSession? Session, GroupFeeRule? Rule, IReadOnlyList<AppUser> Users, IReadOnlyList<GroupMember> Memberships)> GetSettlementSourceAsync(Guid sessionId, bool forUpdate, CancellationToken cancellationToken = default);
     Task<bool> CanViewFinanceAsync(Guid groupId, Guid userId, CancellationToken cancellationToken = default);
+    Task<bool> CanViewSettlementAsync(Guid sessionId, Guid groupId, Guid userId, CancellationToken cancellationToken = default);
     void AddSettlementFees(IEnumerable<SessionFee> fees);
     Task<bool> CanManageFinanceAsync(Guid groupId, Guid userId, CancellationToken cancellationToken = default);
     Task<bool> CanManageAttendanceAsync(Guid groupId, Guid userId, CancellationToken cancellationToken = default);

@@ -1,5 +1,6 @@
 using System.Globalization;
 using LegendsTeamVN.BadmintonClub.Domain.Entities;
+using LegendsTeamVN.BadmintonClub.Domain.Enums;
 using LegendsTeamVN.BadmintonClub.Domain.Repositories;
 using LegendsTeamVN.BadmintonClub.Domain.Services;
 using LegendsTeamVN.Core.Application.Messaging.CQRS;
@@ -20,6 +21,15 @@ public sealed class UpdateClubSchedulesCommandHandler(
         if (club is null)
         {
             return Result.Failure(Error.NotFound("Club.NotFound", "Không tìm thấy câu lạc bộ."));
+        }
+
+        if (command.Request.CourtCount.HasValue || command.Request.CourtRentalCost.HasValue)
+        {
+            club.UpdateCourtDefaults(
+                command.Request.CourtCount ?? club.CourtCount,
+                command.Request.CourtRentalCost ?? club.CourtRentalCost
+            );
+            clubRepository.Update(club);
         }
 
         var existingSchedules = await scheduleRepository.FindAll(s => s.GroupId == command.ClubId).ToListAsync(cancellationToken);
@@ -61,6 +71,22 @@ public sealed class UpdateClubSchedulesCommandHandler(
                 var session = club.CreateRecurringSession(schedule, startUtc, endUtc);
                 sessionRepository.Add(session);
                 existingStartTimes.Add(startUtc);
+            }
+        }
+
+        // Đồng bộ cập nhật số sân và tiền thuê cho các buổi chơi sắp tới chưa chốt
+        if (command.Request.CourtCount.HasValue || command.Request.CourtRentalCost.HasValue)
+        {
+            var futureOpenSessions = await sessionRepository.FindAll(
+                s => s.GroupId == command.ClubId && !s.IsDeleted && s.StartTime >= nowUtc.UtcDateTime && s.Status == SessionStatus.OPEN
+            ).ToListAsync(cancellationToken);
+
+            foreach (var s in futureOpenSessions)
+            {
+                s.UpdateCourtInfo(
+                    command.Request.CourtCount ?? club.CourtCount,
+                    command.Request.CourtRentalCost ?? club.CourtRentalCost
+                );
             }
         }
 

@@ -194,6 +194,19 @@ public partial class BadmintonSession : AggregateRoot<Guid>
         ExtraExpense = extraExpense;
     }
 
+    public void UpdateCourtInfo(int courtCount, decimal courtRentalCost)
+    {
+        if (courtCount > 0)
+        {
+            CourtCount = courtCount;
+            MaxPlayers = courtCount * (TargetPlayerPerCourt > 0 ? TargetPlayerPerCourt : 6);
+        }
+        if (courtRentalCost >= 0 && !PublishedPreviewId.HasValue && Fees.Count == 0)
+        {
+            CourtRentalCost = courtRentalCost;
+        }
+    }
+
     public decimal CalculateCollectedAmount() =>
         Fees.Where(f => !f.IsDeleted && f.PaymentStatus == PaymentStatus.PAID).Sum(f => f.Amount);
 
