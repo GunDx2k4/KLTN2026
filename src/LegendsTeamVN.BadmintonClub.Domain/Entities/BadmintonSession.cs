@@ -328,7 +328,8 @@ public partial class BadmintonSession : AggregateRoot<Guid>
 
     public void UpdateStatus(SessionStatus status)
     {
-        if (status is SessionStatus.CALCULATED or SessionStatus.COMPLETED && !PublishedPreviewId.HasValue)
+        var hasAnyBookings = Bookings.Any(b => !b.IsDeleted);
+        if (status is SessionStatus.CALCULATED or SessionStatus.COMPLETED && hasAnyBookings && !PublishedPreviewId.HasValue)
             throw new InvalidOperationException("Hãy phê duyệt và phát hành khoản thu trước khi chốt buổi.");
         if (!CanTransitionTo(status))
             throw new InvalidOperationException("Invalid session status transition.");
@@ -343,7 +344,9 @@ public partial class BadmintonSession : AggregateRoot<Guid>
             return Result.Failure(Error.Conflict("Rotation.StartMatchRequired", "Hãy bắt đầu trận đầu tiên để chuyển buổi sang đang chơi."));
         if (!CanTransitionTo(target))
             return Result.Failure(Error.Conflict("Session.InvalidTransition", "Không thể chuyển trạng thái buổi chơi về bước trước sau khi đã bắt đầu hoặc chốt buổi."));
-        if (target is SessionStatus.CALCULATED or SessionStatus.COMPLETED && !PublishedPreviewId.HasValue)
+
+        var hasAnyBookings = Bookings.Any(b => !b.IsDeleted);
+        if (target is SessionStatus.CALCULATED or SessionStatus.COMPLETED && hasAnyBookings && !PublishedPreviewId.HasValue)
             return Result.Failure(Error.Conflict("Settlement.ApprovalRequired", "Hãy phê duyệt và phát hành khoản thu trước khi chốt buổi."));
         if (target is SessionStatus.CALCULATED or SessionStatus.COMPLETED)
         {
