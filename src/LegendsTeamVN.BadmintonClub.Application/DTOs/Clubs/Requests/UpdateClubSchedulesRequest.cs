@@ -7,5 +7,7 @@ public sealed record ClubScheduleItemRequest(
 );
 
 public sealed record UpdateClubSchedulesRequest(
-    List<ClubScheduleItemRequest> Schedules
+    List<ClubScheduleItemRequest> Schedules,
+    int? CourtCount = null,
+    decimal? CourtRentalCost = null
 );

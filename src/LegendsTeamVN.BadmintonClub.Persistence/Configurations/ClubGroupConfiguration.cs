@@ -77,6 +77,15 @@ public class ClubGroupConfiguration : IEntityTypeConfiguration<ClubGroup>
             .HasColumnName("created_at")
             .HasDefaultValueSql("now()");
 
+        builder.Property(g => g.CourtCount)
+            .HasColumnName("court_count")
+            .HasDefaultValue(1);
+
+        builder.Property(g => g.CourtRentalCost)
+            .HasColumnName("court_rental_cost")
+            .HasPrecision(18, 2)
+            .HasDefaultValue(0.0m);
+
         builder.HasMany(g => g.Roles)
             .WithOne(r => r.Group)
             .HasForeignKey(r => r.GroupId)

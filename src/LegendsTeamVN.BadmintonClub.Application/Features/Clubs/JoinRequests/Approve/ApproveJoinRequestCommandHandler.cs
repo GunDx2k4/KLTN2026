@@ -64,7 +64,7 @@ public sealed class ApproveJoinRequestCommandHandler(
             groupId: request.ClubId,
             userId: joinRequest.UserId,
             roleId: targetRoleId,
-            memberType: string.IsNullOrWhiteSpace(request.MemberType) ? "MONTHLY" : request.MemberType,
+            memberType: string.IsNullOrWhiteSpace(request.MemberType) ? "DAILY" : request.MemberType,
             monthlyExpiryDate: null,
             status: ClubMemberStatus.ACTIVE
         );

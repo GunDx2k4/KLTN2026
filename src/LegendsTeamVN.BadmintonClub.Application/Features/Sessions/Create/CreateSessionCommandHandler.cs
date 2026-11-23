@@ -27,7 +27,9 @@ public sealed class CreateSessionCommandHandler(
         }
 
         var req = request.Request;
-        var maxPlayers = req.MaxPlayers ?? (req.CourtCount * req.TargetPlayerPerCourt);
+        var courtCount = req.CourtCount > 0 ? req.CourtCount : (club.CourtCount > 0 ? club.CourtCount : 1);
+        var courtCost = req.CourtRentalCost > 0 ? req.CourtRentalCost : club.CourtRentalCost;
+        var maxPlayers = req.MaxPlayers ?? (courtCount * req.TargetPlayerPerCourt);
         var deadline = req.DeadlineBooking ?? req.StartTime.AddHours(-2);
 
         var session = new BadmintonSession(
@@ -36,11 +38,11 @@ public sealed class CreateSessionCommandHandler(
             startTime: req.StartTime.UtcDateTime,
             endTime: req.EndTime.UtcDateTime,
             courtLocation: req.CourtLocation,
-            courtCount: req.CourtCount,
+            courtCount: courtCount,
             targetPlayerPerCourt: req.TargetPlayerPerCourt,
             maxPlayers: maxPlayers,
             deadlineBooking: deadline.UtcDateTime,
-            courtRentalCost: req.CourtRentalCost,
+            courtRentalCost: courtCost,
             status: SessionStatus.OPEN,
             address: req.Address,
             lat: req.Lat,

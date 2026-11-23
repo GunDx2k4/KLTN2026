@@ -181,14 +181,19 @@ public class SessionRepository(BadmintonDbContext dbContext)
         {
             var tracked = await GetAttendanceAsync(sessionId, true, cancellationToken);
             if (tracked is not null)
+            {
                 await DbContext.Entry(tracked).Collection(s => s.Fees).Query()
                     .Include(f => f.User).LoadAsync(cancellationToken);
+                await DbContext.Entry(tracked).Reference(s => s.Group).Query()
+                    .Include(g => g.BankAccounts).LoadAsync(cancellationToken);
+            }
             return tracked;
         }
 
         return await DbContext.BadmintonSessions.AsNoTracking()
             .Include(s => s.Bookings).ThenInclude(b => b.User)
             .Include(s => s.Fees).ThenInclude(f => f.User)
+            .Include(s => s.Group).ThenInclude(g => g.BankAccounts)
             .FirstOrDefaultAsync(s => s.Id == sessionId && !s.IsDeleted, cancellationToken);
     }
 
@@ -265,6 +270,13 @@ public class SessionRepository(BadmintonDbContext dbContext)
             m.Group.IsActive && !m.Group.IsDeleted && m.User.IsActive && !m.User.IsDeleted &&
             m.RoleEntity.GroupId == groupId && !m.RoleEntity.IsDeleted &&
             m.RoleEntity.RolePermissions.Any(rp => rp.Permission.PermissionCode == GroupPermissions.Finance.FeeView), cancellationToken);
+
+    public Task<bool> CanViewSettlementAsync(Guid sessionId, Guid groupId, Guid userId, CancellationToken cancellationToken = default) =>
+        DbContext.BadmintonSessions.AsNoTracking().AnyAsync(s => s.Id == sessionId && !s.IsDeleted && (
+            s.Bookings.Any(b => b.UserId == userId && !b.IsDeleted) ||
+            s.Fees.Any(f => f.UserId == userId && !f.IsDeleted) ||
+            s.Group.Members.Any(m => m.UserId == userId && m.Status == ClubMemberStatus.ACTIVE && !m.IsDeleted)
+        ), cancellationToken);
     public void AddSettlementFees(IEnumerable<SessionFee> fees)
     {
         foreach (var fee in fees)
