@@ -227,6 +227,56 @@ public class SessionFee : AggregateRoot<Guid>
         };
     }
 
+    internal void UpdateAllocation(SettlementMemberAllocation allocation, Guid actorId, DateTime now)
+    {
+        if (allocation.FinalAmount != Amount)
+        {
+            if (PaymentStatus == PaymentStatus.PAID && allocation.FinalAmount > Amount)
+            {
+                PaymentStatus = PaymentStatus.UNPAID;
+            }
+            PaymentRequestId = null;
+            PaymentProgress = null;
+            QrCodePayload = string.Empty;
+            QrBankAccountId = null;
+            QrBankBin = null;
+            QrBankName = null;
+            QrAccountNumber = null;
+            QrAccountHolder = null;
+            QrCreatedAt = null;
+        }
+
+        Amount = allocation.FinalAmount;
+        DiscountApplied = allocation.DiscountApplied;
+        PriceType = allocation.PriceType;
+        Gender = allocation.Gender;
+        MemberType = allocation.MemberType;
+        MonthlyExpiryDate = allocation.MonthlyExpiryDate;
+        CourtShare = allocation.CourtShare;
+        ShuttleShare = allocation.ShuttleShare;
+        ExtraShare = allocation.ExtraShare;
+        MonthlyFundCovered = allocation.MonthlyFundCovered;
+        BaseAmount = allocation.BaseAmount;
+        RawAmount = allocation.RawAmount;
+        CalculatedAmount = allocation.CalculatedAmount;
+        RoundingDelta = allocation.RoundingDelta;
+        AdjustmentDelta = allocation.AdjustmentDelta;
+        AdjustmentReason = allocation.AdjustmentReason;
+        AdjustedBy = allocation.AdjustmentReason is null ? null : actorId;
+        AdjustedAt = allocation.AdjustmentReason is null ? null : now;
+        PublishedBy = actorId;
+        PublishedAt = now;
+
+        if (allocation.FinalAmount == 0)
+        {
+            PaymentStatus = PaymentStatus.EXEMPT;
+        }
+        else if (PaymentStatus == PaymentStatus.EXEMPT)
+        {
+            PaymentStatus = PaymentStatus.UNPAID;
+        }
+    }
+
     private void EnsurePriceMutable()
     {
         if (IsPublished || PaymentStatus == PaymentStatus.PAID)

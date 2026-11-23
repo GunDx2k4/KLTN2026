@@ -372,15 +372,17 @@ public partial class BadmintonSession : AggregateRoot<Guid>
         if (RotationStartedAt.HasValue) RecordRotationChange(now);
     }
 
-    public Result ValidateSettlement(DateTime now, bool confirmRemainingNoShows = false)
+    public Result ValidateSettlement(DateTime now, bool confirmRemainingNoShows = false, bool allowRepublish = false)
     {
-        if (IsDeleted || PublishedPreviewId.HasValue || Fees.Count > 0 || Status is SessionStatus.CALCULATED or SessionStatus.COMPLETED)
+        if (IsDeleted || Status == SessionStatus.COMPLETED)
+            return Result.Failure(Error.Conflict("Settlement.Closed", "Buổi chơi đã đóng hoàn toàn, không thể phát hành lại."));
+        if (!allowRepublish && (PublishedPreviewId.HasValue || Fees.Count > 0 || Status is SessionStatus.CALCULATED))
             return Result.Failure(Error.Conflict("Settlement.AlreadyPublished", "Buổi chơi đã đóng hoặc đã có khoản thu, không thể phát hành lại."));
-        if (Status is not (SessionStatus.OPEN or SessionStatus.LOCKED or SessionStatus.PLAYING) || !CanTransitionTo(SessionStatus.CALCULATED))
+        if (!allowRepublish && (Status is not (SessionStatus.OPEN or SessionStatus.LOCKED or SessionStatus.PLAYING) || !CanTransitionTo(SessionStatus.CALCULATED)))
             return Result.Failure(Error.Conflict("Session.InvalidTransition", "Trạng thái buổi chơi không cho phép phát hành khoản thu."));
         if (now.Kind != DateTimeKind.Utc || StartTime.Kind != DateTimeKind.Utc || EndTime.Kind != DateTimeKind.Utc)
             return Result.Failure(Error.Validation("Settlement.UtcRequired", "Thời gian quyết toán phải sử dụng UTC."));
-        if (now < EndTime && Status is not (SessionStatus.PLAYING or SessionStatus.LOCKED))
+        if (!allowRepublish && now < EndTime && Status is not (SessionStatus.PLAYING or SessionStatus.LOCKED))
             return Result.Failure(Error.Conflict("Settlement.NotEnded", "Buổi chơi chưa kết thúc khung giờ thuê sân."));
         if (Matches.Any(m => !m.IsDeleted && m.Status == MatchStatus.PLAYING))
             return Result.Failure(Error.Conflict("Session.ActiveMatches", "Còn trận đang thi đấu, hãy kết thúc trận trước khi chốt buổi."));
@@ -392,23 +394,26 @@ public partial class BadmintonSession : AggregateRoot<Guid>
     public Result PublishSettlement(GroupFeeRule rule, IReadOnlyCollection<AppUser> users,
         IReadOnlyCollection<GroupMember> memberships, SettlementCosts costs,
         IReadOnlyCollection<SettlementAdjustment> adjustments, Guid previewId, string requestHash,
-        Guid actorId, DateTime now, bool confirmRemainingNoShows = false)
+        Guid actorId, DateTime now, bool confirmRemainingNoShows = false, bool allowRepublish = false)
     {
         if (actorId == Guid.Empty || previewId == Guid.Empty || string.IsNullOrWhiteSpace(requestHash) ||
             requestHash.Length != 64 || requestHash.Any(c => !Uri.IsHexDigit(c)))
             return Result.Failure(Error.Validation("Settlement.InvalidPublication", "Thông tin người duyệt, bản xem trước hoặc mã xác nhận không hợp lệ."));
         if (PublishedPreviewId.HasValue)
-            return PublishedPreviewId == previewId && PublishedRequestHash == requestHash && PublishedBy == actorId
-                ? Result.Success()
-                : Result.Failure(Error.Conflict("Settlement.AlreadyPublished", "Buổi chơi đã phát hành khoản thu từ một yêu cầu khác."));
+        {
+            if (PublishedPreviewId == previewId && PublishedRequestHash == requestHash && PublishedBy == actorId)
+                return Result.Success();
+            if (!allowRepublish)
+                return Result.Failure(Error.Conflict("Settlement.AlreadyPublished", "Buổi chơi đã phát hành khoản thu từ một yêu cầu khác."));
+        }
         var calculated = SettlementAllocationEngine.Calculate(this, rule, users, memberships, costs, adjustments,
-            now, confirmRemainingNoShows);
+            now, confirmRemainingNoShows, allowRepublish);
         if (calculated.IsFailure) return Result.Failure(calculated.Error);
         var allocation = calculated.Value;
         var paymentCodes = allocation.Members.Select(m => SessionFee.CreatePaymentCode(Id, m.UserId)).ToArray();
         if (paymentCodes.Distinct(StringComparer.Ordinal).Count() != paymentCodes.Length)
             return Result.Failure(Error.Conflict("Settlement.PaymentCodeConflict", "Mã thanh toán bị trùng, chưa phát hành khoản thu."));
-        var fees = allocation.Members.Select(m => SessionFee.CreatePublished(Id, m, actorId, now)).ToArray();
+
         PublishedPreviewId = previewId;
         PublishedRequestHash = requestHash;
         PublishedAt = now;
@@ -433,10 +438,26 @@ public partial class BadmintonSession : AggregateRoot<Guid>
         RoundingDelta = allocation.RoundingDelta;
         AdjustmentDelta = allocation.AdjustmentDelta;
         BalanceDifference = allocation.BalanceDifference;
-        foreach (var fee in fees) Fees.Add(fee);
+
+        var feeIds = new List<Guid>();
+        foreach (var m in allocation.Members)
+        {
+            var existing = Fees.FirstOrDefault(f => f.UserId == m.UserId && !f.IsDeleted);
+            if (existing is not null)
+            {
+                existing.UpdateAllocation(m, actorId, now);
+                feeIds.Add(existing.Id);
+            }
+            else
+            {
+                var fee = SessionFee.CreatePublished(Id, m, actorId, now);
+                Fees.Add(fee);
+                feeIds.Add(fee.Id);
+            }
+        }
         ApplyOperationalStatus(SessionStatus.CALCULATED, actorId, now);
         RaiseDomainEvent(new SettlementPublishedDomainEvent(Id, GroupId, previewId, actorId, now,
-            Array.AsReadOnly(fees.Select(f => f.Id).ToArray())));
+            Array.AsReadOnly(feeIds.ToArray())));
         return Result.Success();
     }
 
