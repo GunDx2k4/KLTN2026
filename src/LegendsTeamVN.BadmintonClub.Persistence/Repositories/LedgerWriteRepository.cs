@@ -54,6 +54,9 @@ public sealed class LedgerWriteRepository(BadmintonDbContext db) : ILedgerWriteR
     public Task<GroupMember?> LockMemberAsync(Guid groupId, Guid userId, CancellationToken ct) =>
         Locked(() => db.GroupMembers.FromSqlInterpolated($"SELECT * FROM group_member WHERE id_group = {groupId} AND id_user = {userId} FOR UPDATE")
             .SingleOrDefaultAsync(ct));
+    public Task<bool> HasUnpaidContributionAsync(Guid groupId, Guid userId, CancellationToken ct) =>
+        db.MonthlyContributions.AnyAsync(m => m.GroupId == groupId && m.UserId == userId &&
+            !m.IsDeleted && m.Status == MonthlyContributionStatus.UNPAID, ct);
     public Task<GroupFeeRule?> LockRuleAsync(Guid groupId, CancellationToken ct) =>
         Locked(() => db.GroupFeeRules.FromSqlInterpolated($"SELECT * FROM group_fee_rule WHERE id_group = {groupId} ORDER BY applied_at DESC, id_fee_rule DESC LIMIT 1 FOR SHARE")
             .FirstOrDefaultAsync(ct));

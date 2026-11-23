@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -91,6 +92,8 @@ public sealed class SepaySetupService(ISepaySetupRepository repository, IPayment
         var value = await redis.GetDatabase().StringGetDeleteAsync(StateKey(state)).WaitAsync(ct);
         if (value.IsNullOrEmpty) throw Failure("InvalidState", "Phiên cấp quyền không hợp lệ hoặc đã dùng. Hãy bắt đầu kết nối lại.", 400);
         var auth = JsonSerializer.Deserialize<AuthorizationState>(value.ToString()) ?? throw Failure("InvalidState", "Phiên không hợp lệ.", 400);
+        var traceId = Activity.Current?.TraceId.ToString();
+        logger.LogInformation("Đã xác minh phiên callback SePay. GroupId={GroupId}, TraceId={TraceId}.", auth.GroupId, traceId);
         return await Locked("club:" + auth.GroupId, async token =>
         {
             var app = await ReadyApplication(token);
@@ -100,7 +103,11 @@ public sealed class SepaySetupService(ISepaySetupRepository repository, IPayment
                 ? $"legendsbadminton:///club/{auth.GroupId}/sepay"
                 : app.ClubReturnUrl(auth.GroupId);
             if (!string.IsNullOrEmpty(error) || string.IsNullOrWhiteSpace(code))
+            {
+                logger.LogInformation("Callback SePay chưa cấp quyền. GroupId={GroupId}, Reason={Reason}, TraceId={TraceId}.",
+                    auth.GroupId, !string.IsNullOrEmpty(error) ? "AuthorizationDenied" : "MissingCode", traceId);
                 return new SepayCallbackResponse(returnUrl + "?sepay=denied");
+            }
             if (code.Length > 4096) throw Failure("InvalidCode", "Mã cấp quyền không hợp lệ.", 400);
             var existing = await repository.GetConnectionAsync(bank.Id, token);
             if (existing?.Status is "CONNECTED" or "PROVISIONING" or "DISCONNECTING") throw Failure("AlreadyConnected", "CLB đã có kết nối. Vui lòng tải lại.");

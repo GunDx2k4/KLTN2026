@@ -13,6 +13,7 @@ public interface ILedgerWriteRepository
     Task<MonthlyContribution?> FindMonthAsync(Guid groupId, Guid userId, DateOnly month, CancellationToken ct);
     Task<MonthlyContribution?> LockContributionAsync(Guid groupId, Guid contributionId, CancellationToken ct);
     Task<GroupMember?> LockMemberAsync(Guid groupId, Guid userId, CancellationToken ct);
+    Task<bool> HasUnpaidContributionAsync(Guid groupId, Guid userId, CancellationToken ct);
     Task<GroupFeeRule?> LockRuleAsync(Guid groupId, CancellationToken ct);
     Task<short?> GetGenderAsync(Guid userId, CancellationToken ct);
     Task<IReadOnlyList<Guid>> GetViewerIdsAsync(Guid groupId, CancellationToken ct);
