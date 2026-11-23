@@ -330,7 +330,8 @@ public class SessionEndpoint : EndpointGroupBase
         fr18Group.MapGet("{sessionId:guid}/settlement", GetSessionSettlement)
             .WithName("GetSessionSettlement")
             .WithSummary("Xem thông tin quyết toán chi phí buổi chơi (FR18-FR20)")
-            .Produces<SessionSettlementResponse>();
+            .Produces<SessionSettlementResponse>()
+            .RequireGroupPermission(GroupPermissions.Finance.FeeView);
 
         fr18Group.MapPost("{sessionId:guid}/settlement/members/{userId:guid}/pay", MarkMemberSettlementPaid)
             .WithName("MarkMemberSettlementPaid")
