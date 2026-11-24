@@ -22,6 +22,9 @@ services:
       - Reconciliation__WritesEnabled=${RECONCILIATION_WRITES_ENABLED:-true}
       - Reconciliation__DispatchEnabled=${RECONCILIATION_DISPATCH_ENABLED:-true}
       - Sepay__KeyDirectory=/var/lib/badmintonclub/sepay-keys
+      - Cloudinary__CloudName=${CLOUDINARY_CLOUD_NAME:-dlimibe4b}
+      - Cloudinary__ApiKey=${CLOUDINARY_API_KEY:-924533145124796}
+      - Cloudinary__ApiSecret=${CLOUDINARY_API_SECRET:-8ny2747Y1BeoHzBQ684UuQRO1Sk}
       - MasstransitConfiguration__Host=${RABBITMQ_HOST}
       - MasstransitConfiguration__VHost=${RABBITMQ_VHOST}
       - MasstransitConfiguration__Port=${RABBITMQ_PORT}
