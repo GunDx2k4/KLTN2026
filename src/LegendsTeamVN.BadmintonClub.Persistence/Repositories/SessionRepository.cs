@@ -255,6 +255,24 @@ public class SessionRepository(BadmintonDbContext dbContext)
         var users = await DbContext.AppUsers.IgnoreQueryFilters().AsNoTracking().Where(u => userIds.Contains(u.Id)).ToListAsync(cancellationToken);
         var memberships = await DbContext.GroupMembers.IgnoreQueryFilters().AsNoTracking()
             .Where(m => m.GroupId == session.GroupId && userIds.Contains(m.UserId)).ToListAsync(cancellationToken);
+        var sessionMonthEnd = new DateTime(session.StartTime.Year, session.StartTime.Month,
+            DateTime.DaysInMonth(session.StartTime.Year, session.StartTime.Month), 23, 59, 59, DateTimeKind.Utc);
+        var missingMonthlyMembers = memberships.Where(m => m.MemberType == "MONTHLY" && !m.MonthlyExpiryDate.HasValue).ToList();
+        if (missingMonthlyMembers.Count > 0)
+        {
+            var memberIds = missingMonthlyMembers.Select(m => m.Id).ToArray();
+            var trackedMembers = await DbContext.GroupMembers
+                .Where(m => memberIds.Contains(m.Id)).ToListAsync(cancellationToken);
+            foreach (var tracked in trackedMembers)
+            {
+                tracked.UpdateMemberType("MONTHLY", sessionMonthEnd);
+            }
+            foreach (var m in missingMonthlyMembers)
+            {
+                m.UpdateMemberType("MONTHLY", sessionMonthEnd);
+            }
+            await DbContext.SaveChangesAsync(cancellationToken);
+        }
         var rules = await DbContext.GroupFeeRules.IgnoreQueryFilters().AsNoTracking()
             .Where(r => r.GroupId == session.GroupId).ToListAsync(cancellationToken);
         var rule = rules.OrderByDescending(r => r.AppliedAt)
