@@ -8,6 +8,7 @@ public sealed record NotificationResponse(
     string? ReferenceType,
     Guid? ReferenceId,
     bool IsRead,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    Guid? GroupId = null
 );
 

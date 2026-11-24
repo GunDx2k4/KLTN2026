@@ -38,6 +38,14 @@ public sealed class GetMyNotificationsQueryHandler(
         for (var index = 0; index < notifications.Count; index++)
         {
             var notification = notifications[index];
+            if (notification.ReferenceType == "GroupLedger" && notification.ReferenceId.HasValue)
+            {
+                var groupId = await notificationRepository.ResolveLedgerGroupIdAsync(
+                    notification.ReferenceId.Value, userId, cancellationToken);
+                if (groupId.HasValue)
+                    notifications[index] = notification with { GroupId = groupId.Value };
+                continue;
+            }
             if (notification.Title != "Yêu cầu xác nhận tiền mặt" ||
                 notification.ReferenceType != "SessionFee" || !notification.ReferenceId.HasValue)
                 continue;

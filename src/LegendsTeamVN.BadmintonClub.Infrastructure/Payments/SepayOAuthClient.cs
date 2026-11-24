@@ -1,12 +1,15 @@
+using System.Diagnostics;
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using LegendsTeamVN.BadmintonClub.Application.Abstractions;
+using Microsoft.Extensions.Logging;
 
 namespace LegendsTeamVN.BadmintonClub.Infrastructure.Payments;
 
-public sealed class SepayOAuthClient(HttpClient http, TimeProvider clock) : ISepayOAuthClient
+public sealed class SepayOAuthClient(HttpClient http, TimeProvider clock, ILogger<SepayOAuthClient> logger) : ISepayOAuthClient
 {
     private const string Origin = "https://my.sepay.vn";
 
@@ -21,22 +24,70 @@ public sealed class SepayOAuthClient(HttpClient http, TimeProvider clock) : ISep
     private async Task<SepayTokens> TokenAsync(Dictionary<string, string> fields, CancellationToken ct)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, Origin + "/oauth/token") { Content = new FormUrlEncodedContent(fields) };
-        var json = await SendAsync(request, ct);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        return await ReadAuthorizationResponseAsync(request, fields["grant_type"], ParseTokens, ct);
+    }
+
+    private SepayTokens ParseTokens(JsonElement json)
+    {
         var access = Text(json, "access_token");
         var refresh = Text(json, "refresh_token");
         var expires = Number(json, "expires_in");
-        if (string.IsNullOrWhiteSpace(access) || string.IsNullOrWhiteSpace(refresh) || expires is < 1 or > 31536000 ||
-            !string.Equals(Text(json, "token_type"), "Bearer", StringComparison.OrdinalIgnoreCase))
-            throw InvalidResponse();
+        if (string.IsNullOrWhiteSpace(access)) throw InvalidResponse("MissingOrInvalidText", "access_token");
+        if (string.IsNullOrWhiteSpace(refresh)) throw InvalidResponse("MissingOrInvalidText", "refresh_token");
+        if (expires is < 1 or > 31536000) throw InvalidResponse("ValueOutOfRange", "expires_in");
+        if (!string.Equals(Text(json, "token_type"), "Bearer", StringComparison.OrdinalIgnoreCase))
+            throw InvalidResponse("ExpectedBearer", "token_type");
         return new(access, refresh, clock.GetUtcNow().UtcDateTime.AddSeconds(expires));
     }
 
     public async Task<long> CompanyAsync(string token, CancellationToken ct)
     {
-        var data = Property(await GetAsync("/api/v1/company", token, ct), "data");
-        var id = Number(data, "id");
-        if (id <= 0 || Text(data, "status") != "active") throw InvalidResponse();
+        using var request = Authorized(HttpMethod.Get, "/api/v1/company", token);
+        return await ReadAuthorizationResponseAsync(request, "company", ParseCompany, ct);
+    }
+
+    private long ParseCompany(JsonElement json)
+    {
+        var data = Property(json, "data");
+        var value = Property(data, "id");
+        long id = 0;
+        var isInteger = value.ValueKind switch
+        {
+            JsonValueKind.Number => value.TryGetInt64(out id),
+            JsonValueKind.String => long.TryParse(value.GetString(), NumberStyles.None, CultureInfo.InvariantCulture, out id),
+            _ => false
+        };
+        if (!isInteger) throw InvalidResponse("ExpectedInteger", "data.id", value.ValueKind);
+        if (id <= 0) throw InvalidResponse("ValueOutOfRange", "data.id", value.ValueKind);
+        if (!data.TryGetProperty("status", out var status))
+            throw InvalidResponse("MissingField", "data.status", JsonValueKind.Undefined);
+        if (status.ValueKind != JsonValueKind.String)
+            throw InvalidResponse("ExpectedCompanyStatusText", "data.status", status.ValueKind);
+        var companyStatus = status.GetString()!.Trim();
+        if (string.Equals(companyStatus, "inactive", StringComparison.OrdinalIgnoreCase))
+            throw new SepaySetupException("CompanyInactive", "Công ty trên SePay đang ở trạng thái không hoạt động. Hãy kiểm tra trạng thái công ty trên SePay rồi kết nối lại.");
+        if (!string.Equals(companyStatus, "active", StringComparison.OrdinalIgnoreCase))
+            throw InvalidResponse("UnknownCompanyStatus", "data.status", status.ValueKind);
         return id;
+    }
+
+    private async Task<T> ReadAuthorizationResponseAsync<T>(HttpRequestMessage request, string operation,
+        Func<JsonElement, T> parse, CancellationToken ct)
+    {
+        try
+        {
+            var result = parse(await SendAsync(request, ct));
+            logger.LogInformation("SePay đã phản hồi hợp lệ cho {Operation} tại {ProviderPath}. TraceId={TraceId}.",
+                operation, request.RequestUri!.AbsolutePath, Activity.Current?.TraceId.ToString());
+            return result;
+        }
+        catch (SepaySetupException exception)
+        {
+            logger.LogWarning("SePay lỗi ở bước {Operation} tại {ProviderPath}. ErrorCode={ErrorCode}, TraceId={TraceId}.",
+                operation, request.RequestUri!.AbsolutePath, exception.Code, Activity.Current?.TraceId.ToString());
+            throw;
+        }
     }
 
     public async Task<IReadOnlyList<SepayRemoteBank>> BanksAsync(string token, CancellationToken ct)
@@ -63,18 +114,13 @@ public sealed class SepayOAuthClient(HttpClient http, TimeProvider clock) : ISep
             request_content_type = "Json", is_verify_payment = 1, skip_if_no_code = 0, active = 1,
             only_va = 0, va_mode = "none", retry_conditions = new[] { "non_2xx_status_code" } });
         var id = Number(Property(await SendAsync(request, ct), "data"), "id");
-        return id > 0 ? id : throw InvalidResponse();
+        return id > 0 ? id : throw InvalidResponse("ValueOutOfRange", "data.id");
     }
 
     public async Task DeleteWebhookAsync(string token, long id, CancellationToken ct)
     {
         using var request = Authorized(HttpMethod.Delete, "/api/v1/webhooks/" + id, token);
-        try
-        {
-            using var response = await http.SendAsync(request, ct);
-            if (!response.IsSuccessStatusCode && response.StatusCode != HttpStatusCode.NotFound) throw ProviderFailure(response.StatusCode);
-        }
-        catch (HttpRequestException) { throw new SepaySetupException("ProviderUnavailable", "Không kết nối được SePay. Vui lòng thử lại.", 503); }
+        using var response = await SendRequestAsync(request, ct, allowNotFound: true);
     }
 
     private async Task<IReadOnlyList<JsonElement>> PagesAsync(string path, string token, CancellationToken ct)
@@ -84,16 +130,16 @@ public sealed class SepayOAuthClient(HttpClient http, TimeProvider clock) : ISep
         {
             var json = await GetAsync(path + (path.Contains('?') ? "&" : "?") + "limit=100&page=" + page, token, ct);
             var data = Property(json, "data");
-            if (data.ValueKind != JsonValueKind.Array) throw InvalidResponse();
+            if (data.ValueKind != JsonValueKind.Array) throw InvalidResponse("ExpectedArray", "data");
             rows.AddRange(data.EnumerateArray().Select(x => x.Clone()));
             if (!json.TryGetProperty("meta", out var meta))
             {
                 if (data.GetArrayLength() == 0) return rows;
-                throw InvalidResponse();
+                throw InvalidResponse("MissingField", "meta");
             }
             var pagination = Property(meta, "pagination");
             var current = Number(pagination, "current_page");
-            if (current != page) throw InvalidResponse();
+            if (current != page) throw InvalidResponse("PageMismatch", "current_page");
             if (current >= Number(pagination, "last_page")) return rows;
         }
         throw new SepaySetupException("TooManyAccounts", "Danh sách SePay vượt giới hạn hỗ trợ. Vui lòng liên hệ quản trị viên.");
@@ -117,40 +163,86 @@ public sealed class SepayOAuthClient(HttpClient http, TimeProvider clock) : ISep
     {
         try
         {
-            using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
-            if (!response.IsSuccessStatusCode) throw ProviderFailure(response.StatusCode);
-            if (response.Content.Headers.ContentLength is > 1048576) throw InvalidResponse();
+            using var response = await SendRequestAsync(request, ct);
+            if (response.Content.Headers.ContentLength is > 1048576) throw InvalidResponse("BodyTooLarge");
             await using var stream = await response.Content.ReadAsStreamAsync(ct);
             using var buffer = new MemoryStream();
             var bytes = new byte[8192];
             int count;
             while ((count = await stream.ReadAsync(bytes, ct)) > 0)
             {
-                if (buffer.Length + count > 1048576) throw InvalidResponse();
+                if (buffer.Length + count > 1048576) throw InvalidResponse("BodyTooLarge");
                 await buffer.WriteAsync(bytes.AsMemory(0, count), ct);
             }
             using var document = JsonDocument.Parse(buffer.GetBuffer().AsMemory(0, (int)buffer.Length), new JsonDocumentOptions { MaxDepth = 32 });
-            if (document.RootElement.ValueKind != JsonValueKind.Object ||
-                document.RootElement.TryGetProperty("status", out var status) &&
-                (status.ValueKind != JsonValueKind.String || status.GetString() != "success")) throw InvalidResponse();
+            if (document.RootElement.ValueKind != JsonValueKind.Object) throw InvalidResponse("ExpectedObject");
+            if (document.RootElement.TryGetProperty("status", out var status) &&
+                (status.ValueKind != JsonValueKind.String || status.GetString() != "success"))
+                throw InvalidResponse("UnexpectedApiStatus", "status");
             return document.RootElement.Clone();
         }
-        catch (JsonException) { throw InvalidResponse(); }
-        catch (HttpRequestException) { throw new SepaySetupException("ProviderUnavailable", "Không kết nối được SePay. Vui lòng thử lại.", 503); }
+        catch (JsonException) { throw InvalidResponse("InvalidJson"); }
+        catch (HttpRequestException exception)
+        {
+            LogTransportFailure(request, exception.GetType().Name);
+            throw ProviderUnavailable();
+        }
     }
 
-    private static JsonElement Property(JsonElement json, string name) => json.ValueKind == JsonValueKind.Object &&
-        json.TryGetProperty(name, out var value) ? value : throw InvalidResponse();
-    private static long Number(JsonElement json, string name)
+    private async Task<HttpResponseMessage> SendRequestAsync(HttpRequestMessage request, CancellationToken ct, bool allowNotFound = false)
+    {
+        var start = Stopwatch.GetTimestamp();
+        HttpResponseMessage response;
+        try
+        {
+            response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+        }
+        catch (HttpRequestException exception)
+        {
+            LogTransportFailure(request, exception.GetType().Name);
+            throw ProviderUnavailable();
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            LogTransportFailure(request, "Timeout");
+            throw;
+        }
+
+        var status = response.StatusCode;
+        var accepted = response.IsSuccessStatusCode || allowNotFound && status == HttpStatusCode.NotFound;
+        logger.Log(accepted ? LogLevel.Debug : LogLevel.Warning,
+            "SePay HTTP {Method} {ProviderPath} trả {StatusCode} sau {ElapsedMs} ms. TraceId={TraceId}.",
+            request.Method.Method, request.RequestUri!.AbsolutePath, (int)status,
+            Stopwatch.GetElapsedTime(start).TotalMilliseconds, Activity.Current?.TraceId.ToString());
+        if (accepted) return response;
+        response.Dispose();
+        throw ProviderFailure(status);
+    }
+
+    private void LogTransportFailure(HttpRequestMessage request, string reason) =>
+        logger.LogWarning("Lỗi kết nối SePay HTTP {Method} {ProviderPath}. Reason={Reason}, TraceId={TraceId}.",
+            request.Method.Method, request.RequestUri!.AbsolutePath, reason, Activity.Current?.TraceId.ToString());
+
+    private JsonElement Property(JsonElement json, string name) => json.ValueKind == JsonValueKind.Object &&
+        json.TryGetProperty(name, out var value) ? value : throw InvalidResponse("MissingField", name);
+    private long Number(JsonElement json, string name)
     {
         var value = Property(json, name);
-        return value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var number) ? number : throw InvalidResponse();
+        return value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var number)
+            ? number : throw InvalidResponse("ExpectedInteger", name);
     }
     private static bool Active(JsonElement json) => json.ValueKind == JsonValueKind.Object && json.TryGetProperty("active", out var value) &&
         (value.ValueKind == JsonValueKind.True || value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var n) && n == 1);
     private static string Text(JsonElement json, string name) => json.ValueKind == JsonValueKind.Object && json.TryGetProperty(name, out var value) &&
         value.ValueKind == JsonValueKind.String ? value.GetString()! : "";
-    private static SepaySetupException InvalidResponse() => new("ProviderResponse", "SePay trả dữ liệu không phù hợp. Chưa thể hoàn tất kết nối.", 503);
+    private SepaySetupException InvalidResponse(string reason, string? field = null, JsonValueKind? valueKind = null)
+    {
+        logger.LogWarning("Phản hồi SePay không hợp lệ. Reason={Reason}, Field={Field}, ValueKind={ValueKind}, TraceId={TraceId}.",
+            reason, field, valueKind, Activity.Current?.TraceId.ToString());
+        return new("ProviderResponse", "SePay trả dữ liệu không phù hợp. Chưa thể hoàn tất kết nối.", 503);
+    }
+    private static SepaySetupException ProviderUnavailable() =>
+        new("ProviderUnavailable", "Không kết nối được SePay. Vui lòng thử lại.", 503);
     private static SepaySetupException ProviderFailure(HttpStatusCode status) => new(
         status is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden ? "AuthorizationRequired" : "ProviderUnavailable",
         status is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden

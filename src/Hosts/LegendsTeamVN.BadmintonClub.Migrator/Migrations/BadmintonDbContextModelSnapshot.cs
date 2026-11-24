@@ -611,6 +611,19 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                         .HasColumnType("character varying(50)")
                         .HasColumnName("code");
 
+                    b.Property<int>("CourtCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1)
+                        .HasColumnName("court_count");
+
+                    b.Property<decimal>("CourtRentalCost")
+                        .ValueGeneratedOnAdd()
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasDefaultValue(0.0m)
+                        .HasColumnName("court_rental_cost");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")

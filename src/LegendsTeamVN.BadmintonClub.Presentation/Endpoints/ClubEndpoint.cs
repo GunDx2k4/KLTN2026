@@ -19,6 +19,7 @@ using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.Roles.UpdatePermiss
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.Schedules.Update;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.UpdateInfo;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.UpdateMemberRole;
+using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.UpdateMemberFeePlan;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.FeeRule.Get;
 using LegendsTeamVN.BadmintonClub.Application.Features.Clubs.FeeRule.Update;
 using LegendsTeamVN.BadmintonClub.Domain.Enums;
@@ -80,6 +81,10 @@ public class ClubEndpoint : EndpointGroupBase
         fr03Group.MapPut("{id:guid}/members/{userId:guid}/role", UpdateMemberRole)
             .WithName("UpdateMemberRole")
             .WithSummary("Cập nhật vai trò của thành viên trong câu lạc bộ (FR03)")
+            .RequireGroupPermission(Domain.Constants.GroupPermissions.Member.RoleManage);
+
+        fr03Group.MapPut("{id:guid}/members/{userId:guid}/fee-plan", UpdateMemberFeePlan)
+            .WithName("UpdateMemberFeePlan")
             .RequireGroupPermission(Domain.Constants.GroupPermissions.Member.RoleManage);
 
         fr03Group.MapDelete("{id:guid}/members/{userId:guid}", RemoveMember)
@@ -286,6 +291,15 @@ public class ClubEndpoint : EndpointGroupBase
         var query = new GetClubMembersQuery(id);
         var result = await sender.Send(query, cancellationToken);
         return result.Match(onSuccess: members => Results.Ok(members));
+    }
+
+    private sealed record UpdateMemberFeePlanRequest(string MemberType);
+
+    private static async Task<IResult> UpdateMemberFeePlan(Guid id, Guid userId,
+        UpdateMemberFeePlanRequest request, ISender sender, CancellationToken cancellationToken)
+    {
+        var result = await sender.Send(new UpdateMemberFeePlanCommand(id, userId, request.MemberType), cancellationToken);
+        return result.Match(onSuccess: success => Results.Ok(new { Success = success }));
     }
 
     private static async Task<IResult> UpdateMemberRole(

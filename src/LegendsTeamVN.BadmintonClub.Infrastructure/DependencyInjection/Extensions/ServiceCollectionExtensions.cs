@@ -32,7 +32,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISepaySetupService>(sp => sp.GetRequiredService<Payments.SepaySetupService>());
         services.AddScoped<ISepayWebhookCredentials>(sp => sp.GetRequiredService<Payments.SepaySetupService>());
         services.AddHttpClient<ISepayOAuthClient, Payments.SepayOAuthClient>(client => client.Timeout = TimeSpan.FromSeconds(10))
-            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+            .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false })
+            .RemoveAllLoggers();
         services.AddScoped<ISepayWebhookVerifier, Payments.SepayWebhookVerifier>();
         services.AddSingleton<IWebhookEvidenceArchive, Payments.WebhookEvidenceArchive>();
         services.AddScoped<IReconciliationLock, Payments.RedisReconciliationLock>();

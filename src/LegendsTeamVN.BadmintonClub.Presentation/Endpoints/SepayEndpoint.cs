@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Payments.Requests;
 using LegendsTeamVN.BadmintonClub.Application.Features.Payments.Reconciliation.Webhook;
 using LegendsTeamVN.BadmintonClub.Application.Features.Payments.SepaySetup.ActivateConnection;
@@ -22,6 +23,8 @@ using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace LegendsTeamVN.BadmintonClub.Presentation.Endpoints;
 
@@ -42,13 +45,13 @@ public sealed class SepaySetupEndpoint : EndpointGroupBase
     private static async Task<IResult> GetApplication(HttpContext context, ISender sender, CancellationToken ct)
     {
         context.Response.Headers.CacheControl = "no-store";
-        return (await sender.Send(new GetSepayApplicationQuery(), ct)).ToSepayHttpResult();
+        return (await sender.Send(new GetSepayApplicationQuery(), ct)).ToSepayHttpResult(context);
     }
 
     private static async Task<IResult> ConfigureApplication(ConfigureSepayApplicationRequest input, HttpContext context, ISender sender, CancellationToken ct)
     {
         context.Response.Headers.CacheControl = "no-store";
-        return (await sender.Send(new ConfigureSepayApplicationCommand(input), ct)).ToSepayHttpResult();
+        return (await sender.Send(new ConfigureSepayApplicationCommand(input), ct)).ToSepayHttpResult(context);
     }
 
     private static async Task<IResult> Callback(string state, string? code, string? error, HttpContext context, ISender sender, CancellationToken ct)
@@ -56,7 +59,7 @@ public sealed class SepaySetupEndpoint : EndpointGroupBase
         context.Response.Headers.CacheControl = "no-store";
         context.Response.Headers["Referrer-Policy"] = "no-referrer";
         return (await sender.Send(new CompleteSepayAuthorizationCommand(state, code, error), ct))
-            .ToSepayHttpResult(onSuccess: data => Results.Redirect(data.ReturnUrl));
+            .ToSepayHttpResult(context, onSuccess: data => Results.Redirect(data.ReturnUrl));
     }
 }
 
@@ -82,48 +85,48 @@ public sealed class ClubSepayEndpoint : EndpointGroupBase
     private static async Task<IResult> Status(Guid groupId, HttpContext context, ISender sender, CancellationToken ct)
     {
         context.Response.Headers.CacheControl = "no-store";
-        return (await sender.Send(new GetClubSepayConnectionQuery(groupId), ct)).ToSepayHttpResult();
+        return (await sender.Send(new GetClubSepayConnectionQuery(groupId), ct)).ToSepayHttpResult(context);
     }
     private static async Task<IResult> Start(Guid groupId, HttpContext context, ISender sender,
         CancellationToken ct, bool returnToMobileApp = false)
     {
         context.Response.Headers.CacheControl = "no-store";
-        return (await sender.Send(new StartSepayConnectionCommand(groupId, returnToMobileApp), ct)).ToSepayHttpResult();
+        return (await sender.Send(new StartSepayConnectionCommand(groupId, returnToMobileApp), ct)).ToSepayHttpResult(context);
     }
     private static async Task<IResult> Accounts(Guid groupId, HttpContext context, ISender sender, CancellationToken ct)
     {
         context.Response.Headers.CacheControl = "no-store";
-        return (await sender.Send(new ListSepayBankAccountsQuery(groupId), ct)).ToSepayHttpResult();
+        return (await sender.Send(new ListSepayBankAccountsQuery(groupId), ct)).ToSepayHttpResult(context);
     }
     private static async Task<IResult> Complete(Guid groupId, CompleteSepayRequest input, HttpContext context, ISender sender, CancellationToken ct)
     {
         context.Response.Headers.CacheControl = "no-store";
-        return (await sender.Send(new CompleteClubSepayConnectionCommand(groupId, input.Ticket), ct)).ToSepayHttpResult();
+        return (await sender.Send(new CompleteClubSepayConnectionCommand(groupId, input.Ticket), ct)).ToSepayHttpResult(context);
     }
     private static async Task<IResult> Select(Guid groupId, SelectSepayBankRequest input, HttpContext context, ISender sender, CancellationToken ct)
     {
         context.Response.Headers.CacheControl = "no-store";
-        return (await sender.Send(new SelectSepayBankCommand(groupId, input.ProviderBankId), ct)).ToSepayHttpResult();
+        return (await sender.Send(new SelectSepayBankCommand(groupId, input.ProviderBankId), ct)).ToSepayHttpResult(context);
     }
     private static async Task<IResult> Activate(Guid groupId, HttpContext context, ISender sender, CancellationToken ct)
     {
         context.Response.Headers.CacheControl = "no-store";
-        return (await sender.Send(new ActivateSepayConnectionCommand(groupId), ct)).ToSepayHttpResult();
+        return (await sender.Send(new ActivateSepayConnectionCommand(groupId), ct)).ToSepayHttpResult(context);
     }
     private static async Task<IResult> Disconnect(Guid groupId, HttpContext context, ISender sender, CancellationToken ct)
     {
         context.Response.Headers.CacheControl = "no-store";
-        return (await sender.Send(new DisconnectSepayConnectionCommand(groupId), ct)).ToSepayHttpResult();
+        return (await sender.Send(new DisconnectSepayConnectionCommand(groupId), ct)).ToSepayHttpResult(context);
     }
     private static async Task<IResult> Connections(Guid groupId, HttpContext context, ISender sender, CancellationToken ct)
     {
         context.Response.Headers.CacheControl = "no-store";
-        return (await sender.Send(new ListClubSepayConnectionsQuery(groupId), ct)).ToSepayHttpResult();
+        return (await sender.Send(new ListClubSepayConnectionsQuery(groupId), ct)).ToSepayHttpResult(context);
     }
     private static async Task<IResult> DisconnectById(Guid groupId, Guid connectionId, HttpContext context, ISender sender, CancellationToken ct)
     {
         context.Response.Headers.CacheControl = "no-store";
-        return (await sender.Send(new DisconnectSepayConnectionCommand(groupId, connectionId), ct)).ToSepayHttpResult();
+        return (await sender.Send(new DisconnectSepayConnectionCommand(groupId, connectionId), ct)).ToSepayHttpResult(context);
     }
     public sealed record SelectSepayBankRequest(long ProviderBankId);
     public sealed record CompleteSepayRequest(string Ticket);
@@ -141,8 +144,8 @@ public sealed class SepayWebhookEndpoint : EndpointGroupBase
         request.HttpContext.Response.Headers.CacheControl = "no-store";
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         deadline.CancelAfter(TimeSpan.FromSeconds(25));
-        if (!request.HasJsonContentType()) return Results.StatusCode(StatusCodes.Status415UnsupportedMediaType);
-        if (request.ContentLength > 65536) return Results.StatusCode(StatusCodes.Status413PayloadTooLarge);
+        if (!request.HasJsonContentType()) return Reject(StatusCodes.Status415UnsupportedMediaType, "ExpectedJson");
+        if (request.ContentLength > 65536) return Reject(StatusCodes.Status413PayloadTooLarge, "PayloadTooLarge");
         using var body = new MemoryStream();
         var buffer = new byte[4096];
         try
@@ -150,7 +153,7 @@ public sealed class SepayWebhookEndpoint : EndpointGroupBase
             int count;
             while ((count = await request.Body.ReadAsync(buffer.AsMemory(), deadline.Token)) != 0)
             {
-                if (body.Length + count > 65536) return Results.StatusCode(StatusCodes.Status413PayloadTooLarge);
+                if (body.Length + count > 65536) return Reject(StatusCodes.Status413PayloadTooLarge, "PayloadTooLarge");
                 await body.WriteAsync(buffer.AsMemory(0, count), deadline.Token);
             }
             var result = await sender.Send(new ProcessSepayWebhookCommand(bankAccountId, body.ToArray(),
@@ -161,7 +164,22 @@ public sealed class SepayWebhookEndpoint : EndpointGroupBase
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
+            LogRejection(StatusCodes.Status503ServiceUnavailable, "RequestTimeout");
             return Results.Json(new { success = false }, statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+
+        IResult Reject(int status, string reason)
+        {
+            LogRejection(status, reason);
+            return Results.StatusCode(status);
+        }
+
+        void LogRejection(int status, string reason)
+        {
+            var context = request.HttpContext;
+            var logger = context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger<SepayWebhookEndpoint>();
+            logger.LogWarning("Webhook SePay dừng tại API. BankAccountId={BankAccountId}, StatusCode={StatusCode}, Reason={Reason}, TraceId={TraceId}.",
+                bankAccountId, status, reason, Activity.Current?.TraceId.ToString() ?? context.TraceIdentifier);
         }
     }
 }
