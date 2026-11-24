@@ -131,7 +131,7 @@ public static class ServiceCollectionExtensions
             };
         });
         services.AddAuthorization(options => options.AddPolicy("SessionOperations", policy =>
-            policy.AddAuthenticationSchemes("SessionOperationsBearer", Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme).RequireAuthenticatedUser()));
+            policy.AddAuthenticationSchemes("SessionOperationsBearer").RequireAuthenticatedUser()));
         return services;
     }
 }
