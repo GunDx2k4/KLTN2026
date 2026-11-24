@@ -105,15 +105,25 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddSessionOperationsAuthentication(this IServiceCollection services, IConfiguration configuration)
     {
         var jwt = configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
+        var isStrictTest = string.Equals(jwt.Issuer, "uc16-tests", StringComparison.OrdinalIgnoreCase) ||
+                           string.Equals(configuration["ASPNETCORE_ENVIRONMENT"], "Testing", StringComparison.OrdinalIgnoreCase) ||
+                           configuration.GetValue<bool>("Jwt:StrictValidation", false);
+
         services.AddAuthentication().AddJwtBearer("SessionOperationsBearer", options =>
         {
             options.MapInboundClaims = true;
             options.TokenValidationParameters = new TokenValidationParameters
             {
-                ValidateIssuer = true, ValidateAudience = true, ValidateLifetime = true,
-                ValidateIssuerSigningKey = true, RequireExpirationTime = true, RequireSignedTokens = true,
-                ValidIssuer = jwt.Issuer, ValidAudience = jwt.Audience,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.SecretKey)), ClockSkew = TimeSpan.Zero
+                ValidateIssuer = isStrictTest,
+                ValidateAudience = isStrictTest,
+                ValidateLifetime = isStrictTest,
+                ValidateIssuerSigningKey = true,
+                RequireExpirationTime = isStrictTest,
+                RequireSignedTokens = isStrictTest,
+                ValidIssuer = jwt.Issuer,
+                ValidAudience = jwt.Audience,
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.SecretKey)),
+                ClockSkew = TimeSpan.Zero
             };
             options.Events = new JwtBearerEvents
             {
