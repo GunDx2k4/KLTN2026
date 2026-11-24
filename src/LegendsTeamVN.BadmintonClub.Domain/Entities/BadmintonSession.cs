@@ -211,7 +211,8 @@ public partial class BadmintonSession : AggregateRoot<Guid>
         Fees.Where(f => !f.IsDeleted && f.PaymentStatus == PaymentStatus.PAID).Sum(f => f.Amount);
 
     public bool CanEditAttendance(DateTime now) =>
-        !IsDeleted && now < EndTime && (Status == SessionStatus.PLAYING || StartTime.AddHours(-1) <= now) &&
+        !IsDeleted &&
+        (Status == SessionStatus.PLAYING || Status == SessionStatus.LOCKED || (now < EndTime && StartTime.AddHours(-1) <= now)) &&
         Status is SessionStatus.OPEN or SessionStatus.LOCKED or SessionStatus.PLAYING;
 
     public bool HasAttendanceRoom(SessionBooking? booking) =>

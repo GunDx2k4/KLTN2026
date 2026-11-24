@@ -39,7 +39,7 @@ public static class SettlementAllocationEngine
             .OrderBy(b => b.UserId.ToString("N"), StringComparer.Ordinal).ToArray();
         if (bookings.Length == 0 || bookings.Any(b => b.SessionId != session.Id) ||
             bookings.Select(b => b.UserId).Distinct().Count() != bookings.Length)
-            return Fail("Settlement.InvalidParticipants", "Buổi chơi cần danh sách người có mặt duy nhất và hợp lệ.");
+            return Fail("Settlement.InvalidParticipants", "Buổi chơi chưa có hội viên nào được điểm danh (Check-in ra sân). Vui lòng điểm danh cho các thành viên có mặt trước khi ghi nhận chi phí!");
         var userIds = bookings.Select(b => b.UserId).ToHashSet();
         if (adjustments.Any(a => !userIds.Contains(a.UserId) || !IsValidAmount(a.FinalAmount) || string.IsNullOrWhiteSpace(a.Reason)) ||
             adjustments.Select(a => a.UserId).Distinct().Count() != adjustments.Count)
