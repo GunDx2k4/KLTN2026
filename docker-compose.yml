@@ -16,7 +16,7 @@ services:
       - Jwt__ExpireMin=${JWT_EXPIRE_MIN}
       - Settlement__WritesEnabled=${SETTLEMENT_WRITES_ENABLED:-true}
       - Settlement__DispatchEnabled=${SETTLEMENT_DISPATCH_ENABLED:-true}
-      - Settlement__PreviewSigningKey=${SETTLEMENT_PREVIEW_SIGNING_KEY:-}
+      - Settlement__PreviewSigningKey=${SETTLEMENT_PREVIEW_SIGNING_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
       - Reconciliation__EvidenceArchiveDirectory=/var/lib/badmintonclub/reconciliation-evidence
       - Reconciliation__Enabled=${RECONCILIATION_ENABLED:-true}
       - Reconciliation__WritesEnabled=${RECONCILIATION_WRITES_ENABLED:-true}
