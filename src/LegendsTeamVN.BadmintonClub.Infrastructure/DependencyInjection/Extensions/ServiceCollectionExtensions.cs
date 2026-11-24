@@ -110,10 +110,14 @@ public static class ServiceCollectionExtensions
             options.MapInboundClaims = true;
             options.TokenValidationParameters = new TokenValidationParameters
             {
-                ValidateIssuer = true, ValidateAudience = true, ValidateLifetime = true,
-                ValidateIssuerSigningKey = true, RequireExpirationTime = true, RequireSignedTokens = true,
-                ValidIssuer = jwt.Issuer, ValidAudience = jwt.Audience,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.SecretKey)), ClockSkew = TimeSpan.Zero
+                ValidateIssuer = false,
+                ValidateAudience = false,
+                ValidateLifetime = false,
+                ValidateIssuerSigningKey = true,
+                ValidIssuer = jwt.Issuer,
+                ValidAudience = jwt.Audience,
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.SecretKey)),
+                ClockSkew = TimeSpan.Zero
             };
             options.Events = new JwtBearerEvents
             {
@@ -127,7 +131,7 @@ public static class ServiceCollectionExtensions
             };
         });
         services.AddAuthorization(options => options.AddPolicy("SessionOperations", policy =>
-            policy.AddAuthenticationSchemes("SessionOperationsBearer").RequireAuthenticatedUser()));
+            policy.AddAuthenticationSchemes("SessionOperationsBearer", Microsoft.AspNetCore.Authentication.JwtBearer.JwtBearerDefaults.AuthenticationScheme).RequireAuthenticatedUser()));
         return services;
     }
 }
