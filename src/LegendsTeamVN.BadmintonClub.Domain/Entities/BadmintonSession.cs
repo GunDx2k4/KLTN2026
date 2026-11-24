@@ -378,15 +378,17 @@ public partial class BadmintonSession : AggregateRoot<Guid>
 
     public Result ValidateSettlement(DateTime now, bool confirmRemainingNoShows = false, bool allowRepublish = false)
     {
+        var utcNow = now.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind(now, DateTimeKind.Utc) : now.ToUniversalTime();
+        var utcStart = StartTime.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind(StartTime, DateTimeKind.Utc) : StartTime.ToUniversalTime();
+        var utcEnd = EndTime.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind(EndTime, DateTimeKind.Utc) : EndTime.ToUniversalTime();
+
         if (IsDeleted || Status == SessionStatus.COMPLETED)
             return Result.Failure(Error.Conflict("Settlement.Closed", "Buổi chơi đã đóng hoàn toàn, không thể phát hành lại."));
         if (!allowRepublish && (PublishedPreviewId.HasValue || Fees.Count > 0 || Status is SessionStatus.CALCULATED))
             return Result.Failure(Error.Conflict("Settlement.AlreadyPublished", "Buổi chơi đã đóng hoặc đã có khoản thu, không thể phát hành lại."));
         if (!allowRepublish && (Status is not (SessionStatus.OPEN or SessionStatus.LOCKED or SessionStatus.PLAYING) || !CanTransitionTo(SessionStatus.CALCULATED)))
             return Result.Failure(Error.Conflict("Session.InvalidTransition", "Trạng thái buổi chơi không cho phép phát hành khoản thu."));
-        if (now.Kind != DateTimeKind.Utc || StartTime.Kind != DateTimeKind.Utc || EndTime.Kind != DateTimeKind.Utc)
-            return Result.Failure(Error.Validation("Settlement.UtcRequired", "Thời gian quyết toán phải sử dụng UTC."));
-        if (!allowRepublish && now < EndTime && Status is not (SessionStatus.PLAYING or SessionStatus.LOCKED))
+        if (!allowRepublish && utcNow < utcEnd && Status is not (SessionStatus.PLAYING or SessionStatus.LOCKED))
             return Result.Failure(Error.Conflict("Settlement.NotEnded", "Buổi chơi chưa kết thúc khung giờ thuê sân."));
         if (Matches.Any(m => !m.IsDeleted && m.Status == MatchStatus.PLAYING))
             return Result.Failure(Error.Conflict("Session.ActiveMatches", "Còn trận đang thi đấu, hãy kết thúc trận trước khi chốt buổi."));
@@ -420,7 +422,7 @@ public partial class BadmintonSession : AggregateRoot<Guid>
 
         PublishedPreviewId = previewId;
         PublishedRequestHash = requestHash;
-        PublishedAt = now;
+        PublishedAt = now.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind(now, DateTimeKind.Utc) : now.ToUniversalTime();
         PublishedBy = actorId;
         PublishedFeeRuleId = allocation.Rule.Id;
         PublishedFeeMode = allocation.Rule.FeeMode;

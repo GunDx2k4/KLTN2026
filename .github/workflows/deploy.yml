@@ -166,12 +166,12 @@ jobs:
           RABBITMQ_PORT: ${{ secrets.RABBITMQ_PORT }}
           RABBITMQ_USER: ${{ secrets.RABBITMQ_USER }}
           RABBITMQ_PASS: ${{ secrets.RABBITMQ_PASS }}
-          SETTLEMENT_WRITES_ENABLED: ${{ secrets.SETTLEMENT_WRITES_ENABLED || 'false' }}
-          SETTLEMENT_DISPATCH_ENABLED: ${{ secrets.SETTLEMENT_DISPATCH_ENABLED || 'false' }}
+          SETTLEMENT_WRITES_ENABLED: ${{ secrets.SETTLEMENT_WRITES_ENABLED || 'true' }}
+          SETTLEMENT_DISPATCH_ENABLED: ${{ secrets.SETTLEMENT_DISPATCH_ENABLED || 'true' }}
           SETTLEMENT_PREVIEW_SIGNING_KEY: ${{ secrets.SETTLEMENT_PREVIEW_SIGNING_KEY }}
-          RECONCILIATION_ENABLED: ${{ secrets.RECONCILIATION_ENABLED || 'false' }}
-          RECONCILIATION_WRITES_ENABLED: ${{ secrets.RECONCILIATION_WRITES_ENABLED || 'false' }}
-          RECONCILIATION_DISPATCH_ENABLED: ${{ secrets.RECONCILIATION_DISPATCH_ENABLED || 'false' }}
+          RECONCILIATION_ENABLED: ${{ secrets.RECONCILIATION_ENABLED || 'true' }}
+          RECONCILIATION_WRITES_ENABLED: ${{ secrets.RECONCILIATION_WRITES_ENABLED || 'true' }}
+          RECONCILIATION_DISPATCH_ENABLED: ${{ secrets.RECONCILIATION_DISPATCH_ENABLED || 'true' }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           port: ${{ secrets.SERVER_PORT }}

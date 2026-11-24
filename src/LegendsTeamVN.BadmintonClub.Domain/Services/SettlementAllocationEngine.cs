@@ -137,9 +137,13 @@ public static class SettlementAllocationEngine
             return Result.Failure<PriceType>(Error.Validation("Settlement.InvalidMembership", "Loại hội viên không hợp lệ."));
         if (!member.MonthlyExpiryDate.HasValue)
             return Result.Failure<PriceType>(Error.Validation("Settlement.MonthlyExpiryRequired", "Hội viên tháng chưa có ngày hết hạn được xác nhận."));
-        if (member.MonthlyExpiryDate.Value.Kind != DateTimeKind.Utc)
-            return Result.Failure<PriceType>(Error.Validation("Settlement.UtcRequired", "Ngày hết hạn hội viên tháng phải sử dụng UTC."));
-        return Result.Success(member.MonthlyExpiryDate >= startTime ? PriceType.MONTHLY_MEMBER : PriceType.DAILY_MEMBER);
+        var expiry = member.MonthlyExpiryDate.Value.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(member.MonthlyExpiryDate.Value, DateTimeKind.Utc)
+            : member.MonthlyExpiryDate.Value;
+        var start = startTime.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(startTime, DateTimeKind.Utc)
+            : startTime;
+        return Result.Success(expiry >= start ? PriceType.MONTHLY_MEMBER : PriceType.DAILY_MEMBER);
     }
 
     private static decimal[] Allocate(decimal amount, int count)

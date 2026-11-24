@@ -259,6 +259,12 @@ public class SessionRepository(BadmintonDbContext dbContext)
             .Where(r => r.GroupId == session.GroupId).ToListAsync(cancellationToken);
         var rule = rules.OrderByDescending(r => r.AppliedAt)
             .ThenByDescending(r => r.Id.ToString("N"), StringComparer.Ordinal).FirstOrDefault();
+        if (rule is null)
+        {
+            rule = new GroupFeeRule(session.GroupId, FeeMode.DYNAMIC, roundRule: 1000);
+            DbContext.GroupFeeRules.Add(rule);
+            await DbContext.SaveChangesAsync(cancellationToken);
+        }
         if (forUpdate) DbContext.Attach(session);
         if (snapshot is not null) await snapshot.CommitAsync(cancellationToken);
         return (session, rule, users, memberships);

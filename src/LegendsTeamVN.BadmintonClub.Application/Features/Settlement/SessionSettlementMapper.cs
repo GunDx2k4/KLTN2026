@@ -23,9 +23,9 @@ internal static class SessionSettlementMapper
             .Select(f => new MemberSettlementFeeResponse(f.Id, f.UserId, f.User?.FullName ?? "", f.User?.AvatarUrl,
                 f.PriceType.ToString(), f.Amount, f.PaymentStatus.ToString(), f.QrCodePayload, f.PaymentCode,
                 f.PaidAt, f.PaymentMethod?.ToString(), f.IsPublished ? new SettlementMemberAllocation(f.UserId,
-                    f.Gender!.Value, f.MemberType!, f.MonthlyExpiryDate, f.PriceType, f.CourtShare!.Value, f.ShuttleShare!.Value,
-                    f.ExtraShare!.Value, f.MonthlyFundCovered!.Value, f.BaseAmount!.Value, f.DiscountApplied, f.RawAmount!.Value,
-                    f.CalculatedAmount!.Value, f.Amount, f.AdjustmentReason, f.RoundingDelta!.Value, f.AdjustmentDelta!.Value) : null,
+                    f.Gender ?? 0, f.MemberType ?? "GUEST", f.MonthlyExpiryDate, f.PriceType, f.CourtShare ?? 0m, f.ShuttleShare ?? 0m,
+                    f.ExtraShare ?? 0m, f.MonthlyFundCovered ?? 0m, f.BaseAmount ?? 0m, f.DiscountApplied, f.RawAmount ?? 0m,
+                    f.CalculatedAmount ?? 0m, f.Amount, f.AdjustmentReason, f.RoundingDelta ?? 0m, f.AdjustmentDelta ?? 0m) : null,
                 f.PaymentProgress?.ToString())).ToArray();
 
         var activeBank = session.Group?.BankAccounts?.FirstOrDefault(b => b.IsActive);
