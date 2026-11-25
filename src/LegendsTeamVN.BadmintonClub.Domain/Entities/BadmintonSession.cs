@@ -67,12 +67,6 @@ public partial class BadmintonSession : AggregateRoot<Guid>
 
     protected BadmintonSession() { }
 
-    private static DateTime NormalizeToMinute(DateTime dt)
-    {
-        var utc = dt.Kind == DateTimeKind.Utc ? dt : DateTime.SpecifyKind(dt, DateTimeKind.Utc);
-        return new DateTime(utc.Year, utc.Month, utc.Day, utc.Hour, utc.Minute, 0, DateTimeKind.Utc);
-    }
-
     public BadmintonSession(
         Guid groupId,
         string title,
@@ -94,13 +88,13 @@ public partial class BadmintonSession : AggregateRoot<Guid>
         Id = Guid.NewGuid();
         GroupId = groupId;
         Title = title;
-        StartTime = NormalizeToMinute(startTime);
-        EndTime = NormalizeToMinute(endTime);
+        StartTime = startTime;
+        EndTime = endTime;
         CourtLocation = courtLocation;
         CourtCount = courtCount;
         TargetPlayerPerCourt = targetPlayerPerCourt;
         MaxPlayers = maxPlayers;
-        DeadlineBooking = deadlineBooking.HasValue ? NormalizeToMinute(deadlineBooking.Value) : StartTime.AddHours(-2);
+        DeadlineBooking = deadlineBooking ?? startTime.AddHours(-2);
         ShuttlecockUsed = shuttlecockUsed;
         CourtRentalCost = courtRentalCost;
         ExtraExpense = extraExpense;
@@ -181,12 +175,12 @@ public partial class BadmintonSession : AggregateRoot<Guid>
             CourtCount != courtCount || MaxPlayers != maxPlayers || DeadlineBooking != deadlineBooking))
             throw new InvalidOperationException("Session operational parameters are frozen after rotation starts.");
         Title = title;
-        StartTime = NormalizeToMinute(startTime);
-        EndTime = NormalizeToMinute(endTime);
+        StartTime = startTime;
+        EndTime = endTime;
         CourtLocation = courtLocation;
         CourtCount = courtCount;
         MaxPlayers = maxPlayers;
-        DeadlineBooking = NormalizeToMinute(deadlineBooking);
+        DeadlineBooking = deadlineBooking;
     }
 
     public void UpdateExpenses(int shuttlecockUsed, decimal courtRentalCost, decimal extraExpense)
