@@ -1,3 +1,4 @@
+using LegendsTeamVN.BadmintonClub.Application.Abstractions;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Sessions.Responses;
 using LegendsTeamVN.BadmintonClub.Domain.Entities;
 using LegendsTeamVN.BadmintonClub.Domain.Enums;
@@ -15,6 +16,7 @@ public sealed class VoteBookingCommandHandler(
     IBookingRepository bookingRepository,
     IUserRepository userRepository,
     ICurrentUserService currentUserService,
+    ISessionRealtimePublisher? sessionRealtimePublisher = null,
     IClubMemberRepository? clubMemberRepository = null) : ICommandHandler<VoteBookingCommand, SessionBookingResponse>
 {
     public async Task<Result<SessionBookingResponse>> Handle(VoteBookingCommand request, CancellationToken cancellationToken)
@@ -132,6 +134,12 @@ public sealed class VoteBookingCommandHandler(
         }
 
         RecruitmentRules.Synchronize(session, DateTime.UtcNow);
+
+        if (sessionRealtimePublisher != null)
+        {
+            await sessionRealtimePublisher.BookingUpdatedAsync(session.Id, userId.Value, booking.Status.ToString(), cancellationToken);
+        }
+
         return Result.Success(new SessionBookingResponse(
             booking.Id,
             session.Id,

@@ -8,4 +8,5 @@ public interface ISessionRealtimePublisher
     Task PersonalInviteAsync(Guid userId, DTOs.Rotation.Responses.MatchInvitationResponse invitation, CancellationToken ct);
     Task RotationChangedAsync(Guid eventId, RotationChangedDomainEvent change, CancellationToken ct);
     Task InviteAsync(Guid eventId, Guid userId, RotationChangedDomainEvent change, CancellationToken ct);
+    Task BookingUpdatedAsync(Guid sessionId, Guid userId, string action, CancellationToken ct);
 }

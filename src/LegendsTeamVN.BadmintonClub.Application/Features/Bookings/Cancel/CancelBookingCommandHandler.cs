@@ -1,3 +1,4 @@
+using LegendsTeamVN.BadmintonClub.Application.Abstractions;
 using LegendsTeamVN.BadmintonClub.Domain.Enums;
 using LegendsTeamVN.BadmintonClub.Domain.Repositories;
 using LegendsTeamVN.Core.Application.Messaging.CQRS;
@@ -12,7 +13,8 @@ public sealed class CancelBookingCommandHandler(
     ISessionRepository sessionRepository,
     IBookingRepository bookingRepository,
     ICurrentUserService currentUserService,
-    TimeProvider clock) : ICommandHandler<CancelBookingCommand>
+    TimeProvider clock,
+    ISessionRealtimePublisher? sessionRealtimePublisher = null) : ICommandHandler<CancelBookingCommand>
 {
     public async Task<Result> Handle(CancelBookingCommand request, CancellationToken cancellationToken)
     {
@@ -98,6 +100,12 @@ public sealed class CancelBookingCommandHandler(
         }
 
         RecruitmentRules.Synchronize(session, now);
+
+        if (sessionRealtimePublisher != null)
+        {
+            await sessionRealtimePublisher.BookingUpdatedAsync(request.SessionId, userId.Value, "CANCELLED", cancellationToken);
+        }
+
         return Result.Success();
     }
 }
