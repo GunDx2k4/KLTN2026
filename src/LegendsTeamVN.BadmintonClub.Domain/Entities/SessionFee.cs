@@ -54,14 +54,30 @@ public class SessionFee : AggregateRoot<Guid>
         if (!Enum.IsDefined(method))
             return PaymentFailure("InvalidMethod", "Phương thức thanh toán không hợp lệ.");
         if (PaymentRequestId.HasValue && PaymentMethod != method)
+        {
+            if (method == Enums.PaymentMethod.CASH &&
+                PaymentMethod == Enums.PaymentMethod.BANK_TRANSFER &&
+                PaymentProgress == Enums.PaymentProgress.QR_READY)
+            {
+                return LegendsTeamVN.Core.Utilities.Results.Result.Success();
+            }
             return PaymentFailure("PaymentMethodLocked", "Khoản thu đã chọn phương thức thanh toán khác.");
+        }
         return LegendsTeamVN.Core.Utilities.Results.Result.Success();
     }
 
     public LegendsTeamVN.Core.Utilities.Results.Result RequestCash(DateTime now)
     {
         var valid = ValidatePaymentRequest(Enums.PaymentMethod.CASH);
-        if (valid.IsFailure || PaymentRequestId.HasValue) return valid;
+        if (valid.IsFailure) return valid;
+        if (PaymentRequestId.HasValue && PaymentMethod == Enums.PaymentMethod.CASH) return valid;
+        QrCodePayload = string.Empty;
+        QrBankAccountId = null;
+        QrBankBin = null;
+        QrBankName = null;
+        QrAccountNumber = null;
+        QrAccountHolder = null;
+        QrCreatedAt = null;
         PaymentMethod = Enums.PaymentMethod.CASH;
         PaymentProgress = Enums.PaymentProgress.CASH_CONFIRMATION_REQUESTED;
         PaymentRequestId = Guid.NewGuid();
@@ -235,6 +251,14 @@ public class SessionFee : AggregateRoot<Guid>
             {
                 PaymentStatus = PaymentStatus.UNPAID;
             }
+            if (PaymentStatus != PaymentStatus.PAID)
+            {
+                PaymentMethod = null;
+                PaymentRequestedAt = null;
+                TransferReportedAt = null;
+                PaidAt = null;
+                CashCollectedBy = null;
+            }
             PaymentRequestId = null;
             PaymentProgress = null;
             QrCodePayload = string.Empty;
@@ -320,6 +344,10 @@ public class SessionFee : AggregateRoot<Guid>
         if (session.Id != SessionId || session.IsDeleted || IsDeleted || actor == Guid.Empty || now.Kind != DateTimeKind.Utc)
             throw new InvalidOperationException("Thông tin xác nhận tiền mặt không hợp lệ.");
         if (PaymentStatus == PaymentStatus.PAID) return false;
+        if (PaymentMethod == Enums.PaymentMethod.BANK_TRANSFER && PaymentProgress == Enums.PaymentProgress.QR_READY)
+        {
+            RequestCash(now);
+        }
         MarkAsPaid(Enums.PaymentMethod.CASH, actor);
         PaidAt = PaymentTimestamp(now);
         RaiseDomainEvent(new Events.PaymentConfirmedDomainEvent(Id, SessionId, UserId, session.GroupId,

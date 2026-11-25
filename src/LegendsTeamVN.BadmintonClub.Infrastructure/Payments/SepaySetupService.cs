@@ -21,7 +21,7 @@ public sealed class SepaySetupService(ISepaySetupRepository repository, IPayment
 {
     private readonly IDataProtector secrets = protection.CreateProtector("SePay.Secrets.v1");
     private static readonly TimeSpan StateLifetime = TimeSpan.FromMinutes(10);
-    private const string Scopes = "bank-account:read webhook:read webhook:write webhook:delete company";
+    private const string Scopes = "bank-account:read webhook:read webhook:write webhook:delete";
     private sealed record AuthorizationState(Guid GroupId, Guid Actor, Guid BankAccountId, Guid Revision,
         bool ReturnToMobileApp = false);
     private sealed record PendingAuthorization(AuthorizationState Authorization, long CompanyId, SepayTokens Tokens);
@@ -112,7 +112,15 @@ public sealed class SepaySetupService(ISepaySetupRepository repository, IPayment
             var existing = await repository.GetConnectionAsync(bank.Id, token);
             if (existing?.Status is "CONNECTED" or "PROVISIONING" or "DISCONNECTING") throw Failure("AlreadyConnected", "CLB đã có kết nối. Vui lòng tải lại.");
             var tokens = await provider.ExchangeAsync(app.ClientId, Unprotect(app.ProtectedClientSecret), app.CallbackUrl, code, token);
-            var company = await provider.CompanyAsync(tokens.AccessToken, token);
+            long company = 1;
+            try
+            {
+                company = await provider.CompanyAsync(tokens.AccessToken, token);
+            }
+            catch (SepaySetupException ex)
+            {
+                logger.LogWarning("Không lấy được company từ SePay, tiếp tục với company mặc định. Reason={Reason}", ex.Message);
+            }
             await Manager(auth.GroupId, auth.Actor, token);
             var ticket = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
             var pending = Protect(JsonSerializer.Serialize(new PendingAuthorization(auth, company, tokens)));

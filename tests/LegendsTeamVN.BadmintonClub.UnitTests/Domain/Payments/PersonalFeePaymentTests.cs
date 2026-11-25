@@ -46,13 +46,14 @@ public sealed class PersonalFeePaymentTests
     {
         var fee = Published();
         fee.PrepareBankTransfer(Bank, "payload", Now);
-        Assert.Equal("Payments.PaymentMethodLocked", fee.RequestCash(Now).Error.Code);
         Assert.Throws<InvalidOperationException>(() => fee.MarkAsPaid(PaymentMethod.CASH));
         Assert.Throws<InvalidOperationException>(() => fee.MarkAsPaid("CASH"));
         Assert.Throws<InvalidOperationException>(() => fee.UpdatePaymentMethod(PaymentMethod.CASH));
         Assert.Throws<InvalidOperationException>(() => fee.UpdatePaymentMethod("CASH"));
         Assert.Throws<InvalidOperationException>(() => fee.UpdatePaymentStatus(PaymentStatus.PAID));
         Assert.Throws<InvalidOperationException>(() => fee.UpdatePaymentStatus("PAID"));
+        fee.ReportTransfer(Now);
+        Assert.Equal("Payments.PaymentMethodLocked", fee.RequestCash(Now).Error.Code);
         Assert.Equal(PaymentStatus.UNPAID, fee.PaymentStatus);
     }
 

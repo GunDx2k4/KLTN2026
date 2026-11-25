@@ -20,6 +20,7 @@ public interface IReconciliationRepository
     Task<IReadOnlyList<Guid>> ManagersAsync(Guid groupId, CancellationToken ct);
     Task<bool> CanReceiveConfirmationAsync(Guid feeId, Guid groupId, Guid sessionId, Guid userId, CancellationToken ct);
     Task<bool> CanReceiveAlertAsync(Guid transactionId, Guid groupId, Guid userId, CancellationToken ct);
+    Task<GroupLedger?> FindLedgerByFeeIdAsync(Guid feeId, CancellationToken ct);
     void AddTransaction(BankTransaction transaction);
     void AddLedger(GroupLedger ledger);
 }

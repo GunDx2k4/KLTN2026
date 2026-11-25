@@ -13,8 +13,19 @@ internal static class PersonalFeeMapper
         var actions = new List<string>();
         if (enabled && writes && active && unpaid && f.IsPublished && f.Session.PublishedPreviewId.HasValue)
         {
-            if (f.PaymentMethod is null && !f.PaymentRequestId.HasValue) actions.Add("CASH_REQUEST");
-            if (f.PaymentMethod is null or PaymentMethod.BANK_TRANSFER) actions.Add("BANK_TRANSFER");
+            if (!f.PaymentRequestId.HasValue)
+            {
+                actions.Add("CASH_REQUEST");
+                actions.Add("BANK_TRANSFER");
+            }
+            else if (f.PaymentMethod == PaymentMethod.BANK_TRANSFER)
+            {
+                if (f.PaymentProgress == PaymentProgress.QR_READY)
+                {
+                    actions.Add("CASH_REQUEST");
+                }
+                actions.Add("BANK_TRANSFER");
+            }
             if (f.PaymentMethod == PaymentMethod.BANK_TRANSFER && f.PaymentRequestId.HasValue &&
                 f.PaymentProgress == PaymentProgress.QR_READY && !string.IsNullOrWhiteSpace(f.QrCodePayload)) actions.Add("TRANSFER_NOTICE");
         }

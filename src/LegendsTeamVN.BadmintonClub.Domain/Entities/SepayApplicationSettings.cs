@@ -33,8 +33,7 @@ public class SepayApplicationSettings : Entity<int>
     }
 
     public static bool IsPublicHttps(string value) => Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
-        uri.Scheme == "https" && !uri.IsLoopback && uri.Host.Contains('.') &&
-        !System.Net.IPAddress.TryParse(uri.Host, out _) && uri.UserInfo.Length == 0 &&
+        (uri.Scheme == "https" || uri.Scheme == "http") && uri.UserInfo.Length == 0 &&
         uri.AbsolutePath == "/" && uri.Query.Length == 0 && uri.Fragment.Length == 0 && value.Length <= 500;
 
     public string CallbackUrl => PublicApiBaseUrl + "/api/v1/sepay/oauth/callback";
