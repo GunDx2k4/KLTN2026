@@ -1,11 +1,13 @@
 using LegendsTeamVN.BadmintonClub.Application.Abstractions;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Sessions.Responses;
 using LegendsTeamVN.BadmintonClub.Application.Features.Recruitments;
+using LegendsTeamVN.BadmintonClub.Domain.Entities;
 using LegendsTeamVN.BadmintonClub.Domain.Enums;
 using LegendsTeamVN.BadmintonClub.Domain.Repositories;
 using LegendsTeamVN.Core.Application.Messaging.CQRS;
 using LegendsTeamVN.Core.Identity.Abstractions;
 using LegendsTeamVN.Core.Utilities.Results;
+using Microsoft.Extensions.Logging;
 
 namespace LegendsTeamVN.BadmintonClub.Application.Features.Bookings.Confirm;
 
@@ -14,7 +16,11 @@ public sealed class ConfirmBookingCommandHandler(
     IBookingRepository bookingRepository,
     IUserRepository userRepository,
     ICurrentUserService currentUserService,
-    ISessionRealtimePublisher? sessionRealtimePublisher = null) : ICommandHandler<ConfirmBookingCommand, SessionBookingResponse>
+    ISessionRealtimePublisher? sessionRealtimePublisher = null,
+    INotificationRepository? notificationRepository = null,
+    IDeviceRepository? deviceRepository = null,
+    INotificationService? notificationService = null,
+    ILogger<ConfirmBookingCommandHandler>? logger = null) : ICommandHandler<ConfirmBookingCommand, SessionBookingResponse>
 {
     public async Task<Result<SessionBookingResponse>> Handle(ConfirmBookingCommand command, CancellationToken cancellationToken)
     {
@@ -103,6 +109,49 @@ public sealed class ConfirmBookingCommandHandler(
         if (sessionRealtimePublisher != null)
         {
             await sessionRealtimePublisher.BookingUpdatedAsync(command.SessionId, booking.UserId, "CONFIRMED", cancellationToken);
+        }
+
+        if (notificationRepository != null && deviceRepository != null && notificationService != null)
+        {
+            try
+            {
+                var notifTitle = "Bạn đã được duyệt vào chơi!";
+                var notifContent = $"Bạn đã được duyệt vào danh sách tham gia chính thức cho buổi chơi \"{session.Title}\".";
+
+                var notification = new Notification(
+                    userId: booking.UserId,
+                    title: notifTitle,
+                    content: notifContent,
+                    type: NotificationType.SESSION,
+                    referenceType: "Session",
+                    referenceId: session.Id
+                );
+                notificationRepository.Add(notification);
+
+                var tokens = await deviceRepository.GetActiveTokensAsync(booking.UserId, cancellationToken);
+                var validTokens = tokens.Where(t => !string.IsNullOrWhiteSpace(t)).Distinct(StringComparer.Ordinal).ToList();
+
+                if (validTokens.Count > 0)
+                {
+                    var data = new Dictionary<string, string>
+                    {
+                        ["sessionId"] = session.Id.ToString(),
+                        ["type"] = "SESSION"
+                    };
+
+                    await notificationService.SendMulticastNotificationAsync(
+                        validTokens,
+                        notifTitle,
+                        notifContent,
+                        data,
+                        cancellationToken
+                    );
+                }
+            }
+            catch (Exception ex)
+            {
+                logger?.LogWarning(ex, "Gửi thông báo duyệt người chơi thất bại: {Message}", ex.Message);
+            }
         }
 
         var user = await userRepository.FindByIdAsync(booking.UserId, cancellationToken);
