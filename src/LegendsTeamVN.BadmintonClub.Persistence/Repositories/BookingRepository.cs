@@ -19,6 +19,12 @@ public class BookingRepository(BadmintonDbContext dbContext)
         var startUtc = startTime.Kind == DateTimeKind.Utc ? startTime : DateTime.SpecifyKind(startTime, DateTimeKind.Utc);
         var endUtc = endTime.Kind == DateTimeKind.Utc ? endTime : DateTime.SpecifyKind(endTime, DateTimeKind.Utc);
 
+        var buffer = (endUtc - startUtc) > TimeSpan.FromMinutes(5)
+            ? TimeSpan.FromMinutes(1)
+            : TimeSpan.FromSeconds(5);
+        var effectiveStart = startUtc.Add(buffer);
+        var effectiveEnd = endUtc.Subtract(buffer);
+
         var query = from b in DbContext.SessionBookings.AsNoTracking()
                     join s in DbContext.BadmintonSessions.AsNoTracking() on b.SessionId equals s.Id
                     where !b.IsDeleted
@@ -27,8 +33,8 @@ public class BookingRepository(BadmintonDbContext dbContext)
                           && !s.IsDeleted
                           && s.Status != SessionStatus.COMPLETED
                           && s.Status != SessionStatus.CALCULATED
-                          && s.StartTime < endUtc
-                          && s.EndTime > startUtc
+                          && s.StartTime < effectiveEnd
+                          && s.EndTime > effectiveStart
                     select b;
 
         if (excludeSessionId.HasValue)
