@@ -26,4 +26,11 @@ public sealed class SignalRSessionRealtimePublisher(IHubContext<SessionHub> hub)
             EventId = eventId, change.SessionId, MatchId = change.StartedMatchId, change.CourtNumber,
             TimeStart = change.OccurredAt, RotationVersion = change.Version
         }, ct);
+
+    public async Task BookingUpdatedAsync(Guid sessionId, Guid userId, string action, CancellationToken ct)
+    {
+        var payload = new { SessionId = sessionId, UserId = userId, Action = action, OccurredAt = DateTime.UtcNow };
+        await hub.Clients.Group(SessionHub.SessionGroup(sessionId)).SendAsync("BookingUpdated", payload, ct);
+        await hub.Clients.User(userId.ToString()).SendAsync("BookingUpdated", payload, ct);
+    }
 }

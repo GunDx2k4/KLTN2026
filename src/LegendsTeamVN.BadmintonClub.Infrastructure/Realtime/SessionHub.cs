@@ -12,10 +12,10 @@ public sealed class SessionHub(ISessionRepository sessions) : Hub
 
     public async Task JoinSession(Guid sessionId)
     {
-        if (!Guid.TryParse(Context.UserIdentifier, out var userId)) throw new HubException("Unauthenticated.");
+        if (!Guid.TryParse(Context.UserIdentifier, out _)) throw new HubException("Unauthenticated.");
         var session = await sessions.FindSingleAsync(s => s.Id == sessionId && !s.IsDeleted, Context.ConnectionAborted);
-        if (session is null || !await sessions.CanManageRotationAsync(session.GroupId, userId, Context.ConnectionAborted))
-            throw new HubException("Forbidden.");
+        if (session is null)
+            throw new HubException("NotFound.");
         await Groups.AddToGroupAsync(Context.ConnectionId, SessionGroup(sessionId), Context.ConnectionAborted);
     }
 
