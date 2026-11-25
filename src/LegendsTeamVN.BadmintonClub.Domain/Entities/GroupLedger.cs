@@ -157,6 +157,16 @@ public class GroupLedger : AggregateRoot<Guid>
         TransactionType == TransactionType.INFLOW && Category == LedgerCategory.MONTHLY_FUND &&
         MonthlyContributionId == monthlyContributionId && ActorId == actorId && Amount == expectedAmount;
 
+    public void UpdateSessionFeeReceipt(SessionFee fee, Guid actor)
+    {
+        if (fee.Id != FeeId || fee.PaymentStatus != PaymentStatus.PAID || fee.PaidAt is null)
+            throw new InvalidOperationException("Khoản thu chưa đủ điều kiện cập nhật sổ quỹ.");
+        ActorId = actor;
+        Amount = fee.Amount;
+        Description = $"Thu phí {fee.PaymentCode}";
+        CreatedAt = fee.PaidAt.Value;
+    }
+
     public void UpdateCategory(LedgerCategory category)
     {
         if (FeeId.HasValue || MonthlyContributionId.HasValue || RequestId.HasValue) throw new InvalidOperationException("Không thể đổi hạng mục của khoản thu có nguồn.");

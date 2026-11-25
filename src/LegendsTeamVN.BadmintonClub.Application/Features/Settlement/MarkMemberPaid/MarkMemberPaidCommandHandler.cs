@@ -27,16 +27,20 @@ public sealed class MarkMemberPaidCommandHandler(ISessionRepository sessions, IC
         if (fee is null)
             return Result.Failure<SessionSettlementResponse>(Error.NotFound("Settlement.FeeNotFound", "Không tìm thấy khoản thu."));
         if (fee.PaymentStatus == PaymentStatus.PAID) return Result.Success(SessionSettlementMapper.Map(session));
-        if (fee.PaymentRequestId.HasValue && fee.PaymentMethod == PaymentMethod.BANK_TRANSFER)
-            return Result.Failure<SessionSettlementResponse>(Error.Conflict("Payments.PaymentMethodLocked", "Khoản thu đã chọn chuyển khoản, không thể xác nhận tiền mặt."));
-        if (fee.PaymentRequestId.HasValue && payments.CurrentValue is not { Enabled: true, WritesEnabled: true })
-            return Result.Failure<SessionSettlementResponse>(Error.Conflict("Payments.WritesDisabled", "Chức năng thanh toán đang tạm ngừng."));
         if (fee.PaymentStatus == PaymentStatus.EXEMPT || fee.Amount == 0)
             return Result.Failure<SessionSettlementResponse>(Error.Conflict("Settlement.Exempt", "Khoản miễn thu không được xác nhận thanh toán."));
         if (!reconciliation.CurrentValue.WritesEnabled)
             return Result.Failure<SessionSettlementResponse>(Error.Conflict("Reconciliation.WritesDisabled", "Xác nhận thanh toán đang tạm dừng."));
         fee.ConfirmCashPayment(session, actor, clock.GetUtcNow().UtcDateTime);
-        ledger.AddLedger(LegendsTeamVN.BadmintonClub.Domain.Entities.GroupLedger.CreateSessionFeeReceipt(session, fee));
+        var existingLedger = await ledger.FindLedgerByFeeIdAsync(fee.Id, ct);
+        if (existingLedger is not null)
+        {
+            existingLedger.UpdateSessionFeeReceipt(fee, actor);
+        }
+        else
+        {
+            ledger.AddLedger(LegendsTeamVN.BadmintonClub.Domain.Entities.GroupLedger.CreateSessionFeeReceipt(session, fee));
+        }
         return Result.Success(SessionSettlementMapper.Map(session));
     }
 }

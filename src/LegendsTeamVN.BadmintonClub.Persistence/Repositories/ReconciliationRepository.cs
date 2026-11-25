@@ -147,6 +147,9 @@ public sealed class ReconciliationRepository(BadmintonDbContext db) : IReconcili
         db.BankTransactions.Add(transaction);
     }
 
+    public Task<GroupLedger?> FindLedgerByFeeIdAsync(Guid feeId, CancellationToken ct) =>
+        db.GroupLedgers.FirstOrDefaultAsync(l => l.FeeId == feeId && !l.IsDeleted, ct);
+
     public void AddLedger(GroupLedger ledger)
     {
         RequireTransaction();
