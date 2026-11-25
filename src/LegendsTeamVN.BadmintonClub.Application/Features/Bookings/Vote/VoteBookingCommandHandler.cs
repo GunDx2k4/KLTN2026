@@ -149,17 +149,18 @@ public sealed class VoteBookingCommandHandler(
         {
             try
             {
-                var hostMembers = await clubMemberRepository
+                var allMembers = await clubMemberRepository
                     .FindAll(m => m.GroupId == session.GroupId && m.Status == ClubMemberStatus.ACTIVE && !m.IsDeleted && m.UserId != userId.Value)
                     .Include(m => m.RoleEntity)
-                    .Where(m => m.RoleEntity.RoleName.ToLower().Contains("host") || m.RoleEntity.IsDefault == false)
                     .ToListAsync(cancellationToken);
+
+                var hostMembers = allMembers
+                    .Where(m => m.RoleEntity != null && (m.RoleEntity.RoleName.Contains("Host", StringComparison.OrdinalIgnoreCase) || !m.RoleEntity.IsDefault))
+                    .ToList();
 
                 if (hostMembers.Count == 0)
                 {
-                    hostMembers = await clubMemberRepository
-                        .FindAll(m => m.GroupId == session.GroupId && m.Status == ClubMemberStatus.ACTIVE && !m.IsDeleted && m.UserId != userId.Value)
-                        .ToListAsync(cancellationToken);
+                    hostMembers = allMembers;
                 }
 
                 if (hostMembers.Count > 0)

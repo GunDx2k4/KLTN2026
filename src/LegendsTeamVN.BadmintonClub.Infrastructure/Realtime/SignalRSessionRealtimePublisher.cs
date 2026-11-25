@@ -31,13 +31,10 @@ public sealed class SignalRSessionRealtimePublisher(IHubContext<SessionHub> hub)
     {
         var payload = new
         {
-            sessionId = sessionId.ToString(),
-            SessionId = sessionId.ToString(),
-            userId = userId.ToString(),
-            UserId = userId.ToString(),
-            action = action,
+            SessionId = sessionId,
+            UserId = userId,
             Action = action,
-            occurredAt = DateTime.UtcNow
+            OccurredAt = DateTime.UtcNow
         };
         await hub.Clients.Group(SessionHub.SessionGroup(sessionId)).SendAsync("BookingUpdated", payload, ct);
         await hub.Clients.User(userId.ToString()).SendAsync("BookingUpdated", payload, ct);
