@@ -85,10 +85,27 @@ public static class SettlementAllocationEngine
                 var monthlyCovered = priceType.Value == PriceType.MONTHLY_MEMBER
                     ? (costs.MonthlyExemptCourtOnly ? courtShares[index] : actualShare)
                     : 0m;
+
+                // Kiểm tra xem khách vãng lai có đăng ký qua tin tuyển (GuestRecruitment) hay không
+                decimal? guestRecruitmentCost = null;
+                if (priceType.Value == PriceType.GUEST)
+                {
+                    var bookingRecruitmentId = bookings[index].RecruitmentId;
+                    var recruitment = session.Recruitments.FirstOrDefault(r =>
+                        !r.IsDeleted && (bookingRecruitmentId.HasValue ? r.Id == bookingRecruitmentId.Value : r.Status != RecruitmentStatus.EXPIRED));
+                    if (recruitment != null)
+                    {
+                        guestRecruitmentCost = recruitment.SharedCost;
+                    }
+                }
+
                 var baseAmount = priceType.Value == PriceType.MONTHLY_MEMBER
                     ? (costs.MonthlyExemptCourtOnly ? (shuttleShares[index] + extraShares[index]) : 0m)
-                    : rule.FeeMode == FeeMode.DYNAMIC
-                        ? actualShare : priceType.Value == PriceType.GUEST ? rule.GuestFee : rule.DailyMemberFee;
+                    : (priceType.Value == PriceType.GUEST && guestRecruitmentCost.HasValue)
+                        ? guestRecruitmentCost.Value
+                        : rule.FeeMode == FeeMode.DYNAMIC
+                            ? actualShare
+                            : priceType.Value == PriceType.GUEST ? rule.GuestFee : rule.DailyMemberFee;
                 var configuredDiscount = user.Gender != (short)Gender.Female ? 0m : priceType.Value switch
                 {
                     PriceType.DAILY_MEMBER => rule.FemaleDiscountDaily,
