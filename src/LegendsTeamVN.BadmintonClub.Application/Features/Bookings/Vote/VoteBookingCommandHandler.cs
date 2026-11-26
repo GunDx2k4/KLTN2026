@@ -7,6 +7,7 @@ using LegendsTeamVN.Core.Application.Messaging.CQRS;
 using LegendsTeamVN.Core.Identity.Abstractions;
 using LegendsTeamVN.Core.Utilities.Results;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using LegendsTeamVN.BadmintonClub.Application.Features.Recruitments;
 
 namespace LegendsTeamVN.BadmintonClub.Application.Features.Bookings.Vote;
@@ -17,7 +18,11 @@ public sealed class VoteBookingCommandHandler(
     IUserRepository userRepository,
     ICurrentUserService currentUserService,
     ISessionRealtimePublisher? sessionRealtimePublisher = null,
-    IClubMemberRepository? clubMemberRepository = null) : ICommandHandler<VoteBookingCommand, SessionBookingResponse>
+    IClubMemberRepository? clubMemberRepository = null,
+    INotificationRepository? notificationRepository = null,
+    IDeviceRepository? deviceRepository = null,
+    INotificationService? notificationService = null,
+    ILogger<VoteBookingCommandHandler>? logger = null) : ICommandHandler<VoteBookingCommand, SessionBookingResponse>
 {
     public async Task<Result<SessionBookingResponse>> Handle(VoteBookingCommand request, CancellationToken cancellationToken)
     {
@@ -138,6 +143,75 @@ public sealed class VoteBookingCommandHandler(
         if (sessionRealtimePublisher != null)
         {
             await sessionRealtimePublisher.BookingUpdatedAsync(session.Id, userId.Value, booking.Status.ToString(), cancellationToken);
+        }
+
+        if (clubMemberRepository != null && notificationRepository != null && deviceRepository != null && notificationService != null)
+        {
+            try
+            {
+                var allMembers = await clubMemberRepository
+                    .FindAll(m => m.GroupId == session.GroupId && m.Status == ClubMemberStatus.ACTIVE && !m.IsDeleted && m.UserId != userId.Value)
+                    .Include(m => m.RoleEntity)
+                    .ToListAsync(cancellationToken);
+
+                var hostMembers = allMembers
+                    .Where(m => m.RoleEntity != null && (m.RoleEntity.RoleName.Contains("Host", StringComparison.OrdinalIgnoreCase) || !m.RoleEntity.IsDefault))
+                    .ToList();
+
+                if (hostMembers.Count == 0)
+                {
+                    hostMembers = allMembers;
+                }
+
+                if (hostMembers.Count > 0)
+                {
+                    var isWaiting = booking.Status == BookingStatus.WAITING;
+                    var notifTitle = isWaiting
+                        ? $"Có người đăng ký vào hàng đợi ({session.Title})"
+                        : $"Có người chơi tham gia ({session.Title})";
+                    var notifContent = isWaiting
+                        ? $"{user.FullName} vừa đăng ký vào hàng đợi (#{booking.QueueOrder}) cho buổi chơi \"{session.Title}\". Vui lòng xét duyệt."
+                        : $"{user.FullName} vừa đăng ký tham gia buổi chơi \"{session.Title}\".";
+
+                    foreach (var host in hostMembers)
+                    {
+                        var notification = new Notification(
+                            userId: host.UserId,
+                            title: notifTitle,
+                            content: notifContent,
+                            type: NotificationType.SESSION,
+                            referenceType: "Session",
+                            referenceId: session.Id
+                        );
+                        notificationRepository.Add(notification);
+                    }
+
+                    var hostUserIds = hostMembers.Select(h => h.UserId).Distinct().ToList();
+                    var tokens = await deviceRepository.GetActiveTokensByUserIdsAsync(hostUserIds, cancellationToken);
+                    var validTokens = tokens.Where(t => !string.IsNullOrWhiteSpace(t)).Distinct(StringComparer.Ordinal).ToList();
+
+                    if (validTokens.Count > 0)
+                    {
+                        var data = new Dictionary<string, string>
+                        {
+                            ["sessionId"] = session.Id.ToString(),
+                            ["type"] = "SESSION"
+                        };
+
+                        await notificationService.SendMulticastNotificationAsync(
+                            validTokens,
+                            notifTitle,
+                            notifContent,
+                            data,
+                            cancellationToken
+                        );
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logger?.LogWarning(ex, "Gửi thông báo có người chơi mới thất bại: {Message}", ex.Message);
+            }
         }
 
         return Result.Success(new SessionBookingResponse(
