@@ -30,8 +30,8 @@ services:
       - MasstransitConfiguration__Port=${RABBITMQ_PORT}
       - MasstransitConfiguration__UserName=${RABBITMQ_USER}
       - MasstransitConfiguration__Password=${RABBITMQ_PASS} 
+      - Firebase__CredentialsJson=${FIREBASE_CREDENTIALS_JSON:-}
     volumes:
-      - ./sports-venue-cb204-firebase-adminsdk-fbsvc-7f5ec12fb1.json:/app/sports-venue-cb204-firebase-adminsdk-fbsvc-7f5ec12fb1.json:ro
       - ${RECONCILIATION_EVIDENCE_DIRECTORY:?Cần thư mục bằng chứng UC18 riêng}:/var/lib/badmintonclub/reconciliation-evidence
       - ${SEPAY_KEY_DIRECTORY:?Cần thư mục khóa mã hóa SePay bền vững}:/var/lib/badmintonclub/sepay-keys
     networks:

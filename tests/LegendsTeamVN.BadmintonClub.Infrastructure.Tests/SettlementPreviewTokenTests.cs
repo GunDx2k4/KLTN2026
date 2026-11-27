@@ -25,8 +25,7 @@ public sealed class SettlementPreviewTokenTests
         {
             ["Settlement:PreviewSigningKey"] = new string('a', 32),
             ["Settlement:WritesEnabled"] = "false",
-            ["Settlement:DispatchEnabled"] = "false",
-            ["Firebase:CredentialsPath"] = "uc16-test-no-firebase-credentials.json"
+            ["Settlement:DispatchEnabled"] = "false"
         }).Build();
         var services = new ServiceCollection().AddLogging().AddSingleton<IConfiguration>(configuration);
         services.AddApplication().AddInfrastructure(configuration);

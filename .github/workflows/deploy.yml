@@ -16,18 +16,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Setup Firebase Credentials
-        env:
-          FIREBASE_CREDENTIALS_JSON: ${{ secrets.FIREBASE_CREDENTIALS_JSON }}
-        run: |
-          if [ -n "$FIREBASE_CREDENTIALS_JSON" ]; then
-            if echo "$FIREBASE_CREDENTIALS_JSON" | grep -qv '^{' && echo "$FIREBASE_CREDENTIALS_JSON" | base64 -d > /dev/null 2>&1; then
-              echo "$FIREBASE_CREDENTIALS_JSON" | base64 -d > src/Hosts/LegendsTeamVN.BadmintonClub.API/sports-venue-cb204-firebase-adminsdk-fbsvc-7f5ec12fb1.json
-            else
-              echo "$FIREBASE_CREDENTIALS_JSON" > src/Hosts/LegendsTeamVN.BadmintonClub.API/sports-venue-cb204-firebase-adminsdk-fbsvc-7f5ec12fb1.json
-            fi
-          fi
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -56,18 +44,6 @@ jobs:
       - name: Convert Image Name to Lowercase
         run: echo "IMAGE_NAME_LC=$(echo ${{ env.IMAGE_NAME }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
 
-      - name: Setup Firebase Credentials
-        env:
-          FIREBASE_CREDENTIALS_JSON: ${{ secrets.FIREBASE_CREDENTIALS_JSON }}
-        run: |
-          if [ -n "$FIREBASE_CREDENTIALS_JSON" ]; then
-            if echo "$FIREBASE_CREDENTIALS_JSON" | grep -qv '^{' && echo "$FIREBASE_CREDENTIALS_JSON" | base64 -d > /dev/null 2>&1; then
-              echo "$FIREBASE_CREDENTIALS_JSON" | base64 -d > src/Hosts/LegendsTeamVN.BadmintonClub.API/sports-venue-cb204-firebase-adminsdk-fbsvc-7f5ec12fb1.json
-            else
-              echo "$FIREBASE_CREDENTIALS_JSON" > src/Hosts/LegendsTeamVN.BadmintonClub.API/sports-venue-cb204-firebase-adminsdk-fbsvc-7f5ec12fb1.json
-            fi
-          fi
-        
       - name: Log in to the Container registry
         uses: docker/login-action@v3
         with:
@@ -124,18 +100,24 @@ jobs:
           files: |
             src/Hosts/LegendsTeamVN.BadmintonClub.Migrator/Migrations/**
 
-      - name: Prepare Firebase Credentials for Server
+      - name: Normalize Firebase Credentials JSON
         env:
-          FIREBASE_CREDENTIALS_JSON: ${{ secrets.FIREBASE_CREDENTIALS_JSON }}
+          RAW_FIREBASE_CREDENTIALS_JSON: ${{ secrets.FIREBASE_CREDENTIALS_JSON }}
         run: |
-          if [ -n "$FIREBASE_CREDENTIALS_JSON" ]; then
-            if echo "$FIREBASE_CREDENTIALS_JSON" | grep -qv '^{' && echo "$FIREBASE_CREDENTIALS_JSON" | base64 -d > /dev/null 2>&1; then
-              echo "$FIREBASE_CREDENTIALS_JSON" | base64 -d > sports-venue-cb204-firebase-adminsdk-fbsvc-7f5ec12fb1.json
+          if [ -n "$RAW_FIREBASE_CREDENTIALS_JSON" ]; then
+            if printf '%s' "$RAW_FIREBASE_CREDENTIALS_JSON" | jq -e . > /dev/null 2>&1; then
+              NORMALIZED=$(printf '%s' "$RAW_FIREBASE_CREDENTIALS_JSON" | jq -c .)
             else
-              echo "$FIREBASE_CREDENTIALS_JSON" > sports-venue-cb204-firebase-adminsdk-fbsvc-7f5ec12fb1.json
+              NORMALIZED=$(printf '%s' "$RAW_FIREBASE_CREDENTIALS_JSON" | base64 -d | jq -c .)
             fi
+            echo "::add-mask::$NORMALIZED"
+            {
+              echo "FIREBASE_CREDENTIALS_JSON<<EOF"
+              echo "$NORMALIZED"
+              echo "EOF"
+            } >> "$GITHUB_ENV"
           else
-            touch sports-venue-cb204-firebase-adminsdk-fbsvc-7f5ec12fb1.json
+            echo "FIREBASE_CREDENTIALS_JSON=" >> "$GITHUB_ENV"
           fi
       
       - name: Copy deployment files to server
@@ -145,7 +127,7 @@ jobs:
           port: ${{ secrets.SERVER_PORT }}
           username: ${{ secrets.SERVER_USERNAME }}
           key: ${{ secrets.SERVER_SSH_KEY }}
-          source: "docker-compose.yml,sports-venue-cb204-firebase-adminsdk-fbsvc-7f5ec12fb1.json"
+          source: "docker-compose.yml"
           target: "~/badmintonclub/"
 
       - name: Deploy to self-hosted server via SSH
@@ -176,12 +158,13 @@ jobs:
           CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME || 'dlimibe4b' }}
           CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY || '924533145124796' }}
           CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET || '8ny2747Y1BeoHzBQ684UuQRO1Sk' }}
+          FIREBASE_CREDENTIALS_JSON: ${{ env.FIREBASE_CREDENTIALS_JSON }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           port: ${{ secrets.SERVER_PORT }}
           username: ${{ secrets.SERVER_USERNAME }}
           key: ${{ secrets.SERVER_SSH_KEY }}
-          envs: RUN_MIGRATIONS,DEPLOY_SHA,IMAGE_REPOSITORY,REGISTRY_USER,REGISTRY_TOKEN,DB_CONNECTION_STRING,REDIS_CONNECTION_STRING,JWT_ISSUER,JWT_AUDIENCE,JWT_SECRET,JWT_EXPIRE_MIN,RABBITMQ_HOST,RABBITMQ_VHOST,RABBITMQ_PORT,RABBITMQ_USER,RABBITMQ_PASS,SETTLEMENT_WRITES_ENABLED,SETTLEMENT_DISPATCH_ENABLED,SETTLEMENT_PREVIEW_SIGNING_KEY,RECONCILIATION_ENABLED,RECONCILIATION_WRITES_ENABLED,RECONCILIATION_DISPATCH_ENABLED,CLOUDINARY_CLOUD_NAME,CLOUDINARY_API_KEY,CLOUDINARY_API_SECRET
+          envs: RUN_MIGRATIONS,DEPLOY_SHA,IMAGE_REPOSITORY,REGISTRY_USER,REGISTRY_TOKEN,DB_CONNECTION_STRING,REDIS_CONNECTION_STRING,JWT_ISSUER,JWT_AUDIENCE,JWT_SECRET,JWT_EXPIRE_MIN,RABBITMQ_HOST,RABBITMQ_VHOST,RABBITMQ_PORT,RABBITMQ_USER,RABBITMQ_PASS,SETTLEMENT_WRITES_ENABLED,SETTLEMENT_DISPATCH_ENABLED,SETTLEMENT_PREVIEW_SIGNING_KEY,RECONCILIATION_ENABLED,RECONCILIATION_WRITES_ENABLED,RECONCILIATION_DISPATCH_ENABLED,CLOUDINARY_CLOUD_NAME,CLOUDINARY_API_KEY,CLOUDINARY_API_SECRET,FIREBASE_CREDENTIALS_JSON
           script: |
             set -eu
             umask 077
@@ -213,7 +196,6 @@ jobs:
             mkdir -p "$key_directory"
             chmod 700 "$evidence_directory"
             chmod 700 "$key_directory"
-            chmod 600 sports-venue-cb204-firebase-adminsdk-fbsvc-7f5ec12fb1.json
             
             printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USER" --password-stdin
             docker pull "$api_image"
@@ -232,6 +214,7 @@ jobs:
                 value=$(printenv "$name")
                 write_env "$name" "$value"
             done
+            write_env FIREBASE_CREDENTIALS_JSON "${FIREBASE_CREDENTIALS_JSON:-}"
             
             docker compose --env-file .env.next config --quiet
             if [ "$RUN_MIGRATIONS" = "true" ]; then
