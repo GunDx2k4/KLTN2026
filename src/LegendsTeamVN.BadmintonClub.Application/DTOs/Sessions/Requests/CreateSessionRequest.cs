@@ -12,5 +12,7 @@ public sealed record CreateSessionRequest(
     decimal CourtRentalCost = 0,
     string? Address = null,
     decimal? Lat = null,
-    decimal? Lng = null
+    decimal? Lng = null,
+    int? MinimumPlayers = null,
+    int? ShortageCheckMinutes = null
 );

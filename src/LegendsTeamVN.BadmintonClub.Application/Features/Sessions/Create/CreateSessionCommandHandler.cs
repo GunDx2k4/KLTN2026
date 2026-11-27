@@ -49,6 +49,9 @@ public sealed class CreateSessionCommandHandler(
             lng: req.Lng
         );
 
+        var configured = session.ConfigureShortage(req.MinimumPlayers, req.ShortageCheckMinutes, maxPlayers, false);
+        if (configured.IsFailure) return Result.Failure<Guid>(configured.Error);
+        session.ScheduleShortageCheck();
         sessionRepository.Add(session);
 
         if (clubMemberRepository != null && notificationRepository != null && deviceRepository != null && notificationService != null)

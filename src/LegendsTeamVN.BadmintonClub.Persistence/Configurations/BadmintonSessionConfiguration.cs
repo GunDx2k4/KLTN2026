@@ -11,6 +11,15 @@ public class BadmintonSessionConfiguration : IEntityTypeConfiguration<BadmintonS
         builder.Property(s => s.NextProposalCheckAt).HasColumnName("next_proposal_check_at");
         builder.HasIndex(s => s.NextProposalCheckAt).HasFilter("next_proposal_check_at IS NOT NULL AND NOT \"IsDeleted\"");
         builder.ToTable("badminton_session");
+        builder.Property(s => s.MinimumPlayers).HasColumnName("minimum_players");
+        builder.Property(s => s.ShortageCheckMinutes).HasColumnName("shortage_check_minutes");
+        builder.Property(s => s.ShortageReminderAt).HasColumnName("shortage_reminder_at");
+        builder.Property(s => s.ShortageReminderSent).HasColumnName("shortage_reminder_sent");
+        builder.Property(s => s.ShortageInitialChecked).HasColumnName("shortage_initial_checked");
+        builder.Property(s => s.ShortageFinalChecked).HasColumnName("shortage_final_checked");
+        builder.Property(s => s.NextShortageCheckAt).HasColumnName("next_shortage_check_at");
+        builder.Property(s => s.NotHeldAt).HasColumnName("not_held_at");
+        builder.HasIndex(s => s.NextShortageCheckAt).HasFilter("next_shortage_check_at IS NOT NULL AND NOT \"IsDeleted\"");
 
         builder.HasKey(s => s.Id);
         builder.Property(s => s.Id)

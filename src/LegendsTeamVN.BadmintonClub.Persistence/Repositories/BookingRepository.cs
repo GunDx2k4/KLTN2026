@@ -31,7 +31,7 @@ public class BookingRepository(BadmintonDbContext dbContext)
                           && b.UserId == userId
                           && (b.Status == BookingStatus.CONFIRMED || b.Status == BookingStatus.CHECKED_IN)
                           && !s.IsDeleted
-                          && s.Status != SessionStatus.COMPLETED
+                          && s.Status != SessionStatus.COMPLETED && s.Status != SessionStatus.NOT_HELD
                           && s.Status != SessionStatus.CALCULATED
                           && s.StartTime < effectiveEnd
                           && s.EndTime > effectiveStart

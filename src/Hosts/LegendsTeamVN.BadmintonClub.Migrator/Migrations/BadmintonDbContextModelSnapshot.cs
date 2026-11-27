@@ -257,6 +257,10 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("max_players");
 
+                    b.Property<int?>("MinimumPlayers")
+                        .HasColumnType("integer")
+                        .HasColumnName("minimum_players");
+
                     b.Property<string>("ModifiedBy")
                         .HasColumnType("text");
 
@@ -271,6 +275,14 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                     b.Property<DateTime?>("NextProposalCheckAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("next_proposal_check_at");
+
+                    b.Property<DateTime?>("NextShortageCheckAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_shortage_check_at");
+
+                    b.Property<DateTime?>("NotHeldAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("not_held_at");
 
                     b.Property<decimal?>("PolicyDelta")
                         .HasPrecision(18, 2)
@@ -387,6 +399,26 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                         .HasColumnType("numeric(18,2)")
                         .HasColumnName("rounding_delta");
 
+                    b.Property<int?>("ShortageCheckMinutes")
+                        .HasColumnType("integer")
+                        .HasColumnName("shortage_check_minutes");
+
+                    b.Property<bool>("ShortageFinalChecked")
+                        .HasColumnType("boolean")
+                        .HasColumnName("shortage_final_checked");
+
+                    b.Property<bool>("ShortageInitialChecked")
+                        .HasColumnType("boolean")
+                        .HasColumnName("shortage_initial_checked");
+
+                    b.Property<DateTime?>("ShortageReminderAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("shortage_reminder_at");
+
+                    b.Property<bool>("ShortageReminderSent")
+                        .HasColumnType("boolean")
+                        .HasColumnName("shortage_reminder_sent");
+
                     b.Property<decimal?>("ShuttlecockPrice")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)")
@@ -444,6 +476,9 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
 
                     b.HasIndex("NextProposalCheckAt")
                         .HasFilter("next_proposal_check_at IS NOT NULL AND NOT \"IsDeleted\"");
+
+                    b.HasIndex("NextShortageCheckAt")
+                        .HasFilter("next_shortage_check_at IS NOT NULL AND NOT \"IsDeleted\"");
 
                     b.HasIndex("ReputationProcessingStatus", "ReputationNextAttemptAt");
 

@@ -23,5 +23,10 @@ public sealed record SessionResponse(
     int CurrentUserQueueOrder = 0,
     string? Address = null,
     decimal? Lat = null,
-    decimal? Lng = null
+    decimal? Lng = null,
+    int? MinimumPlayers = null,
+    int? ShortageCheckMinutes = null,
+    DateTime? ShortageReminderAt = null,
+    bool ShortageReminderSent = false,
+    DateTime? NotHeldAt = null
 );
