@@ -41,8 +41,13 @@ public sealed class LedgerWriteRepository(BadmintonDbContext db) : ILedgerWriteR
             await ledger.AnyAsync(l => l.MonthlyContributionId != null && db.MonthlyContributions.Any(m => m.Id == l.MonthlyContributionId &&
                 (m.IsDeleted || m.GroupId != groupId || m.Status != MonthlyContributionStatus.PAID || m.AmountDue != l.Amount)), ct))
             throw new LedgerWriteConflictException("Ledger.RequiresReconciliation", "Sổ quỹ cần đối chiếu dữ liệu trước khi ghi thêm.");
-        return new(await ledger.Where(l => l.TransactionType == TransactionType.INFLOW).SumAsync(l => l.Amount, ct),
-            await ledger.Where(l => l.TransactionType == TransactionType.OUTFLOW).SumAsync(l => l.Amount, ct));
+        var totals = await db.ClubGroups.Where(g => g.Id == groupId).Select(g => new
+        {
+            Inflow = db.GroupLedgers.Where(l => l.GroupId == g.Id && l.TransactionType == TransactionType.INFLOW).Sum(l => l.Amount),
+            Outflow = db.GroupLedgers.Where(l => l.GroupId == g.Id && l.TransactionType == TransactionType.OUTFLOW).Sum(l => l.Amount),
+            Held = db.SessionAdvancePayments.Where(a => a.GroupId == g.Id && !a.IsDeleted).Sum(a => a.HeldAmount)
+        }).SingleAsync(ct);
+        return new(totals.Inflow, totals.Outflow, totals.Held);
     }
     public Task<bool> SessionBelongsToGroupAsync(Guid groupId, Guid sessionId, CancellationToken ct) =>
         db.BadmintonSessions.AnyAsync(s => s.Id == sessionId && s.GroupId == groupId && !s.IsDeleted, ct);

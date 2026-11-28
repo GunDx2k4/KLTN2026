@@ -105,7 +105,9 @@ public static class SettlementAllocationEngine
                 lines.Add(new SettlementMemberAllocation(userId, user.Gender, member?.MemberType ?? "GUEST",
                     member?.MonthlyExpiryDate, priceType.Value, courtShares[index], shuttleShares[index], extraShares[index],
                     monthlyCovered, baseAmount, discount, rawAmount, calculatedAmount, finalAmount,
-                    adjustment?.Reason.Trim(), calculatedAmount - rawAmount, finalAmount - calculatedAmount));
+                    adjustment?.Reason.Trim(), calculatedAmount - rawAmount, finalAmount - calculatedAmount,
+                    session.AdvancePayments.FirstOrDefault(a => !a.IsDeleted && a.UserId == userId && a.Status == SessionAdvanceStatus.RECEIVED)?.ReceivedAmount ?? 0,
+                    session.AdvancePayments.Any(a => !a.IsDeleted && a.UserId == userId && a.Status == SessionAdvanceStatus.REVIEW), user.FullName));
             }
             var totalReceivable = lines.Sum(l => l.FinalAmount);
             var monthlyFundCovered = lines.Sum(l => l.MonthlyFundCovered);
@@ -121,7 +123,11 @@ public static class SettlementAllocationEngine
                 rule.FemaleDiscountDaily, rule.FemaleDiscountGuest, rule.RoundRule, rule.AppliedAt);
             return Result.Success(new SettlementAllocation(session.Id, session.GroupId, costs, ruleSnapshot, shuttleCost,
                 totalCost, totalReceivable, monthlyFundCovered, totalDiscount, policyDelta, roundingDelta, adjustmentDelta,
-                balanceDifference, new ReadOnlyCollection<SettlementMemberAllocation>(lines)));
+                balanceDifference, new ReadOnlyCollection<SettlementMemberAllocation>(lines),
+                session.AdvancePayments.Where(a => !a.IsDeleted && (a.Status is SessionAdvanceStatus.RECEIVED or SessionAdvanceStatus.REVIEW) &&
+                    !lines.Any(l => l.UserId == a.UserId)).OrderBy(a => a.UserId)
+                    .Select(a => new SettlementAdvanceRemainder(a.UserId, users.FirstOrDefault(u => u.Id == a.UserId)?.FullName,
+                        a.ReceivedAmount, a.Status == SessionAdvanceStatus.REVIEW)).ToArray()));
         }
         catch (OverflowException)
         {
@@ -165,8 +171,14 @@ public sealed record SettlementRuleSnapshot(Guid Id, FeeMode FeeMode, decimal Da
 public sealed record SettlementMemberAllocation(Guid UserId, short Gender, string MemberType, DateTime? MonthlyExpiryDate,
     PriceType PriceType, decimal CourtShare, decimal ShuttleShare, decimal ExtraShare, decimal MonthlyFundCovered,
     decimal BaseAmount, decimal DiscountApplied, decimal RawAmount, decimal CalculatedAmount, decimal FinalAmount,
-    string? AdjustmentReason, decimal RoundingDelta, decimal AdjustmentDelta);
+    string? AdjustmentReason, decimal RoundingDelta, decimal AdjustmentDelta, decimal AdvanceReceived = 0, bool AdvancePending = false, string? PlayerName = null)
+{
+    public decimal AdvanceApplied => Math.Min(FinalAmount, AdvanceReceived);
+    public decimal AdvanceRefund => AdvanceReceived - AdvanceApplied;
+    public decimal AmountDue => FinalAmount - AdvanceApplied;
+}
 public sealed record SettlementAllocation(Guid SessionId, Guid GroupId, SettlementCosts Costs, SettlementRuleSnapshot Rule,
     decimal ShuttleCost, decimal TotalCost, decimal TotalReceivable, decimal MonthlyFundCovered, decimal TotalDiscount,
     decimal PolicyDelta, decimal RoundingDelta, decimal AdjustmentDelta, decimal BalanceDifference,
-    IReadOnlyList<SettlementMemberAllocation> Members);
+    IReadOnlyList<SettlementMemberAllocation> Members, IReadOnlyList<SettlementAdvanceRemainder>? OtherAdvances = null);
+public sealed record SettlementAdvanceRemainder(Guid UserId, string? PlayerName, decimal AdvanceRefund, bool AdvancePending);

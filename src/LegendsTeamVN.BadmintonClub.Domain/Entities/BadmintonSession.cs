@@ -208,7 +208,7 @@ public partial class BadmintonSession : AggregateRoot<Guid>
     }
 
     public decimal CalculateCollectedAmount() =>
-        Fees.Where(f => !f.IsDeleted && f.PaymentStatus == PaymentStatus.PAID).Sum(f => f.Amount);
+        Fees.Where(f => !f.IsDeleted).Sum(f => f.AdvanceApplied + (f.PaymentStatus == PaymentStatus.PAID ? f.Amount : 0m));
 
     public bool CanEditAttendance(DateTime now) =>
         !IsDeleted &&
@@ -309,7 +309,7 @@ public partial class BadmintonSession : AggregateRoot<Guid>
         foreach (var recruitment in Recruitments.Where(r => !r.IsDeleted &&
                      r.Status is RecruitmentStatus.ACTIVE or RecruitmentStatus.FILLED))
         {
-            if (IsDeleted || now >= EndTime || Status is SessionStatus.CALCULATED or SessionStatus.COMPLETED)
+            if (IsDeleted || now >= EndTime || Status is SessionStatus.CALCULATED or SessionStatus.COMPLETED or SessionStatus.NOT_HELD)
                 recruitment.UpdateStatus(RecruitmentStatus.EXPIRED);
             else
                 recruitment.UpdateStatus(Status == SessionStatus.OPEN && RemainingRecruitmentSlots(recruitment) > 0
@@ -335,6 +335,7 @@ public partial class BadmintonSession : AggregateRoot<Guid>
         if (!CanTransitionTo(status))
             throw new InvalidOperationException("Invalid session status transition.");
         Status = status;
+        ScheduleShortageCheck();
     }
 
     public Result ChangeOperationalStatus(SessionStatus target, bool confirmRemainingNoShows, Guid actorId, DateTime now)
@@ -382,7 +383,7 @@ public partial class BadmintonSession : AggregateRoot<Guid>
         var utcStart = StartTime.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind(StartTime, DateTimeKind.Utc) : StartTime.ToUniversalTime();
         var utcEnd = EndTime.Kind == DateTimeKind.Unspecified ? DateTime.SpecifyKind(EndTime, DateTimeKind.Utc) : EndTime.ToUniversalTime();
 
-        if (IsDeleted || Status == SessionStatus.COMPLETED)
+        if (IsDeleted || Status is SessionStatus.COMPLETED or SessionStatus.NOT_HELD)
             return Result.Failure(Error.Conflict("Settlement.Closed", "Buổi chơi đã đóng hoàn toàn, không thể phát hành lại."));
         if (!allowRepublish && (PublishedPreviewId.HasValue || Fees.Count > 0 || Status is SessionStatus.CALCULATED))
             return Result.Failure(Error.Conflict("Settlement.AlreadyPublished", "Buổi chơi đã đóng hoặc đã có khoản thu, không thể phát hành lại."));
@@ -409,7 +410,7 @@ public partial class BadmintonSession : AggregateRoot<Guid>
         {
             if (PublishedPreviewId == previewId && PublishedRequestHash == requestHash && PublishedBy == actorId)
                 return Result.Success();
-            if (!allowRepublish)
+            if (!allowRepublish || AdvancePayments.Any(a => a.Received || a.Status == SessionAdvanceStatus.REVIEW))
                 return Result.Failure(Error.Conflict("Settlement.AlreadyPublished", "Buổi chơi đã phát hành khoản thu từ một yêu cầu khác."));
         }
         var calculated = SettlementAllocationEngine.Calculate(this, rule, users, memberships, costs, adjustments,
@@ -461,6 +462,13 @@ public partial class BadmintonSession : AggregateRoot<Guid>
                 feeIds.Add(fee.Id);
             }
         }
+        foreach (var advance in AdvancePayments.Where(a => !a.IsDeleted))
+        {
+            var memberFee = allocation.Members.FirstOrDefault(m => m.UserId == advance.UserId);
+            if (advance.Status == SessionAdvanceStatus.RECEIVED)
+                advance.Allocate(memberFee?.FinalAmount ?? 0m, "Khoản ứng còn dư sau chốt phí.", now);
+            else advance.Close("Buổi đã chốt sổ.", now);
+        }
         ApplyOperationalStatus(SessionStatus.CALCULATED, actorId, now);
         RaiseDomainEvent(new SettlementPublishedDomainEvent(Id, GroupId, previewId, actorId, now,
             Array.AsReadOnly(feeIds.ToArray())));
@@ -468,6 +476,7 @@ public partial class BadmintonSession : AggregateRoot<Guid>
     }
 
     public bool CanTransitionTo(SessionStatus target) => Enum.IsDefined(target) &&
+        Status != SessionStatus.NOT_HELD && target != SessionStatus.NOT_HELD &&
         (!RotationStartedAt.HasValue || target != SessionStatus.OPEN) &&
         (!RotationStartedAt.HasValue || target != SessionStatus.PLAYING || Status == SessionStatus.PLAYING) &&
         (Status == target || Status switch
@@ -699,6 +708,7 @@ public partial class BadmintonSession : AggregateRoot<Guid>
             b.RotationPauseSource == RotationPauseSource.Self && b.SelfPauseTargetMatchId is null))
             booking.BindSelfPauseTarget(match.Id);
         Status = SessionStatus.PLAYING;
+        ScheduleShortageCheck();
         UpdateRotationSchedule(now, true);
         RecordRotationChange(now, match);
         return Result.Success();
@@ -709,7 +719,7 @@ public partial class BadmintonSession : AggregateRoot<Guid>
         var match = Matches.FirstOrDefault(m => m.Id == matchId && !m.IsDeleted);
         if (match is null) return Result.Failure(Error.NotFound("Match.NotFound", "Không tìm thấy trận đấu."));
         if (match.Status == MatchStatus.FINISHED) return Result.Success();
-        if (IsDeleted || Status is SessionStatus.CALCULATED or SessionStatus.COMPLETED ||
+        if (IsDeleted || Status is SessionStatus.CALCULATED or SessionStatus.COMPLETED or SessionStatus.NOT_HELD ||
             match.Status != MatchStatus.PLAYING || !match.TimeStart.HasValue || now < match.TimeStart.Value)
             return Result.Failure(Error.Conflict("Match.NotPlaying", "Chỉ được kết thúc trận đang thi đấu."));
         ValidateRotationPauseMetadata();
@@ -724,11 +734,14 @@ public partial class BadmintonSession : AggregateRoot<Guid>
 
     public Result PrepareRotationDeletion(DateTime now, string? deletedBy = null)
     {
+        if (Status == SessionStatus.NOT_HELD)
+            return Result.Failure(Error.Conflict("Session.Closed", "Buổi không diễn ra đã được lưu trong lịch sử."));
         if (Matches.Any(m => !m.IsDeleted && m.Status == MatchStatus.PLAYING))
             return Result.Failure(Error.Conflict("Session.ActiveMatches", "Hãy kết thúc các trận trước khi xóa buổi."));
         foreach (var match in Matches.Where(m => !m.IsDeleted && m.Status == MatchStatus.WAITING)) match.SkipMatch(now);
         // Mark only the session: DbSet.Remove would cascade-delete non-soft-deletable MatchPlayer history.
         IsDeleted = true;
+        NextShortageCheckAt = null;
         NextProposalCheckAt = null;
         DeletedOnUtc = new DateTimeOffset(now);
         DeletedBy = deletedBy;

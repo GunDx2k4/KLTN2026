@@ -7,5 +7,9 @@ public sealed record UpdateSessionRequest(
     string CourtLocation,
     int CourtCount,
     int MaxPlayers,
-    DateTimeOffset DeadlineBooking
+    DateTimeOffset DeadlineBooking,
+    int? MinimumPlayers = null,
+    int? ShortageCheckMinutes = null,
+    bool? AdvanceEnabled = null,
+    decimal? AdvanceAmount = null
 );

@@ -1,4 +1,5 @@
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Reputation.Responses;
+using LegendsTeamVN.BadmintonClub.Application.Features.Sessions.Shortage;
 using LegendsTeamVN.BadmintonClub.Application.Features.Reputation.GetReputationAudit;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Settlement.Requests;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Settlement.Responses;
@@ -102,6 +103,10 @@ public class SessionEndpoint : EndpointGroupBase
         fr13Group.MapPut("{sessionId:guid}", UpdateSession)
             .WithName("UpdateSession")
             .WithSummary("Cập nhật thông tin vận hành buổi chơi (FR13)")
+            .RequireGroupPermission(GroupPermissions.Operations.SessionUpdate);
+
+        fr13Group.MapPut("{sessionId:guid}/shortage-reminder", SetShortageReminder)
+            .WithName("SetShortageReminder")
             .RequireGroupPermission(GroupPermissions.Operations.SessionUpdate);
 
         fr13Group.MapPatch("{sessionId:guid}/status", UpdateSessionStatus)
@@ -388,6 +393,15 @@ public class SessionEndpoint : EndpointGroupBase
     {
         var command = new UpdateSessionCommand(sessionId, request);
         var result = await sender.Send(command);
+        return result.Match(Results.NoContent);
+    }
+
+    public sealed record SetShortageReminderRequest(int? DelayMinutes);
+
+    private static async Task<IResult> SetShortageReminder([FromRoute] Guid sessionId,
+        [FromBody] SetShortageReminderRequest request, ISender sender, CancellationToken ct)
+    {
+        var result = await sender.Send(new SetShortageReminderCommand(sessionId, request.DelayMinutes), ct);
         return result.Match(Results.NoContent);
     }
 

@@ -25,8 +25,9 @@ internal static class SessionSettlementMapper
                 f.PaidAt, f.PaymentMethod?.ToString(), f.IsPublished ? new SettlementMemberAllocation(f.UserId,
                     f.Gender ?? 0, f.MemberType ?? "GUEST", f.MonthlyExpiryDate, f.PriceType, f.CourtShare ?? 0m, f.ShuttleShare ?? 0m,
                     f.ExtraShare ?? 0m, f.MonthlyFundCovered ?? 0m, f.BaseAmount ?? 0m, f.DiscountApplied, f.RawAmount ?? 0m,
-                    f.CalculatedAmount ?? 0m, f.Amount, f.AdjustmentReason, f.RoundingDelta ?? 0m, f.AdjustmentDelta ?? 0m) : null,
-                f.PaymentProgress?.ToString())).ToArray();
+                    f.CalculatedAmount ?? 0m, f.Amount + f.AdvanceApplied, f.AdjustmentReason, f.RoundingDelta ?? 0m, f.AdjustmentDelta ?? 0m,
+                    f.AdvanceApplied, f.AdvancePending) : null,
+                f.PaymentProgress?.ToString(), f.AdvanceApplied, f.AdvancePending)).ToArray();
 
         var activeBank = session.Group?.BankAccounts?.FirstOrDefault(b => b.IsActive);
         var bankResponse = activeBank is not null

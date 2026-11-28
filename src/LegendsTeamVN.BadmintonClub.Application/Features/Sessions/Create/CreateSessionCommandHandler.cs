@@ -1,4 +1,5 @@
 using LegendsTeamVN.BadmintonClub.Application.Abstractions;
+using LegendsTeamVN.BadmintonClub.Application.Features.Payments.Advance;
 using LegendsTeamVN.BadmintonClub.Domain.Entities;
 using LegendsTeamVN.BadmintonClub.Domain.Enums;
 using LegendsTeamVN.BadmintonClub.Domain.Repositories;
@@ -16,7 +17,7 @@ public sealed class CreateSessionCommandHandler(
     INotificationRepository? notificationRepository = null,
     IDeviceRepository? deviceRepository = null,
     INotificationService? notificationService = null,
-    ILogger<CreateSessionCommandHandler>? logger = null) : ICommandHandler<CreateSessionCommand, Guid>
+    ILogger<CreateSessionCommandHandler>? logger = null, AdvancePaymentConfiguration? advances = null) : ICommandHandler<CreateSessionCommand, Guid>
 {
     public async Task<Result<Guid>> Handle(CreateSessionCommand request, CancellationToken cancellationToken)
     {
@@ -49,6 +50,15 @@ public sealed class CreateSessionCommandHandler(
             lng: req.Lng
         );
 
+        var configured = session.ConfigureShortage(req.MinimumPlayers, req.ShortageCheckMinutes, maxPlayers, false);
+        if (configured.IsFailure) return Result.Failure<Guid>(configured.Error);
+        session.ScheduleShortageCheck();
+        if (req.AdvanceEnabled == true)
+        {
+            if (advances is null) throw new InvalidOperationException("Thiếu cấu hình khoản ứng.");
+            var advanceSetting = await advances.ConfigureAsync(session, true, req.AdvanceAmount, cancellationToken);
+            if (advanceSetting.IsFailure) return Result.Failure<Guid>(advanceSetting.Error);
+        }
         sessionRepository.Add(session);
 
         if (clubMemberRepository != null && notificationRepository != null && deviceRepository != null && notificationService != null)

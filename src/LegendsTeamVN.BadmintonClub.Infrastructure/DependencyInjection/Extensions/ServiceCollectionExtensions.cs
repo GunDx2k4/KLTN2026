@@ -53,6 +53,9 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<LedgerNotificationWorker>();
         services.AddSingleton<ISettlementPreviewTokenService, SettlementPreviewTokenService>();
         services.AddHostedService<SettlementNotificationWorker>();
+        services.AddHostedService<SessionShortageWorker>();
+        services.AddHostedService<SessionShortageNotificationWorker>();
+        services.AddHostedService<AdvanceNotificationWorker>();
         // Session operations authentication, realtime and outbox worker.
         services.AddSessionOperationsAuthentication(configuration);
         var signalR = services.AddSignalR();

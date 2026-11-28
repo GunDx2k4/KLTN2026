@@ -106,6 +106,7 @@ public sealed class CancelBookingCommandHandler(
             await sessionRealtimePublisher.BookingUpdatedAsync(request.SessionId, userId.Value, "CANCELLED", cancellationToken);
         }
 
+        session.CloseAdvances("Thành viên đã hủy suất.", DateTime.UtcNow, userId.Value);
         return Result.Success();
     }
 }

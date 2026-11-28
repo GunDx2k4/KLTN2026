@@ -11,7 +11,7 @@ public static class PersonalMatchSchedulePolicy
         session.ValidateRotationPauseMetadata();
         var booking = session.Bookings.Single(b => b.UserId == userId && !b.IsDeleted);
         var closed = session.IsDeleted || now >= session.EndTime ||
-            session.Status is SessionStatus.CALCULATED or SessionStatus.COMPLETED;
+            session.Status is SessionStatus.CALCULATED or SessionStatus.COMPLETED or SessionStatus.NOT_HELD;
         var phase = closed ? "Closed" : !session.RotationStartedAt.HasValue || now < session.StartTime ? "AwaitingRotation" : "Active";
         var current = session.Matches.SingleOrDefault(m => !m.IsDeleted && m.Status == MatchStatus.PLAYING && m.Players.Any(p => p.UserId == userId));
         var next = current is null ? session.Matches.SingleOrDefault(m => !m.IsDeleted && m.Status == MatchStatus.WAITING && m.Players.Any(p => p.UserId == userId)) : null;

@@ -6,18 +6,20 @@ public sealed record LedgerBalance
 {
     public decimal TotalInflow { get; }
     public decimal TotalOutflow { get; }
-    public decimal AvailableBalance => TotalInflow - TotalOutflow;
+    public decimal ReservedBalance { get; }
+    public decimal AvailableBalance => TotalInflow - TotalOutflow - ReservedBalance;
 
-    public LedgerBalance(decimal totalInflow, decimal totalOutflow)
+    public LedgerBalance(decimal totalInflow, decimal totalOutflow, decimal reservedBalance = 0)
     {
-        if (totalInflow < 0 || totalOutflow < 0)
+        if (totalInflow < 0 || totalOutflow < 0 || reservedBalance < 0)
             throw new ArgumentOutOfRangeException(nameof(totalInflow), "Tổng thu và tổng chi không được âm.");
         TotalInflow = totalInflow;
         TotalOutflow = totalOutflow;
+        ReservedBalance = reservedBalance;
     }
 
-    public LedgerBalance WithReceipt(decimal amount) => new(checked(TotalInflow + amount), TotalOutflow);
-    public LedgerBalance WithExpense(decimal amount) => new(TotalInflow, checked(TotalOutflow + amount));
+    public LedgerBalance WithReceipt(decimal amount) => new(checked(TotalInflow + amount), TotalOutflow, ReservedBalance);
+    public LedgerBalance WithExpense(decimal amount) => new(TotalInflow, checked(TotalOutflow + amount), ReservedBalance);
 
     public Result CheckExpense(decimal amount)
     {

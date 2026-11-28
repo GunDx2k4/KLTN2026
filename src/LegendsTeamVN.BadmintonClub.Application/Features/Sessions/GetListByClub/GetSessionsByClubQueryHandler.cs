@@ -51,7 +51,8 @@ public sealed class GetSessionsByClubQueryHandler(
                 myBooking?.QueueOrder ?? 0,
                 s.Address,
                 s.Lat,
-                s.Lng
+                s.Lng, s.MinimumPlayers, s.ShortageCheckMinutes,
+                s.ShortageReminderAt, s.ShortageReminderSent, s.NotHeldAt, s.AdvanceEnabled, s.AdvanceAmount
             );
         }).ToList();
 

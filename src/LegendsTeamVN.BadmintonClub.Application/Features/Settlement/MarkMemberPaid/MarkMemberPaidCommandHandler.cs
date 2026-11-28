@@ -31,6 +31,7 @@ public sealed class MarkMemberPaidCommandHandler(ISessionRepository sessions, IC
             return Result.Failure<SessionSettlementResponse>(Error.Conflict("Settlement.Exempt", "Khoản miễn thu không được xác nhận thanh toán."));
         if (!reconciliation.CurrentValue.WritesEnabled)
             return Result.Failure<SessionSettlementResponse>(Error.Conflict("Reconciliation.WritesDisabled", "Xác nhận thanh toán đang tạm dừng."));
+        if (fee.AdvancePending) return Result.Failure<SessionSettlementResponse>(Error.Conflict("Advance.Pending", "Khoản ứng đang được đối soát."));
         fee.ConfirmCashPayment(session, actor, clock.GetUtcNow().UtcDateTime);
         var existingLedger = await ledger.FindLedgerByFeeIdAsync(fee.Id, ct);
         if (existingLedger is not null)

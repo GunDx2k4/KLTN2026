@@ -9,6 +9,8 @@ public class SessionFeeConfiguration : IEntityTypeConfiguration<SessionFee>
 {
     public void Configure(EntityTypeBuilder<SessionFee> builder)
     {
+        builder.Property(f => f.AdvanceApplied).HasColumnName("advance_applied").HasPrecision(18, 2);
+        builder.Property(f => f.AdvancePending).HasColumnName("advance_pending");
         builder.ToTable("session_fee");
         builder.ToTable(t => t.HasCheckConstraint("ck_session_fee_payment_progress",
             "payment_progress IS NULL OR payment_progress IN ('QR_READY','AWAITING_RECONCILIATION','CASH_CONFIRMATION_REQUESTED')"));

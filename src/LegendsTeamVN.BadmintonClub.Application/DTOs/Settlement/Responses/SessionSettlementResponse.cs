@@ -5,7 +5,8 @@ namespace LegendsTeamVN.BadmintonClub.Application.DTOs.Settlement.Responses;
 
 public sealed record MemberSettlementFeeResponse(Guid FeeId, Guid UserId, string FullName, string? AvatarUrl,
     string PriceType, decimal FinalFee, string PaymentStatus, string QrCodePayload, string PaymentCode,
-    DateTime? PaidAt, string? PaymentMethod, SettlementMemberAllocation? Breakdown, string? PaymentProgress = null);
+    DateTime? PaidAt, string? PaymentMethod, SettlementMemberAllocation? Breakdown, string? PaymentProgress = null,
+    decimal AdvanceApplied = 0, bool AdvancePending = false);
 public sealed record SessionSettlementResponse(Guid SessionId, string State, int ShuttlecockUsed,
     decimal? ShuttlecockPrice, decimal CourtRentalCost, decimal ExtraExpense, decimal? TotalCost,
     decimal? TotalReceivable, decimal TotalCollected, decimal? MonthlyFundCovered, decimal? TotalDiscount, decimal? PolicyDelta,

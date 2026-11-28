@@ -9,6 +9,10 @@ public class SessionFee : AggregateRoot<Guid>
     public Guid SessionId { get; private set; }
     public Guid UserId { get; private set; }
     public decimal Amount { get; private set; }
+    public decimal AdvanceApplied { get; private set; }
+    public bool AdvancePending { get; private set; }
+
+    public void SetAdvancePending(bool pending) => AdvancePending = pending;
 
     /// <summary>
     /// Loại giá áp dụng của khoản thu. Miền giá trị: MONTHLY_MEMBER, DAILY_MEMBER, GUEST.
@@ -45,6 +49,7 @@ public class SessionFee : AggregateRoot<Guid>
 
     public LegendsTeamVN.Core.Utilities.Results.Result ValidatePaymentRequest(PaymentMethod method)
     {
+        if (AdvancePending) return PaymentFailure("AdvancePending", "Khoản ứng đang được đối soát.");
         if (PaymentStatus == PaymentStatus.PAID)
             return PaymentFailure("AlreadyPaid", "Khoản thu đã thanh toán. Vui lòng xem biên lai.");
         if (PaymentStatus == PaymentStatus.EXEMPT || Amount <= 0)
@@ -217,9 +222,9 @@ public class SessionFee : AggregateRoot<Guid>
 
     internal static SessionFee CreatePublished(Guid sessionId, SettlementMemberAllocation allocation, Guid actorId, DateTime now)
     {
-        return new SessionFee(sessionId, allocation.UserId, allocation.FinalAmount, allocation.PriceType,
+        return new SessionFee(sessionId, allocation.UserId, allocation.AmountDue, allocation.PriceType,
             CreatePaymentCode(sessionId, allocation.UserId), string.Empty,
-            paymentStatus: allocation.FinalAmount == 0 ? PaymentStatus.EXEMPT : PaymentStatus.UNPAID,
+            paymentStatus: allocation.AmountDue > 0 ? PaymentStatus.UNPAID : allocation.AdvanceApplied > 0 ? PaymentStatus.PAID : PaymentStatus.EXEMPT,
             discountApplied: allocation.DiscountApplied)
         {
             IsPublished = true,
@@ -231,6 +236,9 @@ public class SessionFee : AggregateRoot<Guid>
             ExtraShare = allocation.ExtraShare,
             MonthlyFundCovered = allocation.MonthlyFundCovered,
             BaseAmount = allocation.BaseAmount,
+            AdvanceApplied = allocation.AdvanceApplied,
+            AdvancePending = allocation.AdvancePending,
+            PaidAt = allocation.AmountDue == 0 && allocation.AdvanceApplied > 0 ? now : null,
             RawAmount = allocation.RawAmount,
             CalculatedAmount = allocation.CalculatedAmount,
             RoundingDelta = allocation.RoundingDelta,
@@ -330,6 +338,7 @@ public class SessionFee : AggregateRoot<Guid>
         Guid? reconciledBy = null, string? reason = null)
     {
         if (now.Kind != DateTimeKind.Utc) throw new ArgumentException("Thời điểm xác nhận phải là UTC.", nameof(now));
+        if (AdvancePending) return PaymentReconciliationDecision.INVALID_FEE;
         var decision = PaymentReconciliationPolicy.Evaluate(this, session, bank, expectedGateway, evidence, reconciledBy, reason);
         if (decision != PaymentReconciliationDecision.MATCHED) return decision;
         PaymentStatus = PaymentStatus.PAID;

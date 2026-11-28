@@ -14,6 +14,8 @@ public class GroupLedgerConfiguration : IEntityTypeConfiguration<GroupLedger>
 
         builder.Property(l => l.FeeId).HasColumnName("fee_id");
         builder.Property(l => l.BankTransactionId).HasColumnName("bank_transaction_id");
+        builder.Property(l => l.AdvanceId).HasColumnName("advance_id");
+        builder.HasIndex(l => new { l.AdvanceId, l.Category }).IsUnique().HasFilter("advance_id IS NOT NULL");
         builder.HasIndex(l => l.FeeId).IsUnique().HasFilter("fee_id IS NOT NULL");
         builder.HasIndex(l => l.BankTransactionId).IsUnique().HasFilter("bank_transaction_id IS NOT NULL");
         builder.HasOne<SessionFee>().WithMany().HasForeignKey(l => l.FeeId).OnDelete(DeleteBehavior.Restrict);

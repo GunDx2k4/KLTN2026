@@ -141,6 +141,8 @@ public class SessionRepository(BadmintonDbContext dbContext)
             }
         }
         session.ValidateRotationPauseMetadata();
+        if (forUpdate && session.AdvanceEnabled)
+            await DbContext.Entry(session).Collection(s => s.AdvancePayments).Query().Where(a => !a.IsDeleted).LoadAsync(cancellationToken);
         await DbContext.Entry(session).Collection(s => s.Recruitments).Query()
             .Where(r => !r.IsDeleted).LoadAsync(cancellationToken);
         return session;
@@ -245,7 +247,7 @@ public class SessionRepository(BadmintonDbContext dbContext)
             .Include(s => s.Bookings).ThenInclude(b => b.User)
             .Include(s => s.Fees).ThenInclude(f => f.User)
             .Include(s => s.Matches).ThenInclude(m => m.Players)
-            .Include(s => s.Recruitments).AsSplitQuery()
+            .Include(s => s.Recruitments).Include(s => s.AdvancePayments.Where(a => !a.IsDeleted)).AsSplitQuery()
             .SingleOrDefaultAsync(s => s.Id == sessionId && !s.IsDeleted, cancellationToken);
         if (session is null) return (null, null, Array.Empty<AppUser>(), Array.Empty<GroupMember>());
         if (session.GroupId != groupId.Value)

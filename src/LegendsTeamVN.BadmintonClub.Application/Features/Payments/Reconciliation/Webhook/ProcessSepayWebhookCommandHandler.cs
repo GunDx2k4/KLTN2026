@@ -1,5 +1,6 @@
 using LegendsTeamVN.BadmintonClub.Application.DependencyInjection.Options;
 using LegendsTeamVN.BadmintonClub.Application.Abstractions;
+using LegendsTeamVN.BadmintonClub.Application.Features.Payments.Advance;
 using LegendsTeamVN.BadmintonClub.Application.DTOs.Payments.Responses;
 using LegendsTeamVN.BadmintonClub.Domain.Entities;
 using LegendsTeamVN.BadmintonClub.Domain.Enums;
@@ -13,7 +14,7 @@ using Microsoft.Extensions.Options;
 namespace LegendsTeamVN.BadmintonClub.Application.Features.Payments.Reconciliation.Webhook;
 
 public sealed class ProcessSepayWebhookCommandHandler(IReconciliationRepository repository, ISepayWebhookCredentials credentials, TimeProvider clock,
-    IOptionsMonitor<ReconciliationOptions> options, ILogger<ProcessSepayWebhookCommandHandler> logger)
+    IOptionsMonitor<ReconciliationOptions> options, ILogger<ProcessSepayWebhookCommandHandler> logger, ISessionAdvanceRepository? advances = null)
     : ICommandHandler<ProcessSepayWebhookCommand, SepayWebhookResponse>
 {
     public async Task<Result<SepayWebhookResponse>> Handle(ProcessSepayWebhookCommand request, CancellationToken ct)
@@ -47,6 +48,34 @@ public sealed class ProcessSepayWebhookCommandHandler(IReconciliationRepository 
         else
         {
             var codes = PaymentReconciliationPolicy.ExtractPaymentCodes(evidence.Content);
+            var advanceCodes = AdvancePaymentCodes.Extract(evidence.Content);
+            if (advanceCodes.Length > 0)
+            {
+                if (advances is not null && codes.Count == 0 && advanceCodes.Length == 1 &&
+                    await advances.FindSessionByCodeAsync(bank.GroupId, advanceCodes[0], ct) is Guid sessionId &&
+                    await advances.LoadSessionAsync(sessionId, true, ct) is { } session &&
+                    session.AdvancePayments.FirstOrDefault(a => a.PaymentCode == advanceCodes[0]) is { } advance &&
+                    advance.BankAccountId == bank.Id)
+                {
+                    var now = clock.GetUtcNow().UtcDateTime;
+                    if (transaction.ConfirmAdvance(advance, session, now, null))
+                    {
+                        repository.AddLedger(GroupLedger.RecordAdvance(advance, advance.UserId, transaction.Id, now));
+                    }
+                    else
+                    {
+                        transaction.RequireManualCheck("ADVANCE_REVIEW");
+                        advance.FlagReview(transaction.Id);
+                        if (advance.Status == SessionAdvanceStatus.REVIEW)
+                            session.Fees.SingleOrDefault(f => f.UserId == advance.UserId)?.SetAdvancePending(true);
+                    }
+                }
+                else transaction.RequireManualCheck("ADVANCE_UNAVAILABLE");
+                if (transaction.ReconciliationStatus == ReconciliationStatus.MANUAL_CHECK)
+                    transaction.RequestManualReview(bank.GroupId, clock.GetUtcNow().UtcDateTime);
+                repository.AddTransaction(transaction);
+                return Result.Success(new SepayWebhookResponse(true));
+            }
             var feeId = codes.Count == 1 ? await repository.FindFeeByPaymentCodeAsync(bank.GroupId, codes[0], ct) : null;
             if (feeId is Guid id)
             {

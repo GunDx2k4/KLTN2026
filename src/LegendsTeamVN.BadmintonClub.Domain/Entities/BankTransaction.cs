@@ -17,6 +17,7 @@ public class BankTransaction : AggregateRoot<Guid>
     public DateTime? ReconciledAt { get; private set; }
     public string? ReconciliationNote { get; private set; }
 
+    public Guid? AdvanceId { get; private set; }
     public Guid? FeeId { get; private set; }
     public string RecipientAccount { get; private set; } = default!;
     public string? ReferenceCode { get; private set; } = default!;
@@ -122,6 +123,18 @@ public class BankTransaction : AggregateRoot<Guid>
         ReconciledAt = fee.PaidAt;
         ReconciliationNote = reason;
         return decision;
+    }
+
+    public bool ConfirmAdvance(SessionAdvancePayment advance, BadmintonSession session, DateTime now, Guid? actor)
+    {
+        if (ProviderTransactionId is null || FeeId.HasValue || AdvanceId.HasValue ||
+            !advance.Receive(this, session, now, actor.HasValue)) return false;
+        AdvanceId = advance.Id;
+        ReconciliationStatus = ReconciliationStatus.MATCHED;
+        ReconciledAt = now;
+        ReconciledBy = actor;
+        ReasonCode = null;
+        return true;
     }
 
     public void RequestManualReview(Guid groupId, DateTime now)

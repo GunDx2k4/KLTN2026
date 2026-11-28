@@ -9,5 +9,7 @@ public enum LedgerCategory
     COURT_RENT = 2,
     SHUTTLE_EXPENSE = 3,
     MONTHLY_FUND = 4,
-    OTHER = 5
+    OTHER = 5,
+    SESSION_ADVANCE = 6,
+    SESSION_ADVANCE_REFUND = 7
 }

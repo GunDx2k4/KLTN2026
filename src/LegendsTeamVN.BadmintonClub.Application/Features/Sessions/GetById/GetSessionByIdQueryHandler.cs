@@ -125,7 +125,8 @@ public sealed class GetSessionByIdQueryHandler(
             myBooking?.QueueOrder ?? 0,
             session.Address,
             session.Lat,
-            session.Lng
+            session.Lng, session.MinimumPlayers, session.ShortageCheckMinutes,
+            session.ShortageReminderAt, session.ShortageReminderSent, session.NotHeldAt, session.AdvanceEnabled, session.AdvanceAmount
         );
 
         return Result.Success(new SessionDetailResponse(sessionDto, confirmedBookings, waitingBookings, activeRecruitment));

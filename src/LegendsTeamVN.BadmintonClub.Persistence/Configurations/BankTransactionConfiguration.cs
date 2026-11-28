@@ -12,6 +12,8 @@ public class BankTransactionConfiguration : IEntityTypeConfiguration<BankTransac
         builder.ToTable("bank_transaction", table => table.HasCheckConstraint("ck_bank_transaction_uc18",
             "provider_transaction_id IS NULL OR (provider_transaction_id > 0 AND bank_account_id IS NOT NULL AND gateway IS NOT NULL AND sub_account IS NOT NULL AND transfer_type IS NOT NULL AND transfer_type IN ('in', 'out') AND amount_received > 0 AND amount_received = trunc(amount_received) AND (reconciliation_status <> 'MATCHED' OR (id_fee IS NOT NULL AND reconciled_at IS NOT NULL)) AND ((reconciled_by IS NULL AND reconciliation_note IS NULL) OR (reconciled_by IS NOT NULL AND reconciliation_note IS NOT NULL AND length(btrim(reconciliation_note)) > 0)))"));
 
+        builder.Property(t => t.AdvanceId).HasColumnName("advance_id");
+        builder.HasIndex(t => t.AdvanceId).IsUnique();
         builder.Property(t => t.ProviderTransactionId).HasColumnName("provider_transaction_id");
         builder.Property(t => t.ProviderCompanyId).HasColumnName("provider_company_id").HasMaxLength(100);
         builder.Property(t => t.BankAccountId).HasColumnName("bank_account_id");

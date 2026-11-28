@@ -30,6 +30,7 @@ public class BadmintonDbContext(DbContextOptions<BadmintonDbContext> options, IP
     public DbSet<GuestRecruitment> GuestRecruitments => Set<GuestRecruitment>();
     public DbSet<SessionMatch> SessionMatches => Set<SessionMatch>();
     public DbSet<MatchPlayer> MatchPlayers => Set<MatchPlayer>();
+    public DbSet<SessionAdvancePayment> SessionAdvancePayments => Set<SessionAdvancePayment>();
     public DbSet<SessionFee> SessionFees => Set<SessionFee>();
     public DbSet<BankTransaction> BankTransactions => Set<BankTransaction>();
     public DbSet<MonthlyContribution> MonthlyContributions => Set<MonthlyContribution>();

@@ -82,9 +82,10 @@ public sealed class LedgerReadRepository(BadmintonDbContext db, TimeProvider clo
             f.IsPublished && f.PaymentStatus == PaymentStatus.UNPAID && f.Amount > 0).SumAsync(f => f.Amount, ct);
         var monthlyDebt = await db.MonthlyContributions.Where(m => m.GroupId == clubId && !m.IsDeleted &&
             m.Status == MonthlyContributionStatus.UNPAID).SumAsync(m => m.AmountDue, ct);
-        var balance = new LedgerBalance(inflow, outflow);
+        var reserved = await db.SessionAdvancePayments.Where(a => a.GroupId == clubId && !a.IsDeleted).SumAsync(a => a.HeldAmount, ct);
+        var balance = new LedgerBalance(inflow, outflow, reserved);
         await snapshot.CommitAsync(ct);
-        return new(balance.AvailableBalance, periodIn, periodOut, sessionDebt, monthlyDebt, checked(sessionDebt + monthlyDebt), asOf, new(true, false, false));
+        return new(balance.AvailableBalance, periodIn, periodOut, sessionDebt, monthlyDebt, checked(sessionDebt + monthlyDebt), asOf, new(true, false, false), checked(inflow - outflow), reserved);
     }
 
     public async Task<LedgerPageResponse<LedgerTransactionResponse>> ListTransactionsAsync(Guid clubId, Guid userId, LedgerReadFilter filter, CancellationToken ct)
@@ -95,7 +96,8 @@ public sealed class LedgerReadRepository(BadmintonDbContext db, TimeProvider clo
                 m.GroupId == clubId && m.ContributionMonth == filter.ContributionMonth.Value));
         if (filter.OnlyMine) query = query.Where(l => l.TransactionType == TransactionType.INFLOW &&
             ((l.FeeId != null && db.SessionFees.Any(f => f.Id == l.FeeId && f.UserId == userId && f.Session.GroupId == clubId)) ||
-             (l.MonthlyContributionId != null && db.MonthlyContributions.Any(m => m.Id == l.MonthlyContributionId && m.GroupId == clubId && m.UserId == userId))));
+             (l.MonthlyContributionId != null && db.MonthlyContributions.Any(m => m.Id == l.MonthlyContributionId && m.GroupId == clubId && m.UserId == userId)) ||
+             (l.AdvanceId != null && db.SessionAdvancePayments.Any(a => a.Id == l.AdvanceId && a.GroupId == clubId && a.UserId == userId))));
         await using var snapshot = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, ct);
         var count = await query.CountAsync(ct);
         var rows = await query.OrderByDescending(l => l.CreatedAt).ThenByDescending(l => l.Id)

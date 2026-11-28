@@ -28,6 +28,8 @@ public sealed class ConfirmReconciliationCommandHandler(IReconciliationRepositor
         var bank = await repository.GetBankAsync(bankId, ct);
         if (bank is null || string.IsNullOrWhiteSpace(transaction.Gateway))
             return Conflict("BankUnavailable", "Chưa xác minh được ngân hàng của giao dịch.");
+        if (Features.Payments.Advance.AdvancePaymentCodes.Extract(transaction.TransferContent).Length > 0)
+            return Conflict("AdvancePayment", "Hãy xử lý ở danh sách khoản ứng của CLB.");
         var target = await repository.LoadForConfirmationAsync(request.GroupId, request.FeeId, transaction.Id, transaction.ReferenceCode, ct);
         if (target is not { Transaction: { } locked } found)
             return Result.Failure<ReconciliationResponse>(Error.NotFound("Reconciliation.NotFound", "Không tìm thấy khoản thu hoặc giao dịch."));

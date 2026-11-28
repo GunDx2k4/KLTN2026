@@ -9,5 +9,6 @@ public enum SessionStatus
     LOCKED = 2,
     PLAYING = 3,
     CALCULATED = 4,
-    COMPLETED = 5
+    COMPLETED = 5,
+    NOT_HELD = 6
 }
