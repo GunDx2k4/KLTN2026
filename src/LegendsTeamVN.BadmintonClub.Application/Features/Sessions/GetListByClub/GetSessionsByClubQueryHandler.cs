@@ -52,7 +52,7 @@ public sealed class GetSessionsByClubQueryHandler(
                 s.Address,
                 s.Lat,
                 s.Lng, s.MinimumPlayers, s.ShortageCheckMinutes,
-                s.ShortageReminderAt, s.ShortageReminderSent, s.NotHeldAt
+                s.ShortageReminderAt, s.ShortageReminderSent, s.NotHeldAt, s.AdvanceEnabled, s.AdvanceAmount
             );
         }).ToList();
 

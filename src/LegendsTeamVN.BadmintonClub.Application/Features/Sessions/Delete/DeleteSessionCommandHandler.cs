@@ -21,6 +21,11 @@ public sealed class DeleteSessionCommandHandler(ISessionRepository sessionReposi
         var prepared = session.PrepareRotationDeletion(clock.GetUtcNow().UtcDateTime,
             currentUser.UserName ?? currentUser.UserId?.ToString());
         if (prepared.IsFailure) return prepared;
+        if (!session.PublishedPreviewId.HasValue)
+            session.CloseAdvances("Host đã hủy buổi.", clock.GetUtcNow().UtcDateTime);
+        else
+            foreach (var advance in session.AdvancePayments.Where(a => !a.IsDeleted))
+                advance.MarkPublishedCancellation();
         // Tracked soft-delete is persisted by UnitOfWork; do not cascade-remove match history.
 
         if (notifications is not null)

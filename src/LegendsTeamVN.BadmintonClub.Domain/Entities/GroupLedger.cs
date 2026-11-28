@@ -9,6 +9,7 @@ public class GroupLedger : AggregateRoot<Guid>
 {
     public Guid? MonthlyContributionId { get; private set; }
     public Guid? RequestId { get; private set; }
+    public Guid? AdvanceId { get; private set; }
     public Guid? FeeId { get; private set; }
     public Guid? BankTransactionId { get; private set; }
     public Guid GroupId { get; private set; }
@@ -106,6 +107,19 @@ public class GroupLedger : AggregateRoot<Guid>
         });
     }
 
+    public static GroupLedger RecordAdvance(SessionAdvancePayment advance, Guid actor, Guid? incomingId, DateTime now)
+    {
+        var refund = !incomingId.HasValue;
+        if (refund && advance.Status != SessionAdvanceStatus.REFUNDED ||
+            !refund && advance.IncomingTransactionId != incomingId)
+            throw new InvalidOperationException("Thiếu bằng chứng khoản ứng.");
+        return Recorded(new GroupLedger(advance.GroupId, actor, refund ? TransactionType.OUTFLOW : TransactionType.INFLOW,
+            refund ? LedgerCategory.SESSION_ADVANCE_REFUND : LedgerCategory.SESSION_ADVANCE,
+            refund ? advance.RefundDue : advance.ReceivedAmount,
+            refund ? $"Hoàn ứng {advance.PaymentCode}" : $"Thu ứng {advance.PaymentCode}", advance.SessionId)
+        { AdvanceId = advance.Id, BankTransactionId = incomingId, CreatedAt = now });
+    }
+
     public static Result<GroupLedger> CreateExpense(
         Guid groupId, Guid actorId, Guid requestId, decimal amount, LedgerCategory category,
         string description, Services.LedgerBalance balance, DateTime utcNow, Guid? sessionId = null)
@@ -169,7 +183,7 @@ public class GroupLedger : AggregateRoot<Guid>
 
     public void UpdateCategory(LedgerCategory category)
     {
-        if (FeeId.HasValue || MonthlyContributionId.HasValue || RequestId.HasValue) throw new InvalidOperationException("Không thể đổi hạng mục của khoản thu có nguồn.");
+        if (FeeId.HasValue || MonthlyContributionId.HasValue || RequestId.HasValue || AdvanceId.HasValue) throw new InvalidOperationException("Không thể đổi hạng mục của khoản thu có nguồn.");
         if (!Enum.IsDefined(category)) throw new ArgumentOutOfRangeException(nameof(category));
         Category = category;
     }

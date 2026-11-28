@@ -29,6 +29,7 @@ public sealed class ProcessSessionShortageCommandHandler(ISessionRepository sess
         if (notice is null) return Result.Success();
 
         var closed = notice == SessionShortageNotice.NotHeld;
+        if (closed) session.CloseAdvances("Buổi không diễn ra.", now);
         var count = session.ConfirmedPlayerCount();
         var title = closed ? "Buổi chơi không diễn ra" :
             notice == SessionShortageNotice.Final ? "Nhắc lần cuối: Buổi chơi thiếu người" : "Buổi chơi thiếu người";

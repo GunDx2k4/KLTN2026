@@ -208,7 +208,7 @@ public partial class BadmintonSession : AggregateRoot<Guid>
     }
 
     public decimal CalculateCollectedAmount() =>
-        Fees.Where(f => !f.IsDeleted && f.PaymentStatus == PaymentStatus.PAID).Sum(f => f.Amount);
+        Fees.Where(f => !f.IsDeleted).Sum(f => f.AdvanceApplied + (f.PaymentStatus == PaymentStatus.PAID ? f.Amount : 0m));
 
     public bool CanEditAttendance(DateTime now) =>
         !IsDeleted &&
@@ -410,7 +410,7 @@ public partial class BadmintonSession : AggregateRoot<Guid>
         {
             if (PublishedPreviewId == previewId && PublishedRequestHash == requestHash && PublishedBy == actorId)
                 return Result.Success();
-            if (!allowRepublish)
+            if (!allowRepublish || AdvancePayments.Any(a => a.Received || a.Status == SessionAdvanceStatus.REVIEW))
                 return Result.Failure(Error.Conflict("Settlement.AlreadyPublished", "Buổi chơi đã phát hành khoản thu từ một yêu cầu khác."));
         }
         var calculated = SettlementAllocationEngine.Calculate(this, rule, users, memberships, costs, adjustments,
@@ -461,6 +461,13 @@ public partial class BadmintonSession : AggregateRoot<Guid>
                 Fees.Add(fee);
                 feeIds.Add(fee.Id);
             }
+        }
+        foreach (var advance in AdvancePayments.Where(a => !a.IsDeleted))
+        {
+            var memberFee = allocation.Members.FirstOrDefault(m => m.UserId == advance.UserId);
+            if (advance.Status == SessionAdvanceStatus.RECEIVED)
+                advance.Allocate(memberFee?.FinalAmount ?? 0m, "Khoản ứng còn dư sau chốt phí.", now);
+            else advance.Close("Buổi đã chốt sổ.", now);
         }
         ApplyOperationalStatus(SessionStatus.CALCULATED, actorId, now);
         RaiseDomainEvent(new SettlementPublishedDomainEvent(Id, GroupId, previewId, actorId, now,

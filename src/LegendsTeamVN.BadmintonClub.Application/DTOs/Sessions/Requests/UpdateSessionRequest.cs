@@ -9,5 +9,7 @@ public sealed record UpdateSessionRequest(
     int MaxPlayers,
     DateTimeOffset DeadlineBooking,
     int? MinimumPlayers = null,
-    int? ShortageCheckMinutes = null
+    int? ShortageCheckMinutes = null,
+    bool? AdvanceEnabled = null,
+    decimal? AdvanceAmount = null
 );

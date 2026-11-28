@@ -175,6 +175,15 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                         .HasColumnType("numeric(18,2)")
                         .HasColumnName("adjustment_delta");
 
+                    b.Property<decimal?>("AdvanceAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("advance_amount");
+
+                    b.Property<bool>("AdvanceEnabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("advance_enabled");
+
                     b.Property<DateTime?>("AttendanceCompletedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("attendance_completed_at");
@@ -499,6 +508,10 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id_transaction");
 
+                    b.Property<Guid?>("AdvanceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("advance_id");
+
                     b.Property<decimal>("AmountReceived")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)")
@@ -605,6 +618,9 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                         .HasColumnName("transfer_type");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AdvanceId")
+                        .IsUnique();
 
                     b.HasIndex("FeeId");
 
@@ -1006,6 +1022,10 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("actor_id");
 
+                    b.Property<Guid?>("AdvanceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("advance_id");
+
                     b.Property<decimal>("Amount")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)")
@@ -1098,6 +1118,10 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                         .HasFilter("monthly_contribution_id IS NOT NULL");
 
                     b.HasIndex("SessionId");
+
+                    b.HasIndex("AdvanceId", "Category")
+                        .IsUnique()
+                        .HasFilter("advance_id IS NOT NULL");
 
                     b.HasIndex("GroupId", "RequestId")
                         .IsUnique()
@@ -2048,6 +2072,136 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                         });
                 });
 
+            modelBuilder.Entity("LegendsTeamVN.BadmintonClub.Domain.Entities.SessionAdvancePayment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<decimal>("AppliedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid>("BankAccountId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedOnUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DeletedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("DeletedOnUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("GroupId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("HeldAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<Guid?>("IncomingTransactionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ModifiedBy")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("ModifiedOnUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PaymentCode")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("QrPayload")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("ReceivedAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("RefundAccount")
+                        .HasColumnType("text");
+
+                    b.Property<string>("RefundBank")
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("RefundDue")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)");
+
+                    b.Property<string>("RefundEvidence")
+                        .HasColumnType("text");
+
+                    b.Property<string>("RefundHolder")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("RefundOperatorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RefundReason")
+                        .HasColumnType("text");
+
+                    b.Property<string>("RefundReference")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime?>("RefundedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ReviewTransactionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("SessionTitle")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IncomingTransactionId")
+                        .IsUnique();
+
+                    b.HasIndex("PaymentCode")
+                        .IsUnique();
+
+                    b.HasIndex("GroupId", "RefundReference")
+                        .IsUnique();
+
+                    b.HasIndex("GroupId", "Status");
+
+                    b.HasIndex("SessionId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("session_advance_payment", (string)null);
+                });
+
             modelBuilder.Entity("LegendsTeamVN.BadmintonClub.Domain.Entities.SessionBooking", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2227,6 +2381,15 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)")
                         .HasColumnName("adjustment_reason");
+
+                    b.Property<decimal>("AdvanceApplied")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("advance_applied");
+
+                    b.Property<bool>("AdvancePending")
+                        .HasColumnType("boolean")
+                        .HasColumnName("advance_pending");
 
                     b.Property<decimal>("Amount")
                         .HasPrecision(18, 2)
@@ -2899,6 +3062,15 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
                     b.Navigation("Role");
                 });
 
+            modelBuilder.Entity("LegendsTeamVN.BadmintonClub.Domain.Entities.SessionAdvancePayment", b =>
+                {
+                    b.HasOne("LegendsTeamVN.BadmintonClub.Domain.Entities.BadmintonSession", null)
+                        .WithMany("AdvancePayments")
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("LegendsTeamVN.BadmintonClub.Domain.Entities.SessionBooking", b =>
                 {
                     b.HasOne("LegendsTeamVN.BadmintonClub.Domain.Entities.GuestRecruitment", "Recruitment")
@@ -3010,6 +3182,8 @@ namespace LegendsTeamVN.BadmintonClub.Migrator.Migrations
 
             modelBuilder.Entity("LegendsTeamVN.BadmintonClub.Domain.Entities.BadmintonSession", b =>
                 {
+                    b.Navigation("AdvancePayments");
+
                     b.Navigation("Bookings");
 
                     b.Navigation("Fees");

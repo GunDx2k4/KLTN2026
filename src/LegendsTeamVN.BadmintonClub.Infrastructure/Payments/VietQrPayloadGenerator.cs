@@ -12,7 +12,7 @@ public sealed class VietQrPayloadGenerator : IVietQrPayloadGenerator
     public Result<string> Generate(PaymentBankSnapshot bank, decimal amount, string paymentCode)
     {
         if (bank is null || !bank.IsValid || amount <= 0 || amount != decimal.Truncate(amount) || amount > 9999999999999m ||
-            paymentCode is null || !Regex.IsMatch(paymentCode, @"\ACLB [0-9A-F]{12} [0-9A-F]{12}\z", RegexOptions.CultureInvariant))
+            paymentCode is null || !Regex.IsMatch(paymentCode, @"\A(?:CLB|UNG) [0-9A-F]{12} [0-9A-F]{12}\z", RegexOptions.CultureInvariant))
             return Result.Failure<string>(Error.Conflict("Payments.InvalidQrInput", "Thông tin tạo mã thanh toán không hợp lệ."));
         var result = QrPayloadGenerator.GeneratePayload(bank.AccountNumber, bank.BankBin, paymentCode, amount.ToString("0", CultureInfo.InvariantCulture));
         return result.IsSuccess && !string.IsNullOrWhiteSpace(result.Content)

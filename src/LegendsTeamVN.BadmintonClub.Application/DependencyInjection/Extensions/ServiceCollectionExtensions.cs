@@ -16,6 +16,8 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
         services.AddMessageHandler(Assembly.GetExecutingAssembly());
+        services.AddScoped<Features.Payments.Advance.AdvancePaymentConfiguration>();
+        services.AddScoped<Features.Payments.Advance.AdvancePaymentService>();
         var transactionIndex = services.ToList().FindIndex(descriptor =>
             descriptor.ServiceType == typeof(MediatR.IPipelineBehavior<,>) &&
             descriptor.ImplementationType == typeof(LegendsTeamVN.Core.Application.Behaviors.UnitOfWorkBehavior<,>));

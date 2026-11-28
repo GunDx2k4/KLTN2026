@@ -1,4 +1,5 @@
 using LegendsTeamVN.BadmintonClub.Domain.Repositories;
+using LegendsTeamVN.BadmintonClub.Application.Features.Payments.Advance;
 using LegendsTeamVN.Core.Application.Messaging.CQRS;
 using LegendsTeamVN.Core.Utilities.Results;
 using LegendsTeamVN.BadmintonClub.Domain.Enums;
@@ -6,7 +7,7 @@ using LegendsTeamVN.BadmintonClub.Application.Features.Recruitments;
 
 namespace LegendsTeamVN.BadmintonClub.Application.Features.Sessions.Update;
 
-public sealed class UpdateSessionCommandHandler(ISessionRepository sessionRepository, TimeProvider? clock = null) : ICommandHandler<UpdateSessionCommand>
+public sealed class UpdateSessionCommandHandler(ISessionRepository sessionRepository, TimeProvider? clock = null, AdvancePaymentConfiguration? advances = null) : ICommandHandler<UpdateSessionCommand>
 {
     public async Task<Result> Handle(UpdateSessionCommand request, CancellationToken cancellationToken)
     {
@@ -29,6 +30,12 @@ public sealed class UpdateSessionCommandHandler(ISessionRepository sessionReposi
         var configured = session.ConfigureShortage(req.MinimumPlayers, req.ShortageCheckMinutes, req.MaxPlayers,
             session.StartTime != req.StartTime.UtcDateTime);
         if (configured.IsFailure) return configured;
+        if (req.AdvanceEnabled is bool enabled)
+        {
+            if (advances is null) throw new InvalidOperationException("Thiếu cấu hình khoản ứng.");
+            var advanceSetting = await advances.ConfigureAsync(session, enabled, req.AdvanceAmount, cancellationToken);
+            if (advanceSetting.IsFailure) return advanceSetting;
+        }
         session.UpdateSession(
             title: req.Title,
             startTime: req.StartTime.UtcDateTime,

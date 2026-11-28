@@ -126,7 +126,7 @@ public sealed class GetSessionByIdQueryHandler(
             session.Address,
             session.Lat,
             session.Lng, session.MinimumPlayers, session.ShortageCheckMinutes,
-            session.ShortageReminderAt, session.ShortageReminderSent, session.NotHeldAt
+            session.ShortageReminderAt, session.ShortageReminderSent, session.NotHeldAt, session.AdvanceEnabled, session.AdvanceAmount
         );
 
         return Result.Success(new SessionDetailResponse(sessionDto, confirmedBookings, waitingBookings, activeRecruitment));

@@ -28,5 +28,7 @@ public sealed record SessionResponse(
     int? ShortageCheckMinutes = null,
     DateTime? ShortageReminderAt = null,
     bool ShortageReminderSent = false,
-    DateTime? NotHeldAt = null
+    DateTime? NotHeldAt = null,
+    bool AdvanceEnabled = false,
+    decimal? AdvanceAmount = null
 );
