@@ -4,6 +4,8 @@ public sealed class GetReviewInvitationsQueryValidator : AbstractValidator<GetRe
 {
     public GetReviewInvitationsQueryValidator()
     {
-        RuleFor(x => x.Page).InclusiveBetween(1, 1000000); RuleFor(x => x.PageSize).InclusiveBetween(1, 100);
+        RuleFor(x => x.Page).InclusiveBetween(1, 1000000);
+        RuleFor(x => x.PageSize).InclusiveBetween(1, 100);
+        RuleFor(x => x.SessionId).NotEqual(Guid.Empty).When(x => x.SessionId.HasValue);
     }
 }

@@ -15,7 +15,7 @@ public sealed class GetReviewInvitationsQueryHandler(IReputationReadRepository r
         if (currentUser.UserId is not Guid actor) return Result.Failure<ReputationPageResponse<ReviewInvitationResponse>>(ReputationErrors.Unauthorized);
         if (!await writes.IsActiveUserAsync(actor, ct)) return Result.Failure<ReputationPageResponse<ReviewInvitationResponse>>(ReputationErrors.Forbidden);
 
-        var data = await repository.GetInvitationsAsync(actor, clock.GetUtcNow().UtcDateTime, request.Page, request.PageSize, ct);
+        var data = await repository.GetInvitationsAsync(actor, clock.GetUtcNow().UtcDateTime, request.Page, request.PageSize, ct, request.SessionId);
         return Result.Success(data);
     }
 }

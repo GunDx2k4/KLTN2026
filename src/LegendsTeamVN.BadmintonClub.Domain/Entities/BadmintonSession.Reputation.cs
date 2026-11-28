@@ -49,16 +49,22 @@ public partial class BadmintonSession
         foreach (var fee in fees.OrderBy(x => x.Id))
         {
             if (fee.IsDeleted || fee.SessionId != Id || !fee.IsPublished || fee.PublishedAt != PublishedAt
-                || fee.PaymentStatus == PaymentStatus.UNPAID || fee.Amount < 0)
+                || fee.PaymentStatus == PaymentStatus.UNPAID || fee.AdvancePending || fee.Amount < 0 || fee.AdvanceApplied < 0)
                 throw new InvalidOperationException("Khoản thu chưa hoàn tất.");
             if (fee.PaymentStatus == PaymentStatus.EXEMPT)
             {
-                if (fee.Amount != 0 || ledger.Any(x => x.FeeId == fee.Id))
+                if (fee.Amount != 0 || fee.AdvanceApplied != 0 || ledger.Any(x => x.FeeId == fee.Id))
                     throw new InvalidOperationException("Khoản miễn thu có nguồn không hợp lệ.");
                 evidence.Add(new(fee.Id, fee.UserId, 0, "EXEMPT", null, null, null));
                 continue;
             }
+            var advance = fee.AdvanceApplied > 0 ? CaptureAdvanceEvidence(fee, ledger, bankTransactions) : null;
             var receipts = ledger.Where(x => x.FeeId == fee.Id).ToArray();
+            if (fee.PaymentStatus == PaymentStatus.PAID && fee.Amount == 0 && advance is not null && receipts.Length == 0)
+            {
+                evidence.Add(new(fee.Id, fee.UserId, 0, "PAID", null, null, advance.ReceivedAt) { Advance = advance });
+                continue;
+            }
             if (fee.PaymentStatus != PaymentStatus.PAID || fee.Amount <= 0 || receipts.Length != 1
                 || receipts[0].IsDeleted || receipts[0].GroupId != GroupId || receipts[0].SessionId != Id
                 || receipts[0].Amount != fee.Amount || receipts[0].TransactionType != TransactionType.INFLOW
@@ -80,11 +86,35 @@ public partial class BadmintonSession
                 receivedAt = fee.PaidAt;
             else throw new InvalidOperationException("Phương thức xác nhận khoản thu không hợp lệ.");
             ReputationPolicy.RequireUtc(receivedAt.Value);
-            evidence.Add(new(fee.Id, fee.UserId, fee.Amount, "PAID", receipt.Id, receipt.BankTransactionId, receivedAt));
+            evidence.Add(new(fee.Id, fee.UserId, fee.Amount, "PAID", receipt.Id, receipt.BankTransactionId, receivedAt) { Advance = advance });
         }
         quality.Validate();
         return new(1, Id, GroupId, StartTime, EndTime, ReputationPolicy.Version, PublishedAt.Value,
             quality, Array.AsReadOnly(evidence.ToArray()));
+    }
+
+    private FinancialAdvanceSnapshot CaptureAdvanceEvidence(SessionFee fee, IReadOnlyList<GroupLedger> ledger,
+        IReadOnlyList<BankTransaction> banks)
+    {
+        var advances = AdvancePayments.Where(a => !a.IsDeleted && a.UserId == fee.UserId).ToArray();
+        if (advances.Length != 1 || advances[0] is not { } advance || advance.SessionId != Id ||
+            advance.GroupId != GroupId || advance.AppliedAmount != fee.AdvanceApplied ||
+            advance.ReceivedAmount < advance.AppliedAmount ||
+            advance.Status is not (SessionAdvanceStatus.APPLIED or SessionAdvanceStatus.REFUND_PENDING or SessionAdvanceStatus.REFUNDED) ||
+            advance.IncomingTransactionId is not Guid transactionId || advance.ReviewTransactionId.HasValue)
+            throw new InvalidOperationException("Khoản ứng đã trừ chưa có nguồn đối soát hợp lệ.");
+        var receipts = ledger.Where(x => x.AdvanceId == advance.Id && x.Category == LedgerCategory.SESSION_ADVANCE).ToArray();
+        var payments = banks.Where(x => x.Id == transactionId).ToArray();
+        if (receipts.Length != 1 || receipts[0].IsDeleted || receipts[0].FeeId.HasValue ||
+            receipts[0].GroupId != GroupId || receipts[0].SessionId != Id ||
+            receipts[0].TransactionType != TransactionType.INFLOW || receipts[0].Amount != advance.ReceivedAmount ||
+            receipts[0].BankTransactionId != transactionId || payments.Length != 1 || payments[0].IsDeleted ||
+            payments[0].AdvanceId != advance.Id || payments[0].FeeId.HasValue ||
+            payments[0].BankAccountId != advance.BankAccountId || !payments[0].ProviderTransactionId.HasValue ||
+            payments[0].ReconciliationStatus != ReconciliationStatus.MATCHED || payments[0].AmountReceived != advance.ReceivedAmount)
+            throw new InvalidOperationException("Khoản ứng chưa khớp chứng từ ngân hàng và sổ quỹ.");
+        ReputationPolicy.RequireUtc(payments[0].TransactionTime);
+        return new(advance.Id, receipts[0].Id, transactionId, advance.AppliedAmount, payments[0].TransactionTime);
     }
 
     public void FinalizeReputation(SessionReputationSnapshot snapshot, IReadOnlyList<SessionFee> fees,
@@ -112,7 +142,8 @@ public partial class BadmintonSession
             || snapshot.FinancialEvidence.Count == 0
             || snapshot.FinancialEvidence.Select(x => x.UserId).Distinct().Count() != snapshot.FinancialEvidence.Count
             || snapshot.FinancialEvidence.Any(x => x.FeeId == Guid.Empty || x.UserId == Guid.Empty
-                || x.Status == "PAID" && (x.Amount <= 0 || !x.LedgerId.HasValue || !x.ReceivedAt.HasValue)
+                || x.Status == "PAID" && (!x.ReceivedAt.HasValue || x.Amount < 0
+                    || x.Amount > 0 && !x.LedgerId.HasValue || x.Amount == 0 && x.Advance is null)
                 || x.Status == "EXEMPT" && (x.Amount != 0 || x.LedgerId.HasValue || x.BankTransactionId.HasValue)
                 || x.Status is not ("PAID" or "EXEMPT"))
             || Bookings.Any(x => !x.IsDeleted && x.Status == BookingStatus.CONFIRMED)
