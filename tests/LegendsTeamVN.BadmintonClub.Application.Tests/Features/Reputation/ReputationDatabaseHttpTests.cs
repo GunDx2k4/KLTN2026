@@ -52,6 +52,7 @@ public sealed class ReputationDatabaseHttpTests
         { ["Jwt:Issuer"] = "uc20-tests", ["Jwt:Audience"] = "uc20-tests", ["Jwt:SecretKey"] = new string('k', 64) }).Build());
         builder.Services.AddHttpContextAccessor();
         builder.Services.AddApplication();
+        builder.Services.AddSingleton<TimeProvider>(new ReputationEngineTests.Clock());
         var settings = new ReputationOptions { EffectiveFromUtc = new DateTimeOffset(ReputationEngineTests.Now.AddDays(-30)) };
         builder.Services.AddSingleton<IOptionsMonitor<ReputationOptions>>(new TestOptionsMonitor<ReputationOptions>(settings));
         var actor = seed.UserId;
@@ -86,7 +87,15 @@ public sealed class ReputationDatabaseHttpTests
         Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/v1/user/me/reviews", new { SessionId = Guid.NewGuid(), Rating = 6 })).StatusCode);
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync($"/api/v1/clubs/{Guid.NewGuid()}/sessions/{Guid.NewGuid()}/reputation-audit")).StatusCode);
 
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/v1/user/me/reviews/invitations")).StatusCode);
+        var invitations = await client.GetFromJsonAsync<ReputationPageResponse<ReviewInvitationResponse>>(
+            $"/api/v1/user/me/reviews/invitations?sessionId={seed.SessionId}");
+        var invitation = Assert.Single(invitations!.Items);
+        Assert.Equal(seed.GroupId, invitation.GroupId);
+        Assert.False(string.IsNullOrWhiteSpace(invitation.SessionTitle));
+        Assert.False(string.IsNullOrWhiteSpace(invitation.GroupName));
+        var unrelated = await client.GetFromJsonAsync<ReputationPageResponse<ReviewInvitationResponse>>(
+            $"/api/v1/user/me/reviews/invitations?sessionId={Guid.NewGuid()}");
+        Assert.Empty(unrelated!.Items);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/v1/reputation/group-quality?groupId={seed.GroupId}")).StatusCode);
         var reviewBody = new { SessionId = seed.SessionId, Rating = 1, Comment = "Cần cải thiện" };
         var firstReview = await client.PostAsJsonAsync("/api/v1/user/me/reviews", reviewBody);
@@ -98,7 +107,12 @@ public sealed class ReputationDatabaseHttpTests
         Assert.Equal(1, quality!.Score);
         var card = await client.GetFromJsonAsync<PlayerReputationResponse>(path);
         Assert.Equal(100, card!.Score);
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/v1/clubs/{seed.GroupId}/sessions/{seed.SessionId}/reputation-audit")).StatusCode);
+        var audit = await client.GetFromJsonAsync<ReputationAuditResponse>(
+            $"/api/v1/clubs/{seed.GroupId}/sessions/{seed.SessionId}/reputation-audit");
+        var participant = Assert.Single(audit!.Bookings.Items);
+        Assert.Equal(seed.UserId, participant.UserId);
+        Assert.False(string.IsNullOrWhiteSpace(participant.FullName));
+        Assert.Equal(1, participant.Review!.Rating);
         await app.StopAsync();
     }
 }

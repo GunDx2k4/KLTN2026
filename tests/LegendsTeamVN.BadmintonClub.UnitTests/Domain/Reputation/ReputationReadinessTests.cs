@@ -58,6 +58,56 @@ public sealed class ReputationReadinessTests
         Assert.Throws<InvalidOperationException>(() => session.DeferReputation("retry", false, End.AddDays(1)));
     }
 
+    [Theory]
+    [InlineData(40_000, 40_000, 0)]
+    [InlineData(50_000, 50_000, 0)]
+    [InlineData(70_000, 50_000, 20_000)]
+    public void RecognizesOnlyVerifiedAppliedAdvanceAndRequiresAnyRemainingReceipt(
+        int price, int applied, int remainder)
+    {
+        var now = End.AddHours(-3);
+        var user = new AppUser(Guid.NewGuid(), "Player");
+        var session = new BadmintonSession(Guid.NewGuid(), "UC20", End.AddHours(-2), End, "Court", courtCount: 1);
+        var booking = new SessionBooking(session.Id, user.Id);
+        session.Bookings.Add(booking);
+        var rule = new GroupFeeRule(session.GroupId, FeeMode.DYNAMIC);
+        Assert.True(session.ConfigureAdvance(true, 50_000m, rule).IsSuccess);
+        var advance = new SessionAdvancePayment(session, user.Id, Guid.NewGuid(), 50_000,
+            "UNG 123456789AAA 123456789BBB", "vietqr");
+        session.AdvancePayments.Add(advance);
+        var bank = BankTransaction.Receive(advance.BankAccountId, new PaymentReconciliationEvidence(
+            91, "Test", "1234567", null, "in", 50_000, now, "TEST-091", advance.PaymentCode));
+        Assert.True(bank.ConfirmAdvance(advance, session, now, null));
+        var advanceReceipt = GroupLedger.RecordAdvance(advance, user.Id, bank.Id, now);
+        booking.MarkPresent(user.Id, session.StartTime);
+        var member = new GroupMember(session.GroupId, user.Id, Guid.NewGuid(), "DAILY");
+        var published = session.PublishSettlement(rule, [user], [member], new(0, 0, price, 0), [],
+            Guid.NewGuid(), new string('a', 64), user.Id, End);
+        Assert.True(published.IsSuccess, published.Error.Message);
+        session.UpdateStatus(SessionStatus.COMPLETED);
+        var fee = Assert.Single(session.Fees);
+        Assert.Equal(applied, fee.AdvanceApplied);
+        Assert.Equal(remainder, fee.Amount);
+        var quality = new QualitySessionEvidence(0, 0, 0, 0, 1, 0);
+        var ledger = new List<GroupLedger> { advanceReceipt };
+        var assessedAt = End.AddMinutes(1);
+        if (remainder > 0)
+        {
+            Assert.Throws<InvalidOperationException>(() =>
+                session.CaptureReputationSnapshot(quality, [fee], ledger, [bank], assessedAt));
+            fee.ConfirmCashPayment(session, Guid.NewGuid(), assessedAt);
+            ledger.Add(GroupLedger.CreateSessionFeeReceipt(session, fee));
+        }
+        Assert.Throws<InvalidOperationException>(() =>
+            session.CaptureReputationSnapshot(quality, [fee], ledger, [], assessedAt));
+        Assert.True(session.AssessReputation(quality, [fee], ledger, [bank], assessedAt));
+        var evidence = Assert.Single(session.ReputationSnapshot!.FinancialEvidence);
+        Assert.Equal(applied, evidence.Advance!.Amount);
+        Assert.Equal(now, evidence.Advance.ReceivedAt);
+        Assert.Equal(bank.Id, evidence.Advance.BankTransactionId);
+        Assert.Equal(2m, booking.ReputationRawDelta);
+    }
+
     private static BadmintonSession CreatePublished(decimal price)
     {
         var user = new AppUser(Guid.NewGuid(), "Player");

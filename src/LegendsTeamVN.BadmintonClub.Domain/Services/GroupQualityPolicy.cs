@@ -15,8 +15,14 @@ public sealed record GroupQualitySummary(int SchemaVersion, decimal? Score, deci
     decimal? Transparency, decimal? Density, int ReviewCount, int SessionCount, decimal Coverage,
     long InvoiceCount, long ExpenseCount, long LedgerViewerCount, long MemberCount, int DensitySampleCount);
 
+public sealed record FinancialAdvanceSnapshot(Guid AdvanceId, Guid LedgerId, Guid BankTransactionId,
+    decimal Amount, DateTime ReceivedAt);
+
 public sealed record FinancialFeeSnapshot(Guid FeeId, Guid UserId, decimal Amount, string Status,
-    Guid? LedgerId, Guid? BankTransactionId, DateTime? ReceivedAt);
+    Guid? LedgerId, Guid? BankTransactionId, DateTime? ReceivedAt)
+{
+    public FinancialAdvanceSnapshot? Advance { get; init; }
+}
 
 public sealed record SessionReputationSnapshot(int SchemaVersion, Guid SessionId, Guid GroupId,
     DateTime StartTime, DateTime EndTime, string PolicyVersion, DateTime SettlementPublishedAt,

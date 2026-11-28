@@ -41,23 +41,28 @@ public sealed class ReputationReadRepository(BadmintonDbContext db) : IReputatio
         var total = await query.CountAsync(ct);
         var items = await query.OrderByDescending(b => b.ReputationComputedAt).ThenBy(b => b.Id).Skip((page - 1) * size).Take(size)
             .Select(b => new ReputationEntryResponse(b.Id, b.SessionId, b.ReputationRawDelta, b.ReputationComputedAt,
-                b.ReputationPolicyVersion, b.ReputationEvidence)).ToListAsync(ct);
+                b.ReputationPolicyVersion, b.ReputationEvidence, b.Session.Title, b.Session.Group.GroupName, b.Session.StartTime)).ToListAsync(ct);
         return new(items, page, size, total);
     }
-    public async Task<ReputationPageResponse<ReviewInvitationResponse>> GetInvitationsAsync(Guid userId, DateTime now, int page, int size, CancellationToken ct)
+    public async Task<ReputationPageResponse<ReviewInvitationResponse>> GetInvitationsAsync(Guid userId, DateTime now, int page, int size,
+        CancellationToken ct, Guid? sessionId = null)
     {
-        var query = db.SessionBookings.AsNoTracking().Where(b => b.UserId == userId && !b.IsDeleted && b.ReputationReviewEligible &&
+        var query = db.SessionBookings.AsNoTracking().Where(b => (sessionId == null || b.SessionId == sessionId) && b.UserId == userId && !b.IsDeleted && b.ReputationReviewEligible &&
             !b.Session.IsDeleted && b.Session.Group.IsActive && !b.Session.Group.IsDeleted &&
             b.Session.ReputationProcessingStatus == ReputationProcessingStatus.Finalized &&
             b.Session.FinancialReconciledAt <= now && b.Session.FinancialReconciledAt > now.AddDays(-7));
         var total = await query.CountAsync(ct);
         var rows = await query.OrderByDescending(b => b.Session.FinancialReconciledAt).ThenBy(b => b.Id)
-            .Skip((page - 1) * size).Take(size).Select(b => new { b.SessionId, b.Session.GroupId, b.Session.FinancialReconciledAt }).ToListAsync(ct);
+            .Skip((page - 1) * size).Take(size).Select(b => new
+            {
+                b.SessionId, b.Session.GroupId, b.Session.FinancialReconciledAt,
+                b.Session.Title, b.Session.Group.GroupName, b.Session.StartTime
+            }).ToListAsync(ct);
         var ids = rows.Select(r => r.SessionId).ToArray();
         var reviews = await db.GroupReviews.IgnoreQueryFilters().AsNoTracking().Where(r => r.UserId == userId && r.SessionId != null && ids.Contains(r.SessionId.Value))
             .Select(r => new SessionReviewResponse(r.Id, r.SessionId!.Value, r.Rating, r.Comment, r.CreatedAt)).ToListAsync(ct);
         return new(rows.Select(r => new ReviewInvitationResponse(r.SessionId, r.GroupId, r.FinancialReconciledAt!.Value.AddDays(7),
-            reviews.SingleOrDefault(v => v.SessionId == r.SessionId))).ToArray(), page, size, total);
+            reviews.SingleOrDefault(v => v.SessionId == r.SessionId), r.Title, r.GroupName, r.StartTime)).ToArray(), page, size, total);
     }
     public Task<bool> CanAuditAsync(Guid groupId, Guid userId, CancellationToken ct) =>
         db.GroupMembers.AsNoTracking().AnyAsync(m => m.GroupId == groupId && m.UserId == userId && !m.IsDeleted &&
@@ -72,12 +77,12 @@ public sealed class ReputationReadRepository(BadmintonDbContext db) : IReputatio
         var query = db.SessionBookings.IgnoreQueryFilters().AsNoTracking().Where(b => b.SessionId == sessionId && b.ReputationComputedAt != null);
         var total = await query.CountAsync(ct);
         var rows = await query.OrderBy(b => b.Id).Skip((page - 1) * size).Take(size)
-            .Select(b => new { b.Id, b.UserId, b.ReputationRawDelta, b.ReputationEvidence }).ToListAsync(ct);
+            .Select(b => new { b.Id, b.UserId, b.ReputationRawDelta, b.ReputationEvidence, b.User.FullName }).ToListAsync(ct);
         var users = rows.Select(b => b.UserId).ToArray();
         var reviews = await db.GroupReviews.IgnoreQueryFilters().AsNoTracking().Where(r => r.SessionId == sessionId && users.Contains(r.UserId))
             .Select(r => new { r.UserId, Review = new SessionReviewResponse(r.Id, sessionId, r.Rating, r.Comment, r.CreatedAt) }).ToListAsync(ct);
         return new(sessionId, session.ReputationProcessingStatus.ToString(), session.ReputationPendingReason, session.ReputationSnapshot,
             new(rows.Select(b => new ReputationAuditBookingResponse(b.Id, b.UserId, b.ReputationRawDelta, b.ReputationEvidence,
-                reviews.SingleOrDefault(r => r.UserId == b.UserId)?.Review)).ToArray(), page, size, total));
+                reviews.SingleOrDefault(r => r.UserId == b.UserId)?.Review, b.FullName)).ToArray(), page, size, total));
     }
 }

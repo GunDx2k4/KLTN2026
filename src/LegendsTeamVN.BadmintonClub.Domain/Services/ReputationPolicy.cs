@@ -2,7 +2,7 @@ using LegendsTeamVN.BadmintonClub.Domain.Enums;
 
 namespace LegendsTeamVN.BadmintonClub.Domain.Services;
 
-public enum ReputationPaymentEvidence { Unknown, Exempt, Bank, Cash }
+public enum ReputationPaymentEvidence { Unknown, Exempt, Bank, Cash, Advance }
 public enum ReputationCancellationSource { Booking, Recruitment }
 public enum ReputationProcessingStatus { Pending, DataInsufficient, Finalized }
 
@@ -16,7 +16,10 @@ public sealed record BookingCancellationFact(Guid EventId, DateTime CancelledAt,
 public sealed record ReputationEvidence(int SchemaVersion, BookingStatus Attendance,
     DateTime StartTime, DateTime? CheckinAt, DateTime? PublishedAt, DateTime? ReceivedAt,
     ReputationPaymentEvidence Payment, Guid? FeeId, Guid? BankTransactionId,
-    BookingCancellationFact? Cancellation);
+    BookingCancellationFact? Cancellation)
+{
+    public FinancialAdvanceSnapshot? Advance { get; init; }
+}
 
 public sealed record ReputationCorrection(int SchemaVersion, Guid EventId, Guid ActorId,
     DateTime OccurredAt, string Reason, decimal ReplacementDelta);
@@ -73,6 +76,12 @@ public static class ReputationPolicy
         {
             payment = evidence.ReceivedAt <= evidence.PublishedAt.Value.AddHours(24) ? 1m
                 : evidence.Payment == ReputationPaymentEvidence.Bank ? -3m : 0m;
+        }
+        if (evidence.Payment == ReputationPaymentEvidence.Advance && evidence.Advance is { Amount: > 0 } advance &&
+            evidence.FeeId.HasValue && evidence.PublishedAt.HasValue && advance.BankTransactionId != Guid.Empty)
+        {
+            RequireUtc(advance.ReceivedAt);
+            if (advance.ReceivedAt <= evidence.PublishedAt.Value.AddHours(24)) payment = 1m;
         }
         return new(attendance, payment);
     }

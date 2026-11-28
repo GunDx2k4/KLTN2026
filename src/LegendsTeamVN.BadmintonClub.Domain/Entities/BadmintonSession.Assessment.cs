@@ -23,10 +23,11 @@ public partial class BadmintonSession
             var source = snapshot.FinancialEvidence.SingleOrDefault(x => x.UserId == booking.UserId);
             var payment = source is null ? ReputationPaymentEvidence.Unknown
                 : source.Status == "EXEMPT" ? ReputationPaymentEvidence.Exempt
+                : source.Amount == 0 && source.Advance is not null ? ReputationPaymentEvidence.Advance
                 : source.BankTransactionId.HasValue ? ReputationPaymentEvidence.Bank : ReputationPaymentEvidence.Cash;
             booking.RecordReputation(new(1, booking.Status, snapshot.StartTime, booking.CheckinAt,
                 snapshot.SettlementPublishedAt, source?.ReceivedAt, payment, source?.FeeId,
-                source?.BankTransactionId, booking.GetReputationCancellation()), now);
+                source?.BankTransactionId, booking.GetReputationCancellation()) { Advance = source?.Advance }, now);
         }
         FinalizeReputation(snapshot, fees, ledger, banks, now);
         return true;

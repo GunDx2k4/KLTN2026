@@ -77,7 +77,7 @@ public sealed class ReputationNotificationWorker(IServiceScopeFactory scopes, Ti
             foreach (var batch in tokens.Where(t => !string.IsNullOrWhiteSpace(t)).Distinct(StringComparer.Ordinal).Chunk(500))
             {
                 if (!await Authorized()) return;
-                var data = new Dictionary<string, string> { ["eventId"] = push.EventId.ToString(), ["sessionId"] = push.SessionId.ToString(), ["bookingId"] = push.BookingId.ToString(), ["kind"] = message.Kind };
+                var data = new Dictionary<string, string> { ["eventId"] = push.EventId.ToString(), ["sessionId"] = push.SessionId.ToString(), ["bookingId"] = push.BookingId.ToString(), ["recipientId"] = push.RecipientId.ToString(), ["kind"] = message.Kind };
                 if (await services.GetRequiredService<INotificationService>().SendMulticastNotificationAsync(batch,
                     message.Kind == "ReviewInvitationPush" ? "Mời đánh giá buổi chơi" : "Uy tín đã cập nhật",
                     "Mở ứng dụng để xem thông tin mới.", data, pushTimeout.Token) != batch.Length)

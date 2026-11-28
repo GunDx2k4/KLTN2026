@@ -146,9 +146,10 @@ public class UserEndpoint : EndpointGroupBase
     }
 
     // --- FR05 Handlers ---
-    private static async Task<IResult> GetReviewInvitations(ISender sender, CancellationToken ct, int page = 1, int pageSize = 20)
+    private static async Task<IResult> GetReviewInvitations(ISender sender, CancellationToken ct,
+        int page = 1, int pageSize = 20, Guid? sessionId = null)
     {
-        var result = await sender.Send(new GetReviewInvitationsQuery(page, pageSize), ct);
+        var result = await sender.Send(new GetReviewInvitationsQuery(page, pageSize, sessionId), ct);
         return result.Match(onSuccess: data => Results.Ok(data));
     }
 

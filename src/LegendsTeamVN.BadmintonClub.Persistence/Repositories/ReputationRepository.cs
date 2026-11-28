@@ -26,6 +26,7 @@ public sealed class ReputationRepository(BadmintonDbContext db) : IReputationRep
         if (session is null || session.IsDeleted || session.GroupId != group.Id) return null;
         await db.Entry(session).Collection(s => s.Bookings).Query().IgnoreQueryFilters().LoadAsync(ct);
         await db.Entry(session).Collection(s => s.Matches).Query().IgnoreQueryFilters().LoadAsync(ct);
+        await db.Entry(session).Collection(s => s.AdvancePayments).Query().IgnoreQueryFilters().LoadAsync(ct);
         var fees = await db.SessionFees.IgnoreQueryFilters().AsNoTracking().Where(f => f.SessionId == sessionId).ToListAsync(ct);
         var ids = fees.Select(f => f.Id).ToArray();
         var ledger = await db.GroupLedgers.IgnoreQueryFilters().AsNoTracking()
@@ -33,7 +34,7 @@ public sealed class ReputationRepository(BadmintonDbContext db) : IReputationRep
         var bankIds = ledger.Where(l => l.BankTransactionId.HasValue).Select(l => l.BankTransactionId!.Value).ToArray();
         var banks = await db.BankTransactions.IgnoreQueryFilters().AsNoTracking().Where(b => bankIds.Contains(b.Id)).ToListAsync(ct);
         var expenses = ledger.Where(l => !l.IsDeleted && l.SessionId == sessionId && l.GroupId == group.Id &&
-            l.TransactionType == TransactionType.OUTFLOW && l.Amount > 0).Select(l => l.Id).ToArray();
+            l.TransactionType == TransactionType.OUTFLOW && l.Category != LedgerCategory.SESSION_ADVANCE_REFUND && l.Amount > 0).Select(l => l.Id).ToArray();
         var invoices = await db.LedgerAttachments.Where(a => expenses.Contains(a.LedgerId))
             .Select(a => a.LedgerId).Distinct().CountAsync(ct);
         var members = await db.GroupMembers.AsNoTracking().Where(m => m.GroupId == group.Id && !m.IsDeleted &&

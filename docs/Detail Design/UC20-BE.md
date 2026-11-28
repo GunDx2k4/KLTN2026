@@ -41,7 +41,7 @@ Prefix `/api/v1`. Gửi `Authorization: Bearer <accessToken>`. Thành công tr�
 
 | Method | Route | Mục đích | Quyền |
 |---|---|---|---|
-| GET | `/user/me/reviews/invitations` | Lời mời còn hạn, kèm review của chính mình | JWT và ownership, gồm guest tham gia |
+| GET | `/user/me/reviews/invitations` | Lời mời còn hạn, kèm review của chính mình. Hỗ trợ lọc tùy chọn theo `sessionId`. | JWT và ownership, gồm guest tham gia |
 | POST | `/user/me/reviews` | Gửi hoặc replay review | JWT, booking và eligibility đã chốt |
 | GET | `/reputation/players/{userId}` | Card uy tín tối thiểu | Người đăng nhập, tài khoản hợp lệ |
 | GET | `/reputation/me/entries` | Kết quả uy tín của chính mình | UserId từ JWT |
@@ -151,11 +151,13 @@ Không có email/điện thoại/công nợ/comment trong card. FE không suy sa
 
 ### 4.2. Lời mời và kết quả gửi
 
-Invitation gồm sessionId/groupId/expiresAt/review. Review gồm reviewId/sessionId/rating/comment/createdAt; null nếu chưa gửi. createdAt chuẩn hóa microsecond để response tạo mới/replay khớp độ chính xác PostgreSQL.
+Invitation gồm sessionId/groupId/sessionTitle/groupName/sessionStartAt/expiresAt/review. Review gồm reviewId/sessionId/rating/comment/createdAt; null nếu chưa gửi. createdAt chuẩn hóa microsecond để response tạo mới/replay khớp độ chính xác PostgreSQL.
 
 ### 4.3. Nhật ký cá nhân và audit
 
-Entry gồm bookingId/sessionId/rawDelta/computedAt/policyVersion/evidence. BookingId là định danh entry; không có bảng entry. Evidence chứa attendance, giờ bắt đầu/check-in, mốc phát hành/nhận tiền, loại nguồn thanh toán, ID nguồn và dữ kiện hủy nếu có. Không dùng rawDelta để FE tự cộng vào score vì clamp và thứ tự rebuild ảnh hưởng kết quả.
+Entry gồm bookingId/sessionId/sessionTitle/groupName/sessionStartAt/rawDelta/computedAt/policyVersion/evidence. BookingId là định danh entry. Evidence chứa attendance, giờ bắt đầu/check-in, mốc phát hành/nhận tiền, loại nguồn thanh toán, ID nguồn và dữ kiện hủy nếu có. Điểm tổng dùng API card vì thứ tự rebuild và giới hạn điểm ảnh hưởng kết quả.
+
+Khi có tiền ứng đã áp dụng, snapshot lưu chứng từ `advance` riêng, gồm ID khoản ứng, bút toán, giao dịch, số đã áp dụng và giờ nhận tiền. Ứng đủ dùng thời điểm giao dịch ứng để xét đúng hạn. Ứng một phần vẫn cần chứng từ cho phần còn lại. Hoàn dư tiền ứng được loại khỏi mẫu số tính tỷ lệ chi có hóa đơn.
 
 Audit gồm sessionId/status/pendingReason/snapshot/bookings. Mỗi booking có bookingId/userId/rawDelta/evidence/review; chỉ hiển thị trong màn hình quản trị đúng nhóm. Snapshot lưu nguồn đối soát và I/O/D bất biến.
 
@@ -210,7 +212,7 @@ FE xử lý bằng HTTP status và `code`, không so khớp `title`/`detail` vì
 
 Notification type REPUTATION, ReferenceType SessionReputation. Outbox kind ReviewInvitationPush/ReputationUpdatedPush; EventId xác định từ kind/buổi/booking/người nhận, giữ nguyên khi retry. Payload chỉ có định danh điều hướng và hạn lời mời, không tiền/điểm/nội dung phạt.
 
-FCM data gồm eventId/sessionId/bookingId/kind. SignalR SessionHub gửi ReviewInvitation/ReputationUpdated qua Clients.User(RecipientId). Client dedupe EventId và GET lại; không tự cộng điểm từ thông báo. Delivery ít nhất một lần: FCM thành công rồi SignalR lỗi có thể gửi lại FCM cùng EventId.
+FCM data gồm eventId/sessionId/bookingId/recipientId/kind. SignalR SessionHub gửi ReviewInvitation/ReputationUpdated qua Clients.User(RecipientId). Client khử trùng EventId và tải lại qua GET. Delivery ít nhất một lần: FCM thành công rồi SignalR lỗi có thể gửi lại FCM cùng EventId.
 
 Worker kiểm account, nhóm, booking ownership, Finalized và nguồn chưa xóa trước từng kênh/batch token. Lời mời cần đúng hạn snapshot, chưa hết hạn và chưa có review kể cả soft-delete; không yêu cầu guest có LedgerView. Nguồn không hợp lệ được hoàn tất không gửi; lỗi kỹ thuật retry theo lease/backoff, timeout lượt gửi 20 giây.
 
@@ -235,7 +237,7 @@ Ví dụ payload SignalR `ReviewInvitation` (UUID minh họa):
 }
 ```
 
-FCM data chỉ gồm chuỗi `eventId`, `sessionId`, `bookingId`, `kind`; không có `recipientId`, `expiresAt`, score hoặc groupId. SignalR `ReputationUpdated` có `expiresAt: null`. Không lấy hạn gửi từ thời điểm nhận thông báo; lấy expiresAt của invitations. Cùng một thông báo đi qua hai kênh dùng cùng eventId; lời mời và thông báo cập nhật điểm của cùng buổi là hai eventId khác nhau. Khử trùng theo tài khoản + eventId để không hiện hai thông báo UI cho cùng sự kiện, nhưng vẫn refresh dữ liệu khi mở màn hình/reconnect. Không chờ hai kênh cùng đến và không dùng eventId để cộng/trừ điểm.
+FCM data chỉ gồm chuỗi `eventId`, `sessionId`, `bookingId`, `recipientId`, `kind`. FE đối chiếu người nhận với tài khoản hiện tại. SignalR `ReputationUpdated` có `expiresAt: null`. Lấy hạn gửi từ API invitations. Cùng một thông báo đi qua hai kênh dùng cùng eventId; lời mời và thông báo cập nhật điểm của cùng buổi là hai eventId khác nhau. Khử trùng theo tài khoản + eventId và tải lại dữ liệu khi mở màn hình/reconnect.
 
 ### 7.1. Cấu hình server
 
