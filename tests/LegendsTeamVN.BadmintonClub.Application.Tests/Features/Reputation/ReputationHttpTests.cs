@@ -27,6 +27,24 @@ namespace LegendsTeamVN.BadmintonClub.Application.Tests.Features.Reputation;
 public sealed class ReputationHttpTests
 {
     [Fact]
+    public void ReasonsExplainPenaltiesAndWithheldBonuses()
+    {
+        var start = new DateTime(2026, 11, 6, 10, 0, 0, DateTimeKind.Utc);
+        var evidence = new LegendsTeamVN.BadmintonClub.Domain.Services.ReputationEvidence(1,
+            LegendsTeamVN.BadmintonClub.Domain.Enums.BookingStatus.CHECKED_IN, start, start.AddMinutes(20),
+            start, start.AddHours(1), LegendsTeamVN.BadmintonClub.Domain.Services.ReputationPaymentEvidence.Bank,
+            Guid.NewGuid(), Guid.NewGuid(), null);
+        var entry = new ReputationEntryResponse(Guid.NewGuid(), Guid.NewGuid(), -3, start,
+            LegendsTeamVN.BadmintonClub.Domain.Services.ReputationPolicy.Version, evidence, null, null, null);
+        Assert.Equal("CHECKED_IN_LATE", entry.Reasons![0].Code);
+        Assert.Equal(-3, entry.Reasons[0].Points);
+        Assert.Equal("PAID_ON_TIME", entry.Reasons[1].Code);
+        Assert.Equal(0, entry.Reasons[1].Points);
+        Assert.True(entry.Reasons[1].Suppressed);
+        Assert.Null((entry with { RawDelta = -2 }).Reasons);
+    }
+
+    [Fact]
     public async Task RealRoutesEnforceJwtPaginationAndAuditScope()
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = "Testing" });
